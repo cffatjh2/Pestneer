@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: pesneer
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pesneer-db
+          property: connectionString
+      - key: Jwt__SigningKey
+        generateValue: true
+      - key: BootstrapOwner__Email
+        value: sahip@mail.com
+      - key: BootstrapOwner__Password
+        sync: false
+      - key: BootstrapOwner__CompanyCode
+        value: TURA-ANKARA
+      - key: BootstrapOwner__CompanyName
+        value: Tura Çevre Sağlığı
+
+databases:
+  - name: pesneer-db
+    plan: free
+    region: frankfurt
+    databaseName: pesneer
+    user: pesneer
+    postgresMajorVersion: "17"
