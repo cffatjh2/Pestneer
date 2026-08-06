@@ -1,0 +1,542 @@
+/* ================================================================== */
+/*  PESNEER — EK-1 Report & Print Styles                              */
+/*  Biyosidal Ürün Uygulama İşlem Formu ve yazdırma stilleri.        */
+/* ================================================================== */
+
+/* ── Report Workspace ──────────────────────────────────────────── */
+.report-workspace {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* ── Report Sidebar ────────────────────────────────────────────── */
+.report-sidebar {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-5));
+  padding: var(--space-4);
+}
+
+.report-case {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--blue-50);
+}
+
+.case-label {
+  display: block;
+  color: var(--blue-600);
+  font-size: 9px;
+  font-weight: var(--font-extrabold);
+  letter-spacing: 0.8px;
+}
+
+.report-case > strong {
+  display: block;
+  margin: var(--space-1) 0;
+  color: var(--blue-800);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+}
+
+.report-case p {
+  margin: 0 0 var(--space-2);
+  color: var(--gray-500);
+  font-size: 10px;
+  line-height: var(--leading-relaxed);
+}
+
+/* ── Report Steps ──────────────────────────────────────────────── */
+.report-steps {
+  display: grid;
+  gap: 2px;
+  margin: var(--space-5) 0;
+}
+
+.report-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-1);
+  border-bottom: 1px solid var(--color-border-light);
+  text-align: left;
+  transition: background var(--transition-fast);
+  border-radius: var(--radius-sm);
+}
+
+.report-step:hover {
+  background: var(--gray-50);
+}
+
+.report-step i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-full);
+  color: var(--gray-400);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: var(--font-bold);
+  flex-shrink: 0;
+}
+
+.report-step.done i {
+  border-color: var(--green-300);
+  color: var(--green-600);
+  background: var(--green-50);
+}
+
+.report-step.active i {
+  border-color: var(--color-primary);
+  color: white;
+  background: var(--color-primary);
+}
+
+.report-step strong {
+  display: block;
+  color: var(--gray-700);
+  font-size: 10px;
+}
+
+.report-step small {
+  display: block;
+  margin-top: 1px;
+  color: var(--gray-400);
+  font-size: 9px;
+}
+
+/* ── Signature CTA ─────────────────────────────────────────────── */
+.signature-cta {
+  padding: var(--space-4);
+  border: 1px solid var(--green-200);
+  border-radius: var(--radius-lg);
+  color: var(--green-700);
+  background: linear-gradient(135deg, var(--green-50), #f8fffd);
+}
+
+.signature-cta strong {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.signature-cta > span {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--green-600);
+  font-size: 9px;
+  line-height: var(--leading-relaxed);
+}
+
+.signature-cta > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: var(--space-3);
+  padding: 0;
+  color: var(--green-700);
+  font-size: 10px;
+  font-weight: var(--font-extrabold);
+  transition: color var(--transition-fast);
+}
+
+.signature-cta > button:hover {
+  color: var(--green-800);
+}
+
+/* ── Report Canvas ─────────────────────────────────────────────── */
+.report-canvas {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--gray-200);
+}
+
+.report-canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--gray-600);
+  background: var(--color-surface);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.report-canvas-toolbar > span,
+.report-canvas-toolbar > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.zoom-label {
+  color: var(--gray-400);
+  font-size: 10px;
+}
+
+/* ── Print Sheet (A4 Form) ─────────────────────────────────────── */
+.print-sheet {
+  width: min(100%, 830px);
+  min-height: 1120px;
+  margin: var(--space-6) auto;
+  padding: 32px 37px 26px;
+  box-shadow: var(--shadow-2xl);
+  color: var(--gray-800);
+  background: white;
+  font-family: Arial, sans-serif;
+  transform-origin: top center;
+}
+
+/* Form Header */
+.form-header {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 1fr;
+  align-items: center;
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--gray-200);
+}
+
+.ministry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--gray-700);
+  font-size: 9px;
+  font-weight: var(--font-bold);
+}
+
+.ministry small {
+  color: var(--gray-500);
+  font-size: 7px;
+}
+
+.ministry-seal {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid #c53030;
+  border-radius: var(--radius-full);
+  color: #c53030;
+  font-size: 18px;
+}
+
+.form-title {
+  color: var(--gray-700);
+  font-size: var(--text-base);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.form-title strong {
+  font-size: var(--text-md);
+}
+
+.firm-logo-area {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.firm-logo-area img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.firm-logo-area .firm-name {
+  display: grid;
+}
+
+.firm-logo-area .firm-name strong {
+  color: var(--gray-900);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.firm-logo-area .firm-name span {
+  color: var(--gray-500);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+/* Form Contact */
+.form-contact {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  color: var(--gray-800);
+  font-size: 10px;
+}
+
+/* Form Section */
+.form-section h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  color: white;
+  background: var(--color-primary);
+  font-size: var(--text-xs);
+  border-radius: 2px;
+}
+
+.form-section h3 span {
+  display: grid;
+  place-items: center;
+}
+
+/* Form Row */
+.form-row {
+  display: grid;
+  grid-template-columns: 44% 56%;
+  min-height: 28px;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 9px;
+}
+
+.form-row strong {
+  display: flex;
+  align-items: center;
+  padding: 5px 5px 5px 0;
+  color: var(--gray-800);
+  line-height: 1.3;
+}
+
+.form-row span {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 5px 0 5px 10px;
+  color: var(--gray-600);
+  line-height: 1.3;
+  text-align: right;
+}
+
+/* Product Separator */
+.product-separator {
+  margin: var(--space-2) 0;
+  border: none;
+  border-top: 1px dashed var(--gray-300);
+}
+
+.product-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3);
+  background: var(--blue-50);
+  font-size: 9px;
+  font-weight: var(--font-bold);
+  color: var(--blue-700);
+}
+
+/* Form Signatures */
+.form-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  padding: 30px 8px 20px;
+}
+
+.form-signature {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.signature-image {
+  display: grid;
+  place-items: end center;
+  width: 150px;
+  height: 55px;
+  border-bottom: 1px solid var(--gray-400);
+}
+
+.signature-image img {
+  max-width: 140px;
+  max-height: 52px;
+  mix-blend-mode: multiply;
+}
+
+.signature-image span {
+  color: var(--gray-300);
+  font-family: cursive;
+  font-size: 17px;
+}
+
+.form-signature strong {
+  margin-top: var(--space-2);
+  color: var(--gray-800);
+  font-size: var(--text-sm);
+}
+
+.form-signature small {
+  margin-top: 2px;
+  color: var(--gray-500);
+  font-size: 8px;
+  font-style: italic;
+}
+
+/* Form Footer */
+.form-footer {
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--gray-200);
+  color: var(--gray-600);
+  font-size: 9px;
+}
+
+.form-footer-warning {
+  padding: var(--space-2) 0;
+  color: var(--red-600);
+  font-size: 8px;
+  line-height: 1.5;
+  font-weight: var(--font-semibold);
+}
+
+.form-footer-verify {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.form-footer-verify > div:first-child {
+  flex: 1;
+}
+
+.form-footer-verify strong {
+  display: block;
+  font-size: 9px;
+  color: var(--gray-800);
+}
+
+.form-footer-verify .verify-code {
+  font-family: var(--font-mono);
+  color: var(--gray-600);
+  font-size: 9px;
+  letter-spacing: 0.3px;
+}
+
+.qr-placeholder {
+  display: grid;
+  grid-template-columns: repeat(3, 8px);
+  gap: 2px;
+  padding: 4px;
+  border: 2px solid var(--gray-800);
+  flex-shrink: 0;
+}
+
+.qr-placeholder i {
+  width: 8px;
+  height: 8px;
+  background: var(--gray-800);
+}
+
+.qr-placeholder i:nth-child(2n),
+.qr-placeholder i:nth-child(5) {
+  background: white;
+}
+
+/* ── Signature Pad Modal ───────────────────────────────────────── */
+.signature-modal {
+  width: min(100%, 760px);
+}
+
+.signature-pad-wrap {
+  position: relative;
+  padding: var(--space-4);
+  border: 2px dashed var(--blue-200);
+  border-radius: var(--radius-lg);
+  background: var(--blue-50);
+}
+
+.signature-pad-wrap > span {
+  position: absolute;
+  bottom: 25px;
+  left: 50%;
+  color: var(--gray-400);
+  font-size: var(--text-xs);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.signature-pad {
+  width: 100%;
+  height: 220px;
+  border-radius: var(--radius-md);
+  background: white;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* ── Print Styles ──────────────────────────────────────────────── */
+@media print {
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+
+  body {
+    background: white;
+  }
+
+  .sidebar,
+  .topbar,
+  .page-heading,
+  .report-sidebar,
+  .report-canvas-toolbar,
+  .toast,
+  .sidebar-scrim {
+    display: none !important;
+  }
+
+  .main-content {
+    width: 100%;
+    margin: 0;
+  }
+
+  .page {
+    display: none;
+    padding: 0;
+  }
+
+  .report-page {
+    display: block;
+  }
+
+  .report-workspace {
+    display: block;
+  }
+
+  .report-canvas {
+    overflow: visible;
+    border: 0;
+    background: white;
+  }
+
+  .print-sheet {
+    display: block;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    transform: none;
+  }
+}

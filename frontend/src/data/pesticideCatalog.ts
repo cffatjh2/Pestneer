@@ -1,0 +1,15 @@
+export const pesticideCatalog = [
+  'Cypermethrin bazlı konsantre (Tip 18)',
+  'Deltamethrin bazlı süspansiyon (Tip 18)',
+  'Alfa-cypermethrin bazlı konsantre (Tip 18)',
+  'Lambda-cyhalothrin bazlı mikrokapsül (Tip 18)',
+  'Permethrin bazlı insektisit (Tip 18)',
+  'Tetramethrin bazlı insektisit (Tip 18)',
+  'Cyphenothrin + Tetramethrin + PBO (Tip 18)',
+  '1R-trans Phenothrin bazlı insektisit (Tip 18)',
+  'Imidacloprid hamamböceği jeli (Tip 18)',
+  'Fipronil hamamböceği jeli (Tip 18)',
+  'Pyriproxyfen larvasit (Tip 18)',
+  'S-Methoprene larvasit (Tip 18)',
+  'Diflubenzuron larvasit (Tip 18)',
+] as const;

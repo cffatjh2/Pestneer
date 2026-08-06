@@ -1,0 +1,61 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Pesneer.Api.Data;
+using Pesneer.Api.Domain;
+
+namespace Pesneer.Api.Auth;
+
+public interface ILoginService
+{
+    Task<LoginResponse?> SignInAsync(PortalType portal, LoginRequest request, CancellationToken cancellationToken);
+}
+
+public sealed class LoginService(
+    PesneerDbContext dbContext,
+    IPasswordHasher<Account> passwordHasher,
+    IJwtTokenService jwtTokenService) : ILoginService
+{
+    public async Task<LoginResponse?> SignInAsync(PortalType portal, LoginRequest request, CancellationToken cancellationToken)
+    {
+        var companyCode = request.CompanyCode.Trim().ToUpperInvariant();
+        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
+        var company = await dbContext.Companies.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Code == companyCode && item.IsActive, cancellationToken);
+        var account = await dbContext.Accounts.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Portal == portal && item.NormalizedEmail == normalizedEmail && item.IsActive, cancellationToken);
+
+        if (company is null || account is null ||
+            passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
+        {
+            return null;
+        }
+
+        CompanyRole role;
+        Guid? customerId = null;
+
+        if (portal == PortalType.Customer)
+        {
+            var membership = await dbContext.CustomerMemberships.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.AccountId == account.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
+            if (membership is null) return null;
+            role = membership.Role;
+            customerId = membership.CustomerId;
+        }
+        else
+        {
+            var membership = await dbContext.CompanyMemberships.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.AccountId == account.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
+            if (membership is null || portal == PortalType.Owner && membership.Role != CompanyRole.Owner) return null;
+            role = membership.Role;
+        }
+
+        var token = jwtTokenService.Create(account, company, role, customerId);
+        return new LoginResponse(
+            token.Value,
+            token.ExpiresAt,
+            portal.ToString().ToLowerInvariant(),
+            new CompanySummary(company.Id, company.LegalName, company.Code),
+            new UserSummary(account.Id, account.DisplayName, account.Email, role.ToString()),
+            customerId);
+    }
+}

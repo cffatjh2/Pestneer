@@ -1,0 +1,345 @@
+/* ================================================================== */
+/*  PESNEER — Responsive Styles                                       */
+/*  Tüm responsive media query'ler burada.                           */
+/* ================================================================== */
+
+/* ── Tablet / Küçük Masaüstü ───────────────────────────────────── */
+@media (max-width: 1180px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-side-column {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .team-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .report-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .report-sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1fr;
+    gap: var(--space-4);
+    align-items: center;
+  }
+
+  .report-steps {
+    margin: 0;
+  }
+
+  .signature-cta {
+    height: 100%;
+  }
+
+  .report-step {
+    padding: var(--space-2) 0;
+  }
+
+  .stock-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Tablet / Mobil Geçişi ─────────────────────────────────────── */
+@media (max-width: 920px) {
+  .sidebar {
+    width: var(--sidebar-width);
+    transform: translateX(-105%);
+    transition: transform var(--transition-slow);
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-scrim {
+    display: block;
+  }
+
+  .main-content {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .menu-button {
+    display: grid;
+    place-items: center;
+  }
+
+  .mobile-close {
+    display: grid;
+  }
+
+  .topbar {
+    padding: 0 var(--space-5);
+  }
+
+  .page {
+    padding: var(--space-6) var(--space-5) var(--space-10);
+  }
+
+  .today {
+    display: none;
+  }
+
+  .topbar-divider {
+    display: none;
+  }
+
+  .report-sidebar {
+    display: block;
+  }
+
+  .report-steps {
+    margin: var(--space-5) 0;
+  }
+
+  .stock-overview {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Mobil ──────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .topbar {
+    height: 56px;
+    padding: 0 var(--space-4);
+  }
+
+  .breadcrumb {
+    display: none;
+  }
+
+  .topbar-actions {
+    margin-left: auto;
+  }
+
+  .search-button {
+    display: none;
+  }
+
+  .page {
+    padding: var(--space-5) var(--space-4) var(--space-8);
+  }
+
+  .page-heading {
+    flex-direction: column;
+    margin-bottom: var(--space-5);
+  }
+
+  .page-heading h1 {
+    font-size: var(--text-2xl);
+  }
+
+  .page-heading > div > p:not(.eyebrow) {
+    line-height: var(--leading-relaxed);
+  }
+
+  .primary-button,
+  .secondary-button {
+    min-height: 38px;
+  }
+
+  .page-heading > .primary-button {
+    width: 100%;
+  }
+
+  .metric-grid {
+    gap: var(--space-2);
+  }
+
+  .metric-card {
+    min-height: 96px;
+    padding: var(--space-3);
+    gap: var(--space-3);
+  }
+
+  .metric-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+  }
+
+  .metric-card strong {
+    font-size: var(--text-xl);
+  }
+
+  .metric-card span,
+  .metric-card small {
+    font-size: 9px;
+  }
+
+  .dashboard-side-column {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-surface,
+  .work-table-surface,
+  .progress-surface,
+  .attention-surface,
+  .full-table-surface {
+    padding: var(--space-4);
+  }
+
+  .schedule-days {
+    gap: 2px;
+    padding: var(--space-1);
+  }
+
+  .day-cell {
+    min-height: 44px;
+  }
+
+  .day-cell span {
+    font-size: 8px;
+  }
+
+  .day-cell strong {
+    font-size: var(--text-sm);
+  }
+
+  .timeline-item {
+    grid-template-columns: 44px 18px 1fr;
+  }
+
+  .timeline-detail {
+    display: block;
+  }
+
+  .timeline-detail .status {
+    margin-top: var(--space-2);
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .search-field {
+    flex-basis: 100%;
+  }
+
+  .filter-button {
+    height: 34px;
+  }
+
+  .heading-actions {
+    width: 100%;
+  }
+
+  .heading-actions > button {
+    flex: 1;
+    padding: 0 var(--space-2);
+  }
+
+  .team-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .team-note {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .team-note .secondary-button {
+    width: 100%;
+  }
+
+  .calendar-surface {
+    padding: var(--space-3);
+  }
+
+  .calendar-toolbar > div > strong {
+    font-size: var(--text-md);
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(7, 104px);
+  }
+
+  .report-page {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .report-page .page-heading {
+    padding: 0 var(--space-4);
+  }
+
+  .report-workspace {
+    gap: var(--space-2);
+  }
+
+  .report-sidebar {
+    border-radius: 0;
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .report-canvas {
+    border-radius: 0;
+  }
+
+  .report-canvas-toolbar {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .print-sheet {
+    min-width: 720px;
+    margin: var(--space-4);
+    transform: scale(0.62);
+    margin-bottom: -390px;
+    transform-origin: top left;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-heading-actions,
+  .work-order-customer-line {
+    width: 100%;
+    grid-template-columns: 1fr;
+    flex-wrap: wrap;
+  }
+
+  .page-heading-actions > button { flex: 1; }
+  .work-order-kpis { grid-template-columns: 1fr; }
+  .customer-mini-grid { grid-template-columns: repeat(2, 1fr); }
+  .branch-picker-list { grid-template-columns: 1fr; }
+  .customer-data-grid { grid-template-columns: 1fr; }
+  .customer-data-grid .form-field-wide { grid-column: auto; }
+  .customer-mode-switch { grid-template-columns: 1fr; }
+  .calendar-heading-actions { width: 100%; align-items: stretch; flex-direction: column; }
+  .system-clock { width: 100%; }
+  .calendar-toolbar { align-items: flex-start; gap: var(--space-3); flex-direction: column; }
+  .calendar-toolbar > div { flex-wrap: wrap; }
+  .calendar-toolbar > div > strong { width: 100%; margin-top: var(--space-2); margin-left: 0; }
+  .day-agenda-list, .employee-task-list { grid-template-columns: 1fr; }
+  .employee-portal-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .day-view-heading { align-items: stretch; flex-direction: column; }
+
+  .modal {
+    padding: var(--space-5);
+  }
+
+  .signature-pad {
+    height: 175px;
+  }
+
+  .toast {
+    right: var(--space-3);
+    bottom: var(--space-3);
+    left: var(--space-3);
+    max-width: none;
+  }
+}

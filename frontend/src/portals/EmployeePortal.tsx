@@ -1,0 +1,175 @@
+import { useEffect, useMemo, useState } from 'react';
+import { BriefcaseBusiness, CalendarClock, CheckCircle2, Clock3, Coffee, LogOut, PackageCheck, PackagePlus, Play, RefreshCw, TimerReset } from 'lucide-react';
+import type { AuthenticatedSession } from '../auth/types';
+import VehicleStockModal from '../components/modals/VehicleStockModal';
+import PortalHeader from './PortalHeader';
+import {
+  createVehicleStockCheck,
+  endBreak,
+  FieldSessionExpiredError,
+  finishShift,
+  getLatestVehicleStock,
+  getTodayAttendance,
+  getVehicleStockCatalog,
+  startBreak,
+  startShift,
+  type AttendanceRecord,
+  type VehicleStockCheck,
+  type VehicleStockItemInput,
+} from '../services/fieldOperationsApi';
+import { CalendarSessionExpiredError, getCalendarEntries, type CalendarEntryRecord } from '../services/calendarApi';
+
+export default function EmployeePortal({ session, onLogout }: { session: AuthenticatedSession; onLogout: () => void }) {
+  const [attendance, setAttendance] = useState<AttendanceRecord | null>(null);
+  const [latestStock, setLatestStock] = useState<VehicleStockCheck | null>(null);
+  const [catalog, setCatalog] = useState<string[]>([]);
+  const [assignedTasks, setAssignedTasks] = useState<CalendarEntryRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'operations' | 'tasks'>('operations');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [clock, setClock] = useState(Date.now());
+
+  const load = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      const [attendanceResult, stockResult, catalogResult, taskResult] = await Promise.all([
+        getTodayAttendance(session.accessToken),
+        getLatestVehicleStock(session.accessToken),
+        getVehicleStockCatalog(session.accessToken),
+        getCalendarEntries(session.accessToken, toDateKey(today), toDateKey(nextWeek)),
+      ]);
+      setAttendance(attendanceResult);
+      setLatestStock(stockResult);
+      setCatalog(catalogResult);
+      setAssignedTasks(taskResult);
+    } catch (loadError) {
+      if (loadError instanceof FieldSessionExpiredError || loadError instanceof CalendarSessionExpiredError) return onLogout();
+      setError(loadError instanceof Error ? loadError.message : 'Saha operasyon bilgileri yüklenemedi.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, [session.accessToken]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const workedMinutes = useMemo(() => {
+    if (!attendance) return 0;
+    const liveMinutes = attendance.status === 'working'
+      ? Math.max(0, Math.floor((clock - new Date(attendance.calculatedAt).getTime()) / 60_000))
+      : 0;
+    return attendance.workedMinutes + liveMinutes;
+  }, [attendance, clock]);
+
+  const runAttendanceAction = async (action: () => Promise<AttendanceRecord>) => {
+    setIsActionLoading(true);
+    setError(null);
+    try {
+      setAttendance(await action());
+      setClock(Date.now());
+    } catch (actionError) {
+      if (actionError instanceof FieldSessionExpiredError) return onLogout();
+      setError(actionError instanceof Error ? actionError.message : 'Mesai işlemi tamamlanamadı.');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const saveStock = async (items: VehicleStockItemInput[]) => {
+    const check = await createVehicleStockCheck(session.accessToken, items);
+    setLatestStock(check);
+    setCatalog((current) => Array.from(new Set([...current, ...items.map((item) => item.productName)])).sort((a, b) => a.localeCompare(b, 'tr')));
+    setIsStockModalOpen(false);
+  };
+
+  const status = attendance?.status ?? 'notStarted';
+  const firstName = session.user.name.split(' ')[0];
+
+  return (
+    <div className="role-portal employee-operations-portal">
+      <PortalHeader session={session} onLogout={onLogout} context="SAHA OPERASYONLARI" />
+      <main className="role-portal-main">
+        <div className="role-welcome"><div><p>{formatLongDate(new Date())}</p><h1>Merhaba, {firstName}</h1><span>Mesaini ve araç hazırlığını bu ekrandan gerçek zamanlı yönet.</span></div><button onClick={() => setIsStockModalOpen(true)}><PackagePlus size={18} />Araç stok kontrolü</button></div>
+
+        <nav className="employee-portal-tabs" aria-label="Çalışan modülleri"><button className={activeTab === 'operations' ? 'active' : ''} onClick={() => setActiveTab('operations')}><BriefcaseBusiness size={17} /> Günlük Operasyon</button><button className={activeTab === 'tasks' ? 'active' : ''} onClick={() => setActiveTab('tasks')}><CalendarClock size={17} /> Görevlerim <span>{assignedTasks.length}</span></button></nav>
+
+        {error && <div className="field-operation-error"><span>{error}</span><button onClick={() => void load()}><RefreshCw size={15} />Yenile</button></div>}
+
+        {activeTab === 'tasks' ? <section className="role-surface employee-tasks-page"><div className="role-section-title"><div><p>GÖREV TAKVİMİ</p><h2>Yaklaşan Görevlerim</h2></div><span>{assignedTasks.length} görev</span></div><p className="employee-task-intro">Firma yöneticiniz tarafından önümüzdeki 7 gün için size atanan görevler.</p>{isLoading ? <div className="field-loading"><RefreshCw className="spin-icon" size={26} /><span>Görevler yükleniyor…</span></div> : assignedTasks.length > 0 ? <div className="employee-task-list employee-task-list-full">{assignedTasks.map((task) => <article key={task.id}><span><CalendarClock size={18} /></span><div><strong>{task.title}</strong><small>{formatTaskDate(task)}{task.description ? ` · ${task.description}` : ''}</small></div><em className={`task-priority-${task.priority.toLowerCase()}`}>{task.priority === 'High' ? 'Yüksek' : task.priority === 'Low' ? 'Düşük' : 'Normal'}</em></article>)}</div> : <div className="field-empty-work"><BriefcaseBusiness size={22} /><div><strong>Atanmış görev bulunmuyor</strong><span>Yeni bir görev atandığında bu sekmede tarih ve saatiyle birlikte görünecek.</span></div></div>}</section> : isLoading ? <div className="role-surface field-loading"><RefreshCw className="spin-icon" size={28} /><span>Operasyon bilgileri yükleniyor…</span></div> : !attendance ? <div className="role-surface field-loading field-load-failed"><strong>Operasyon bilgileri alınamadı.</strong><span>Yukarıdaki “Yenile” düğmesiyle tekrar deneyin.</span></div> : <>
+          <div className="employee-kpis field-kpis">
+            <article><span><Clock3 size={20} /></span><div><small>Net çalışma</small><strong>{formatDuration(workedMinutes)}</strong></div></article>
+            <article><span className="orange"><Coffee size={20} /></span><div><small>Toplam mola</small><strong>{formatDuration(attendance.breakMinutes)}</strong></div></article>
+            <article><span className="green"><PackageCheck size={20} /></span><div><small>Araç stok durumu</small><strong>{latestStock ? `${latestStock.items.length} ürün` : 'Bekliyor'}</strong></div></article>
+          </div>
+
+          <div className="field-operations-grid">
+            <section className={`role-surface shift-control-card shift-${status}`}>
+              <div className="shift-card-heading"><div><p>MESAİ TAKİBİ</p><h2>{statusLabels[status].title}</h2><span>{statusLabels[status].description}</span></div><div className="shift-live-time">{formatDuration(workedMinutes)}</div></div>
+              <div className="shift-times"><div><span>Başlangıç</span><strong>{formatTime(attendance.startedAt)}</strong></div><div><span>Mola</span><strong>{formatDuration(attendance.breakMinutes)}</strong></div><div><span>Bitiş</span><strong>{formatTime(attendance.endedAt)}</strong></div></div>
+              <div className="shift-actions">
+                {status === 'notStarted' && <button className="shift-start" disabled={isActionLoading} onClick={() => void runAttendanceAction(() => startShift(session.accessToken))}><Play size={17} />İşe Başladım</button>}
+                {status === 'working' && <><button className="shift-break" disabled={isActionLoading} onClick={() => void runAttendanceAction(() => startBreak(session.accessToken))}><Coffee size={17} />Öğle Molası</button><button className="shift-finish" disabled={isActionLoading} onClick={() => void runAttendanceAction(() => finishShift(session.accessToken))}><LogOut size={17} />Mesaiyi Bitir</button></>}
+                {status === 'onBreak' && <><button className="shift-start" disabled={isActionLoading} onClick={() => void runAttendanceAction(() => endBreak(session.accessToken))}><TimerReset size={17} />İşe Devam Et</button><button className="shift-finish" disabled={isActionLoading} onClick={() => void runAttendanceAction(() => finishShift(session.accessToken))}><LogOut size={17} />Mesaiyi Bitir</button></>}
+                {status === 'completed' && <div className="shift-completed"><CheckCircle2 size={18} />Bugünkü mesai kaydı tamamlandı.</div>}
+              </div>
+            </section>
+
+            <section className="role-surface vehicle-stock-card">
+              <div className="role-section-title"><div><p>ARAÇ HAZIRLIĞI</p><h2>İlaç & Malzeme Kontrolü</h2></div>{latestStock && <span>{latestStock.items.length} ürün</span>}</div>
+              {latestStock ? <><div className="latest-stock-meta"><PackageCheck size={22} /><div><strong>Son kontrol kaydedildi</strong><span>{formatDateTime(latestStock.checkedAt)}</span></div></div><div className="latest-stock-list">{latestStock.items.slice(0, 5).map((item) => <div key={item.id}><span>{item.productName}</span><strong>{item.quantity} {item.unit}</strong></div>)}</div>{latestStock.items.length > 5 && <small className="stock-more">+{latestStock.items.length - 5} ürün daha</small>}</> : <div className="stock-first-check"><PackagePlus size={31} /><strong>Araç stok kontrolü yapılmadı</strong><span>İlaçlarını seç veya manuel ürün ekleyerek güne hazır olduğunu bildir.</span></div>}
+              <button className="role-primary-button" onClick={() => setIsStockModalOpen(true)}>{latestStock ? 'Kontrolü Güncelle' : 'Stok Kontrolüne Başla'} <PackagePlus size={17} /></button>
+            </section>
+          </div>
+
+        </>}
+      </main>
+
+      {isStockModalOpen && <VehicleStockModal catalog={catalog} initialItems={latestStock?.items} onClose={() => setIsStockModalOpen(false)} onSubmit={saveStock} />}
+    </div>
+  );
+}
+
+const statusLabels = {
+  notStarted: { title: 'Mesai henüz başlamadı', description: 'Çalışmaya başladığında kaydını tek dokunuşla aç.' },
+  working: { title: 'Mesai aktif', description: 'Net çalışma süren gerçek zamanlı hesaplanıyor.' },
+  onBreak: { title: 'Mola aktif', description: 'Mola süresi çalışma süresinden otomatik düşülür.' },
+  completed: { title: 'Mesai tamamlandı', description: 'Bugünkü net çalışma süren kaydedildi.' },
+} as const;
+
+function formatDuration(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  return `${hours}s ${remaining}dk`;
+}
+
+function formatTime(value?: string) {
+  return value ? new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—';
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+}
+
+function formatLongDate(value: Date) {
+  return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric', weekday: 'long' }).format(value).toLocaleUpperCase('tr-TR');
+}
+
+function formatTaskDate(task: CalendarEntryRecord) {
+  const value = new Date(task.scheduledAt);
+  const date = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', weekday: 'short' }).format(value);
+  const time = task.isAllDay ? 'Tüm gün' : new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(value);
+  return `${date} · ${time}`;
+}
+
+function toDateKey(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
