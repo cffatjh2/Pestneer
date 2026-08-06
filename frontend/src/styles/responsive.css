@@ -51,7 +51,7 @@
 }
 
 /* ── Tablet / Mobil Geçişi ─────────────────────────────────────── */
-@media (max-width: 920px) {
+@media (max-width: 1100px) {
   .sidebar {
     width: var(--sidebar-width);
     transform: translateX(-105%);
@@ -330,6 +330,7 @@
 
   .modal {
     padding: var(--space-5);
+    border-radius: var(--radius-xl);
   }
 
   .signature-pad {

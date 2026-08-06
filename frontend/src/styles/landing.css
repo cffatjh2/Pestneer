@@ -43,3 +43,29 @@ html { scroll-behavior: smooth; }
 @media (max-width:1150px) { .landing-header nav { display:none; }.landing-hero { grid-template-columns:1fr; padding-top:85px; text-align:center; }.landing-hero-copy { max-width:820px; margin:0 auto; }.landing-hero-copy>p { margin-right:auto; margin-left:auto; }.landing-hero-actions,.landing-trust-row { justify-content:center; }.landing-product-stage { width:min(100%,760px); margin:0 auto; }.landing-feature-grid { grid-template-columns:repeat(2,1fr); }.landing-workflow { grid-template-columns:1fr; gap:65px; }.workflow-visual { width:min(100%,620px); margin:0 auto; }.workflow-copy { max-width:760px; margin:0 auto; text-align:center; }.workflow-copy li { text-align:left; } }
 @media (max-width:760px) { .landing-header { width:calc(100% - 32px); height:74px; }.landing-brand small { display:none; }.landing-header .landing-brand strong { font-size:18px; }.landing-login-button { min-height:38px; padding:0 13px; }.landing-hero { grid-template-columns:minmax(0,1fr); width:calc(100% - 32px); min-height:auto; padding:65px 0 75px; }.landing-hero h1 { font-size:clamp(42px,13vw,62px); letter-spacing:-3px; }.landing-hero-copy>p { font-size:13px; }.landing-pill { font-size:7px; }.landing-hero-actions { flex-direction:column; }.landing-primary,.landing-secondary { width:100%; }.landing-trust-row { display:grid; justify-content:start; width:fit-content; margin-right:auto; margin-left:auto; text-align:left; }.landing-product-stage { min-height:415px; margin-top:20px; }.product-window { top:30px; right:-105px; left:-12px; transform:scale(.75); transform-origin:top left; animation:none; }.floating-card-top { top:0; right:-4px; }.floating-card-bottom { bottom:0; left:0; }.floating-success,.stage-orbit { display:none; }.landing-section { padding:82px 16px; }.landing-feature-grid { grid-template-columns:1fr; }.landing-feature-card { min-height:230px; }.landing-workflow { gap:45px; }.workflow-visual { min-height:535px; transform:scale(.88); transform-origin:center top; margin-bottom:-65px; }.badge-sign { right:-25px; }.badge-stock { left:-25px; }.workflow-copy h2 { font-size:37px; }.landing-security { grid-template-columns:1fr; gap:42px; padding:75px 20px; }.landing-cta { align-items:flex-start; flex-direction:column; width:calc(100% - 32px); padding:38px 25px; margin:60px auto; }.landing-cta>button { width:100%; }.landing-footer { align-items:flex-start; flex-direction:column; width:calc(100% - 32px); padding:28px 0; }.landing-footer>div { width:100%; justify-content:space-between; } }
 @media (prefers-reduced-motion:reduce) { .landing-page *,.landing-page *::before,.landing-page *::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; } }
+
+/* Cross-browser viewport and compositing safeguards. */
+.landing-page {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.landing-page::before {
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+.landing-secondary,
+.floating-card,
+.floating-success,
+.workflow-badge {
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.floating-card {
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.feature-icon {
+  background: #edf5fb;
+  background: color-mix(in srgb, currentColor 10%, white);
+}

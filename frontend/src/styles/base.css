@@ -12,18 +12,30 @@
 }
 
 html {
+  min-width: 320px;
+  min-height: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
 }
 
 body {
   min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
   color: var(--color-text-primary);
   background: var(--color-background);
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 button,
@@ -49,6 +61,12 @@ img,
 svg {
   display: block;
   max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
 }
 
 table {
