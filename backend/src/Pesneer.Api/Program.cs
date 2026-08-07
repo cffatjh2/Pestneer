@@ -53,6 +53,7 @@ else
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
+builder.Services.AddProblemDetails();
 
 builder.Services.AddCors(options =>
 {
@@ -107,6 +108,7 @@ var app = builder.Build();
 await MigrateDatabaseAsync(app.Services);
 await DevelopmentDataSeeder.InitializeAsync(app.Services, app.Environment);
 
+app.UseExceptionHandler();
 app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();

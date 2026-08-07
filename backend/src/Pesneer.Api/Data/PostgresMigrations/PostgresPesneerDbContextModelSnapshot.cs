@@ -411,6 +411,48 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.ToTable("InventoryItems");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.InventoryMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InventoryItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("CompanyId", "OccurredAt");
+
+                    b.ToTable("InventoryMovements");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>
                 {
                     b.Property<Guid>("Id")
@@ -667,6 +709,17 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("Company");
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.InventoryMovement", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>

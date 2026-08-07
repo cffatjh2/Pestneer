@@ -104,15 +104,21 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
   ) => {
     try {
       let targetCustomerId = customerId;
+      let createdCustomerName: string | null = null;
       if (customerInput) {
         const customer = await createCustomer(session.accessToken, customerInput);
         targetCustomerId = customer.id;
+        createdCustomerName = customer.legalName;
       }
       if (!targetCustomerId) throw new Error('Müşteri seçimi tamamlanamadı.');
-      await addCustomerBranches(session.accessToken, targetCustomerId, branches);
+      if (branches.length > 0) {
+        await addCustomerBranches(session.accessToken, targetCustomerId, branches);
+      }
       setCustomers(await getCustomers(session.accessToken));
       setIsCustomerModalOpen(false);
-      showToast(`${branches.length} şube müşteri portföyüne eklendi.`);
+      showToast(branches.length > 0
+        ? `${branches.length} şube müşteri portföyüne eklendi.`
+        : `${createdCustomerName ?? 'Çatı müşteri'} müşteri portföyüne eklendi.`);
       if (reopenOrderAfterCustomer) setIsNewOrderModalOpen(true);
       setReopenOrderAfterCustomer(false);
     } catch (error) {
@@ -153,11 +159,35 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
 }
 
 export default function App() {
-  const [session, setSession] = useState<AuthenticatedSession | null>(null);
+  const [session, setSession] = useState<AuthenticatedSession | null>(loadStoredSession);
   const [isLoginVisible, setIsLoginVisible] = useState(false);
+  const handleAuthenticated = (authenticatedSession: AuthenticatedSession) => {
+    window.sessionStorage.setItem('pesneer.session', JSON.stringify(authenticatedSession));
+    setSession(authenticatedSession);
+  };
+  const handleLogout = () => {
+    window.sessionStorage.removeItem('pesneer.session');
+    setSession(null);
+  };
   if (!session && !isLoginVisible) return <LandingPage onLogin={() => setIsLoginVisible(true)} />;
-  if (!session) return <LoginPage onAuthenticated={setSession} onBack={() => setIsLoginVisible(false)} />;
-  if (session.portal === 'employee') return <EmployeePortal session={session} onLogout={() => setSession(null)} />;
-  if (session.portal === 'customer') return <CustomerPortal session={session} onLogout={() => setSession(null)} />;
-  return <OwnerPortal session={session} onLogout={() => setSession(null)} />;
+  if (!session) return <LoginPage onAuthenticated={handleAuthenticated} onBack={() => setIsLoginVisible(false)} />;
+  if (session.portal === 'employee') return <EmployeePortal session={session} onLogout={handleLogout} />;
+  if (session.portal === 'customer') return <CustomerPortal session={session} onLogout={handleLogout} />;
+  return <OwnerPortal session={session} onLogout={handleLogout} />;
+}
+
+function loadStoredSession(): AuthenticatedSession | null {
+  try {
+    const stored = window.sessionStorage.getItem('pesneer.session');
+    if (!stored) return null;
+    const session = JSON.parse(stored) as AuthenticatedSession;
+    if (!session.accessToken || new Date(session.expiresAt).getTime() <= Date.now()) {
+      window.sessionStorage.removeItem('pesneer.session');
+      return null;
+    }
+    return session;
+  } catch {
+    window.sessionStorage.removeItem('pesneer.session');
+    return null;
+  }
 }

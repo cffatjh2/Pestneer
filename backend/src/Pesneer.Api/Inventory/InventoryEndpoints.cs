@@ -10,7 +10,9 @@ public static class InventoryEndpoints
     {
         var group = app.MapGroup("/api/company/inventory").RequireAuthorization("OwnerPortal");
         group.MapGet("/", GetInventoryAsync);
+        group.MapGet("/summary", GetSummaryAsync);
         group.MapPost("/entries", CreateEntryAsync);
+        group.MapPost("/exits", CreateExitAsync);
         return app;
     }
 
@@ -21,6 +23,20 @@ public static class InventoryEndpoints
             .OrderBy(item => item.Name)
             .ToListAsync(cancellationToken);
         return Results.Ok(items.Select(ToResponse));
+    }
+
+    private static async Task<IResult> GetSummaryAsync(
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+        var exitDates = await dbContext.InventoryMovements.AsNoTracking()
+            .Where(item => item.Type == "Exit")
+            .Select(item => item.OccurredAt)
+            .ToListAsync(cancellationToken);
+        var exitCount = exitDates.Count(item => item >= monthStart);
+        return Results.Ok(new InventorySummaryResponse(exitCount));
     }
 
     private static async Task<IResult> CreateEntryAsync(
@@ -65,6 +81,69 @@ public static class InventoryEndpoints
             item.Category = request.Category.Trim();
             item.LastMovementAt = DateTimeOffset.UtcNow;
         }
+
+        dbContext.InventoryMovements.Add(new InventoryMovement
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyContext.CompanyId.Value,
+            InventoryItemId = item.Id,
+            Type = "Entry",
+            Quantity = request.Quantity,
+            Unit = item.Unit,
+            Note = lotNumber is null ? null : $"Lot / Parti: {lotNumber}",
+            OccurredAt = item.LastMovementAt
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(item));
+    }
+
+    private static async Task<IResult> CreateExitAsync(
+        CreateInventoryExitRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        CancellationToken cancellationToken)
+    {
+        if (!companyContext.CompanyId.HasValue) return Results.Forbid();
+        if (request.Quantity <= 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["quantity"] = ["Çıkış miktarı sıfırdan büyük olmalıdır."]
+            });
+        }
+
+        if (request.Note?.Trim().Length > 500)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["note"] = ["Açıklama en fazla 500 karakter olabilir."]
+            });
+        }
+
+        var item = await dbContext.InventoryItems.SingleOrDefaultAsync(existing =>
+            existing.Id == request.InventoryItemId && existing.IsActive,
+            cancellationToken);
+        if (item is null) return Results.NotFound(new { message = "Stok kalemi bulunamadı." });
+        if (request.Quantity > item.Quantity)
+        {
+            return Results.Conflict(new { message = $"Çıkış miktarı mevcut {item.Quantity:0.##} {item.Unit} stoktan fazla olamaz." });
+        }
+
+        var occurredAt = DateTimeOffset.UtcNow;
+        item.Quantity -= request.Quantity;
+        item.LastMovementAt = occurredAt;
+        dbContext.InventoryMovements.Add(new InventoryMovement
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyContext.CompanyId.Value,
+            InventoryItemId = item.Id,
+            Type = "Exit",
+            Quantity = request.Quantity,
+            Unit = item.Unit,
+            Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
+            OccurredAt = occurredAt
+        });
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToResponse(item));

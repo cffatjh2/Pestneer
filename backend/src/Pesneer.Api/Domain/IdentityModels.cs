@@ -193,6 +193,19 @@ public sealed class InventoryItem : ICompanyScoped
     public bool IsActive { get; set; } = true;
 }
 
+public sealed class InventoryMovement : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid InventoryItemId { get; set; }
+    public required string Type { get; set; }
+    public decimal Quantity { get; set; }
+    public required string Unit { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
+    public InventoryItem InventoryItem { get; set; } = null!;
+}
+
 public sealed class CalendarEntry : ICompanyScoped
 {
     public Guid Id { get; set; }

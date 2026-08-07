@@ -8,6 +8,14 @@ public sealed record CreateInventoryEntryRequest(
     decimal MinimumQuantity,
     string? LotNumber);
 
+public sealed record CreateInventoryExitRequest(
+    Guid InventoryItemId,
+    decimal Quantity,
+    string? Note);
+
+public sealed record InventorySummaryResponse(
+    int ThisMonthExitCount);
+
 public sealed record InventoryItemResponse(
     Guid Id,
     string Name,

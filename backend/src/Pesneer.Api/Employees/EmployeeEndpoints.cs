@@ -97,7 +97,6 @@ public static class EmployeeEndpoints
         };
         account.PasswordHash = passwordHasher.HashPassword(account, request.Password);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             dbContext.Accounts.Add(account);
@@ -110,11 +109,9 @@ public static class EmployeeEndpoints
             });
 
             await dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
         {
-            await transaction.RollbackAsync(cancellationToken);
             loggerFactory.CreateLogger("EmployeeEndpoints")
                 .LogError(exception, "Çalışan hesabı oluşturulurken veritabanı bütünlüğü hatası oluştu.");
             return Results.Problem(

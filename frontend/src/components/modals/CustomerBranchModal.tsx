@@ -73,7 +73,7 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    if (parsedBranches.length === 0) {
+    if (mode === 'existing' && parsedBranches.length === 0) {
       setError(importMode === 'excel' ? 'Geçerli bir Excel dosyası yükleyin.' : 'En az bir şube satırı girin.');
       return;
     }
@@ -122,7 +122,7 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
           </section>}
 
           <section className="bulk-branch-section">
-            <div className="modal-subheading"><FileSpreadsheet size={18} /><div><strong>Şubeleri içe aktar</strong><span>Excel dosyasıyla veya metin listesiyle 250 lokasyona kadar ekleyin.</span></div><em>{parsedBranches.length} şube</em></div>
+            <div className="modal-subheading"><FileSpreadsheet size={18} /><div><strong>Şubeleri içe aktar</strong><span>{mode === 'new' ? 'İsterseniz müşteriyi şubesiz kaydedebilir veya ' : ''}Excel dosyasıyla ya da metin listesiyle 250 lokasyona kadar ekleyin.</span></div><em>{parsedBranches.length} şube</em></div>
             <div className="branch-import-switch" role="tablist" aria-label="Şube ekleme yöntemi">
               <button type="button" className={importMode === 'excel' ? 'active' : ''} onClick={() => { setImportMode('excel'); setError(null); }}><FileSpreadsheet size={15} /> Excel dosyası</button>
               <button type="button" className={importMode === 'text' ? 'active' : ''} onClick={() => { setImportMode('text'); setError(null); }}><Table2 size={15} /> Metinle ekle</button>
@@ -157,7 +157,7 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
           </section>
 
           {error && <div className="modal-form-error" role="alert">{error}</div>}
-          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button" disabled={isSubmitting || isReadingExcel || parsedBranches.length === 0}>{isSubmitting ? 'Kaydediliyor…' : `${parsedBranches.length || ''} Şubeyi Kaydet`} <Plus size={17} /></button></div>
+          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button" disabled={isSubmitting || isReadingExcel || (mode === 'existing' && parsedBranches.length === 0)}>{isSubmitting ? 'Kaydediliyor…' : parsedBranches.length > 0 ? `${parsedBranches.length} Şubeyi Kaydet` : 'Çatı Müşteriyi Kaydet'} <Plus size={17} /></button></div>
         </form>
       </div>
     </div>

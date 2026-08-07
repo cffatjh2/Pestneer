@@ -20,6 +20,7 @@ public class PesneerDbContext(
     public DbSet<VehicleStockCheck> VehicleStockChecks => Set<VehicleStockCheck>();
     public DbSet<VehicleStockCheckItem> VehicleStockCheckItems => Set<VehicleStockCheckItem>();
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -149,6 +150,17 @@ public class PesneerDbContext(
             entity.Property(item => item.LotNumber).HasMaxLength(80);
             entity.Property(item => item.Quantity).HasPrecision(12, 2);
             entity.Property(item => item.MinimumQuantity).HasPrecision(12, 2);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<InventoryMovement>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.OccurredAt });
+            entity.Property(item => item.Type).HasMaxLength(16);
+            entity.Property(item => item.Unit).HasMaxLength(24);
+            entity.Property(item => item.Note).HasMaxLength(500);
+            entity.Property(item => item.Quantity).HasPrecision(12, 2);
+            entity.HasOne(item => item.InventoryItem).WithMany().HasForeignKey(item => item.InventoryItemId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 

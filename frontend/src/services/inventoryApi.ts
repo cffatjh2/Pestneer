@@ -21,10 +21,26 @@ export type CreateInventoryEntry = {
   lotNumber?: string;
 };
 
+export type CreateInventoryExit = {
+  inventoryItemId: string;
+  quantity: number;
+  note?: string;
+};
+
+export type InventorySummary = {
+  thisMonthExitCount: number;
+};
+
 export const getInventory = (token: string) => request<InventoryItem[]>('/api/company/inventory', token);
 
 export const createInventoryEntry = (token: string, input: CreateInventoryEntry) =>
   request<InventoryItem>('/api/company/inventory/entries', token, { method: 'POST', body: JSON.stringify(input) });
+
+export const createInventoryExit = (token: string, input: CreateInventoryExit) =>
+  request<InventoryItem>('/api/company/inventory/exits', token, { method: 'POST', body: JSON.stringify(input) });
+
+export const getInventorySummary = (token: string) =>
+  request<InventorySummary>('/api/company/inventory/summary', token);
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;
