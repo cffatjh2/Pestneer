@@ -169,6 +169,78 @@ public sealed class WorkOrderPhoto : ICompanyScoped
     public WorkOrder WorkOrder { get; set; } = null!;
 }
 
+public sealed class ServiceReport : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WorkOrderId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public required string ReportNumber { get; set; }
+    public required string Status { get; set; } = "Draft";
+    public required string FirmName { get; set; }
+    public string? FirmAddress { get; set; }
+    public string? FirmPhone { get; set; }
+    public string? FirmWeb { get; set; }
+    public string? ResponsibleManager { get; set; }
+    public string? PermissionNumber { get; set; }
+    public string? TeamManager { get; set; }
+    public string? TargetPests { get; set; }
+    public string? ResidenceType { get; set; }
+    public decimal? AreaSquareMeters { get; set; }
+    public string? WorkType { get; set; }
+    public string? Consumables { get; set; }
+    public string? SafetyMeasures { get; set; }
+    public string? ApplicationSummary { get; set; }
+    public string? Findings { get; set; }
+    public string? CorrectiveActions { get; set; }
+    public string? Recommendations { get; set; }
+    public string? CustomerRepresentativeName { get; set; }
+    public string? ManagerSignatureData { get; set; }
+    public string? CustomerSignatureData { get; set; }
+    public required string VerificationCode { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? FinalizedAt { get; set; }
+    public WorkOrder WorkOrder { get; set; } = null!;
+    public Account CreatedByAccount { get; set; } = null!;
+    public ICollection<ServiceReportStation> Stations { get; set; } = [];
+    public ICollection<ServiceReportProduct> Products { get; set; } = [];
+}
+
+public sealed class ServiceReportStation : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid ServiceReportId { get; set; }
+    public required string DeviceNumber { get; set; }
+    public required string Area { get; set; }
+    public required string DeviceType { get; set; }
+    public string? TargetPest { get; set; }
+    public int CaughtCount { get; set; }
+    public bool HasActivity { get; set; }
+    public bool PlateChanged { get; set; }
+    public required string DeviceStatus { get; set; } = "Active";
+    public string? Notes { get; set; }
+    public ServiceReport ServiceReport { get; set; } = null!;
+}
+
+public sealed class ServiceReportProduct : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid ServiceReportId { get; set; }
+    public required string ProductName { get; set; }
+    public string? LicenseNumber { get; set; }
+    public string? ApplicationMethod { get; set; }
+    public string? DilutionRate { get; set; }
+    public string? ActiveIngredient { get; set; }
+    public string? Antidote { get; set; }
+    public string? PackingQuantity { get; set; }
+    public decimal AmountUsed { get; set; }
+    public required string Unit { get; set; }
+    public ServiceReport ServiceReport { get; set; } = null!;
+}
+
 public sealed class WorkShift : ICompanyScoped
 {
     public Guid Id { get; set; }

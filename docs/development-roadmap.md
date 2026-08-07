@@ -60,12 +60,23 @@ Bu plan, canlı sistemdeki operasyon kayıplarını önce giderir; saha hizmeti,
 
 ## Faz 3 — Resmî İş Raporu, Trend ve Risk
 
+**Durum: Tamamlandı (07 Ağustos 2026)**
+
 - Saha çalışanı ve firma sahibi için yapılandırılmış iş raporu formu.
 - İstasyon/cihaz numarası, alan, hedef zararlı, aktivite görülen istasyon, yakalanan adet, plaka değişimi ve cihaz durumu.
 - Uygulama, kullanılan ürün, bulgu, düzeltici faaliyet, öneri, fotoğraf ve dijital imza.
 - Şube, ay ve çeyrek bazlı trend grafikleri.
 - Düşük/orta/yüksek aktivite eşikleri ve açıklanabilir risk puanı.
 - Verilen Arçelik EFT ve canlı yakalama dosyalarına uygun profesyonel Excel/PDF çıktısı.
+
+### Faz 3 doğrulama özeti
+
+- Saha çalışanının taslak rapor kaydetmesi, iki dijital imzayla onaylaması ve onaylanan raporun çalışan tarafında kilitlenmesi doğrulandı.
+- Firma sahibinin tamamlanmış raporu görmesi, yeniden düzenlemesi ve şube bazında filtrelemesi doğrulandı.
+- EFT, canlı yakalama, kemirgen ve haşere monitörü istasyonları; aktivite, yakalama ve plaka değişimi bilgileriyle kalıcılaştırıldı.
+- Örnek dosyalardaki eşiklere göre düşük, orta ve yüksek risk hesabı ile istilâ göstergesi API testinde doğrulandı.
+- Aylık ve çeyreklik trend, zararlı dağılımı, müşteri/şube filtreleri ve açıklanabilir risk kartları eklendi.
+- EK-1 saha formu PDF/yazdırma önizlemesi ile rapor ve trend için çok sayfalı Excel dışa aktarımı eklendi.
 
 ## Faz 4 — Müşteri Portalı ve Acil Çağrı
 

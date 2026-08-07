@@ -451,6 +451,259 @@ namespace Pesneer.Api.Data.Migrations
                     b.ToTable("InventoryMovements");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicationSummary")
+                        .HasMaxLength(3000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("AreaSquareMeters")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Consumables")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CorrectiveActions")
+                        .HasMaxLength(3000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CustomerRepresentativeName")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CustomerSignatureData")
+                        .HasMaxLength(500000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("FinalizedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Findings")
+                        .HasMaxLength(3000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FirmAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FirmName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FirmPhone")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FirmWeb")
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ManagerSignatureData")
+                        .HasMaxLength(500000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PermissionNumber")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Recommendations")
+                        .HasMaxLength(3000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReportNumber")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResidenceType")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResponsibleManager")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SafetyMeasures")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetPests")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TeamManager")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VerificationCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkType")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("WorkOrderId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "ReportNumber")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "WorkOrderId")
+                        .IsUnique();
+
+                    b.ToTable("ServiceReports");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportProduct", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActiveIngredient")
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AmountUsed")
+                        .HasPrecision(12, 3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Antidote")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplicationMethod")
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DilutionRate")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LicenseNumber")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PackingQuantity")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ServiceReportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceReportId");
+
+                    b.HasIndex("CompanyId", "ServiceReportId", "ProductName");
+
+                    b.ToTable("ServiceReportProducts");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportStation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Area")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CaughtCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceNumber")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasActivity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PlateChanged")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ServiceReportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetPest")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceReportId");
+
+                    b.HasIndex("CompanyId", "ServiceReportId", "DeviceNumber");
+
+                    b.ToTable("ServiceReportStations");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>
                 {
                     b.Property<Guid>("Id")
@@ -827,6 +1080,47 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("InventoryItem");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
+                        .WithOne()
+                        .HasForeignKey("Pesneer.Api.Domain.ServiceReport", "WorkOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAccount");
+
+                    b.Navigation("WorkOrder");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportProduct", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.ServiceReport", "ServiceReport")
+                        .WithMany("Products")
+                        .HasForeignKey("ServiceReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ServiceReport");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportStation", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.ServiceReport", "ServiceReport")
+                        .WithMany("Stations")
+                        .HasForeignKey("ServiceReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ServiceReport");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.Account", "EmployeeAccount")
@@ -929,6 +1223,13 @@ namespace Pesneer.Api.Data.Migrations
             modelBuilder.Entity("Pesneer.Api.Domain.Customer", b =>
                 {
                     b.Navigation("Branches");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
+                {
+                    b.Navigation("Products");
+
+                    b.Navigation("Stations");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>

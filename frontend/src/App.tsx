@@ -159,7 +159,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'calendar': return <Calendar accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} onNotify={showToast} />;
       case 'stock': return <Stock accessToken={session.accessToken} onSessionExpired={onLogout} />;
       case 'team': return <Team accessToken={session.accessToken} companyCode={session.company.code} onNotify={showToast} onSessionExpired={onLogout} />;
-      case 'reports': return <ReportsAnalytics accessToken={session.accessToken} onSessionExpired={onLogout} />;
+      case 'reports': return <ReportsAnalytics accessToken={session.accessToken} companyName={session.company.name} userName={session.user.name} workOrders={workOrders} onSessionExpired={onLogout} />;
       default: return <section className="page"><h1>Yapım aşamasında</h1></section>;
     }
   };

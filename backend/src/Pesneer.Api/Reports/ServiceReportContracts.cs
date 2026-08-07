@@ -1,0 +1,150 @@
+namespace Pesneer.Api.Reports;
+
+public sealed record ServiceReportStationInput(
+    string DeviceNumber,
+    string Area,
+    string DeviceType,
+    string? TargetPest,
+    int CaughtCount,
+    bool HasActivity,
+    bool PlateChanged,
+    string DeviceStatus,
+    string? Notes);
+
+public sealed record ServiceReportProductInput(
+    string ProductName,
+    string? LicenseNumber,
+    string? ApplicationMethod,
+    string? DilutionRate,
+    string? ActiveIngredient,
+    string? Antidote,
+    string? PackingQuantity,
+    decimal AmountUsed,
+    string Unit);
+
+public sealed record UpsertServiceReportRequest(
+    string FirmName,
+    string? FirmAddress,
+    string? FirmPhone,
+    string? FirmWeb,
+    string? ResponsibleManager,
+    string? PermissionNumber,
+    string? TeamManager,
+    string? TargetPests,
+    string? ResidenceType,
+    decimal? AreaSquareMeters,
+    string? WorkType,
+    string? Consumables,
+    string? SafetyMeasures,
+    string? ApplicationSummary,
+    string? Findings,
+    string? CorrectiveActions,
+    string? Recommendations,
+    string? CustomerRepresentativeName,
+    string? ManagerSignatureData,
+    string? CustomerSignatureData,
+    bool Finalize,
+    IReadOnlyList<ServiceReportStationInput> Stations,
+    IReadOnlyList<ServiceReportProductInput> Products);
+
+public sealed record ServiceReportStationResponse(
+    Guid Id,
+    string DeviceNumber,
+    string Area,
+    string DeviceType,
+    string? TargetPest,
+    int CaughtCount,
+    bool HasActivity,
+    bool PlateChanged,
+    string DeviceStatus,
+    string? Notes);
+
+public sealed record ServiceReportProductResponse(
+    Guid Id,
+    string ProductName,
+    string? LicenseNumber,
+    string? ApplicationMethod,
+    string? DilutionRate,
+    string? ActiveIngredient,
+    string? Antidote,
+    string? PackingQuantity,
+    decimal AmountUsed,
+    string Unit);
+
+public sealed record ServiceReportPhotoResponse(Guid Id, string FileName, string ContentType, DateTimeOffset UploadedAt, string Url);
+
+public sealed record ServiceReportResponse(
+    Guid Id,
+    Guid WorkOrderId,
+    string WorkOrderNumber,
+    string ReportNumber,
+    string Status,
+    Guid CustomerId,
+    string CustomerName,
+    Guid? BranchId,
+    string BranchName,
+    string BranchAddress,
+    DateTimeOffset ScheduledAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    string OperatorName,
+    string FirmName,
+    string? FirmAddress,
+    string? FirmPhone,
+    string? FirmWeb,
+    string? ResponsibleManager,
+    string? PermissionNumber,
+    string? TeamManager,
+    string? TargetPests,
+    string? ResidenceType,
+    decimal? AreaSquareMeters,
+    string? WorkType,
+    string? Consumables,
+    string? SafetyMeasures,
+    string? ApplicationSummary,
+    string? Findings,
+    string? CorrectiveActions,
+    string? Recommendations,
+    string? CustomerRepresentativeName,
+    string? ManagerSignatureData,
+    string? CustomerSignatureData,
+    string VerificationCode,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? FinalizedAt,
+    int TotalStations,
+    int ActiveStations,
+    int PlateChanges,
+    int TotalCaught,
+    decimal ActivityRate,
+    int RiskScore,
+    string RiskLevel,
+    bool InfestationIndicator,
+    IReadOnlyList<ServiceReportStationResponse> Stations,
+    IReadOnlyList<ServiceReportProductResponse> Products,
+    IReadOnlyList<ServiceReportPhotoResponse> Photos);
+
+public sealed record TrendPeriodResponse(
+    string Period,
+    int ReportCount,
+    int TotalStations,
+    int ActiveStations,
+    int PlateChanges,
+    int TotalCaught,
+    decimal ActivityRate,
+    int RiskScore,
+    string RiskLevel);
+
+public sealed record PestTrendResponse(string Pest, int TotalCaught);
+
+public sealed record ServiceReportAnalyticsResponse(
+    DateOnly From,
+    DateOnly To,
+    int ReportCount,
+    int TotalStations,
+    int ActiveStations,
+    int TotalCaught,
+    decimal ActivityRate,
+    int RiskScore,
+    string RiskLevel,
+    IReadOnlyList<TrendPeriodResponse> Periods,
+    IReadOnlyList<PestTrendResponse> PestTotals);

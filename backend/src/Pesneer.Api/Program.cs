@@ -12,6 +12,7 @@ using Pesneer.Api.Domain;
 using Pesneer.Api.Employees;
 using Pesneer.Api.FieldOperations;
 using Pesneer.Api.Inventory;
+using Pesneer.Api.Reports;
 using Pesneer.Api.WorkOrders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -147,6 +148,7 @@ app.MapFieldOperationsEndpoints();
 app.MapInventoryEndpoints();
 app.MapWorkOrderEndpoints();
 app.MapCalendarEndpoints();
+app.MapServiceReportEndpoints();
 
 app.MapGet("/api/customer/work-orders", async (
     PesneerDbContext dbContext,

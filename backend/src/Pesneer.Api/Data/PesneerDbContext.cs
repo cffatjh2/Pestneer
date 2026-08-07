@@ -17,6 +17,9 @@ public class PesneerDbContext(
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
     public DbSet<WorkOrderStatusHistory> WorkOrderStatusHistories => Set<WorkOrderStatusHistory>();
     public DbSet<WorkOrderPhoto> WorkOrderPhotos => Set<WorkOrderPhoto>();
+    public DbSet<ServiceReport> ServiceReports => Set<ServiceReport>();
+    public DbSet<ServiceReportStation> ServiceReportStations => Set<ServiceReportStation>();
+    public DbSet<ServiceReportProduct> ServiceReportProducts => Set<ServiceReportProduct>();
     public DbSet<WorkShift> WorkShifts => Set<WorkShift>();
     public DbSet<WorkShiftBreak> WorkShiftBreaks => Set<WorkShiftBreak>();
     public DbSet<VehicleStockCheck> VehicleStockChecks => Set<VehicleStockCheck>();
@@ -132,6 +135,67 @@ public class PesneerDbContext(
             entity.Property(item => item.FileName).HasMaxLength(240);
             entity.Property(item => item.ContentType).HasMaxLength(80);
             entity.HasOne(item => item.WorkOrder).WithMany(workOrder => workOrder.Photos).HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<ServiceReport>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.ReportNumber }).IsUnique();
+            entity.Property(item => item.ReportNumber).HasMaxLength(48);
+            entity.Property(item => item.Status).HasMaxLength(20);
+            entity.Property(item => item.FirmName).HasMaxLength(240);
+            entity.Property(item => item.FirmAddress).HasMaxLength(500);
+            entity.Property(item => item.FirmPhone).HasMaxLength(40);
+            entity.Property(item => item.FirmWeb).HasMaxLength(240);
+            entity.Property(item => item.ResponsibleManager).HasMaxLength(160);
+            entity.Property(item => item.PermissionNumber).HasMaxLength(120);
+            entity.Property(item => item.TeamManager).HasMaxLength(160);
+            entity.Property(item => item.TargetPests).HasMaxLength(500);
+            entity.Property(item => item.ResidenceType).HasMaxLength(80);
+            entity.Property(item => item.AreaSquareMeters).HasPrecision(12, 2);
+            entity.Property(item => item.WorkType).HasMaxLength(120);
+            entity.Property(item => item.Consumables).HasMaxLength(1000);
+            entity.Property(item => item.SafetyMeasures).HasMaxLength(2000);
+            entity.Property(item => item.ApplicationSummary).HasMaxLength(3000);
+            entity.Property(item => item.Findings).HasMaxLength(3000);
+            entity.Property(item => item.CorrectiveActions).HasMaxLength(3000);
+            entity.Property(item => item.Recommendations).HasMaxLength(3000);
+            entity.Property(item => item.CustomerRepresentativeName).HasMaxLength(160);
+            entity.Property(item => item.ManagerSignatureData).HasMaxLength(500000);
+            entity.Property(item => item.CustomerSignatureData).HasMaxLength(500000);
+            entity.Property(item => item.VerificationCode).HasMaxLength(64);
+            entity.HasOne(item => item.WorkOrder).WithOne().HasForeignKey<ServiceReport>(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<ServiceReportStation>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.ServiceReportId, item.DeviceNumber });
+            entity.Property(item => item.DeviceNumber).HasMaxLength(80);
+            entity.Property(item => item.Area).HasMaxLength(240);
+            entity.Property(item => item.DeviceType).HasMaxLength(40);
+            entity.Property(item => item.TargetPest).HasMaxLength(160);
+            entity.Property(item => item.DeviceStatus).HasMaxLength(32);
+            entity.Property(item => item.Notes).HasMaxLength(1000);
+            entity.HasOne(item => item.ServiceReport).WithMany(report => report.Stations).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<ServiceReportProduct>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.ServiceReportId, item.ProductName });
+            entity.Property(item => item.ProductName).HasMaxLength(240);
+            entity.Property(item => item.LicenseNumber).HasMaxLength(160);
+            entity.Property(item => item.ApplicationMethod).HasMaxLength(240);
+            entity.Property(item => item.DilutionRate).HasMaxLength(120);
+            entity.Property(item => item.ActiveIngredient).HasMaxLength(240);
+            entity.Property(item => item.Antidote).HasMaxLength(500);
+            entity.Property(item => item.PackingQuantity).HasMaxLength(160);
+            entity.Property(item => item.AmountUsed).HasPrecision(12, 3);
+            entity.Property(item => item.Unit).HasMaxLength(32);
+            entity.HasOne(item => item.ServiceReport).WithMany(report => report.Products).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 

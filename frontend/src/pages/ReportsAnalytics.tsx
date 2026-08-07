@@ -1,75 +1,84 @@
-import { useEffect, useState } from 'react';
-import { BarChart3, CheckCircle2, Clock3, Coffee, PackageCheck, RefreshCw, Users } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, BarChart3, CheckCircle2, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, Gauge, Printer, RefreshCw, ShieldAlert, Users, X } from 'lucide-react';
+import { useReactToPrint } from 'react-to-print';
+import type { WorkOrder } from '../types';
+import ServiceReportModal from '../components/modals/ServiceReportModal';
+import ServiceReportPrintSheet from '../components/report/ServiceReportPrintSheet';
 import { FieldSessionExpiredError, getWorkforceAnalytics, type WorkforceAnalytics } from '../services/fieldOperationsApi';
+import { getCompanyServiceReports, getServiceReportAnalytics, ReportSessionExpiredError, saveServiceReport, type ServiceReportAnalytics, type ServiceReportRecord, type UpsertServiceReportInput } from '../services/serviceReportApi';
+import { exportServiceReportExcel, exportTrendExcel } from '../utils/serviceReportExcel';
 
-export default function ReportsAnalytics({ accessToken, onSessionExpired }: { accessToken: string; onSessionExpired: () => void }) {
-  const [analytics, setAnalytics] = useState<WorkforceAnalytics | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
+type Props = { accessToken: string; companyName: string; userName: string; workOrders: WorkOrder[]; onSessionExpired: () => void };
+type Tab = 'reports' | 'trends' | 'workforce';
+
+export default function ReportsAnalytics({ accessToken, companyName, userName, workOrders, onSessionExpired }: Props) {
+  const [tab, setTab] = useState<Tab>('reports');
+  const [reports, setReports] = useState<ServiceReportRecord[]>([]); const [analytics, setAnalytics] = useState<ServiceReportAnalytics | null>(null); const [workforce, setWorkforce] = useState<WorkforceAnalytics | null>(null);
+  const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [editing, setEditing] = useState<{ order: WorkOrder; report?: ServiceReportRecord } | null>(null); const [preview, setPreview] = useState<ServiceReportRecord | null>(null);
+  const [customerId, setCustomerId] = useState(''); const [branchId, setBranchId] = useState(''); const [from, setFrom] = useState(defaultFrom()); const [to, setTo] = useState(dateKey(new Date()));
+  const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pesneer_Saha_Raporu' });
 
   const load = async () => {
-    setIsLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      setAnalytics(await getWorkforceAnalytics(accessToken));
+      const query = new URLSearchParams({ from, to }); if (customerId) query.set('customerId', customerId); if (branchId) query.set('branchId', branchId);
+      const [reportItems, reportAnalytics, workforceAnalytics] = await Promise.all([getCompanyServiceReports(accessToken), getServiceReportAnalytics(accessToken, query.toString()), getWorkforceAnalytics(accessToken)]);
+      setReports(reportItems); setAnalytics(reportAnalytics); setWorkforce(workforceAnalytics);
     } catch (loadError) {
-      if (loadError instanceof FieldSessionExpiredError) return onSessionExpired();
-      setError(loadError instanceof Error ? loadError.message : 'Analiz verileri yüklenemedi.');
-    } finally {
-      setIsLoading(false);
-    }
+      if (loadError instanceof ReportSessionExpiredError || loadError instanceof FieldSessionExpiredError) return onSessionExpired();
+      setError(loadError instanceof Error ? loadError.message : 'Rapor verileri yüklenemedi.');
+    } finally { setLoading(false); }
   };
+  useEffect(() => { void load(); }, [accessToken, customerId, branchId, from, to]);
 
-  useEffect(() => { void load(); }, [accessToken]);
+  const customers = useMemo(() => Array.from(new Map(workOrders.map((item) => [item.customerId, { id: item.customerId, name: item.client }])).values()), [workOrders]);
+  const branches = useMemo(() => Array.from(new Map(workOrders.filter((item) => !customerId || item.customerId === customerId).filter((item) => item.branchId).map((item) => [item.branchId!, { id: item.branchId!, name: item.branch }])).values()), [workOrders, customerId]);
+  const reportByOrder = useMemo(() => new Map(reports.map((item) => [item.workOrderId, item])), [reports]);
+  const reportableOrders = workOrders.filter((item) => item.technicalStatus === 'InProgress' || item.technicalStatus === 'Completed');
+  const save = async (input: UpsertServiceReportInput) => { if (!editing) return; const saved = await saveServiceReport(accessToken, editing.order.recordId, input); setReports((current) => [saved, ...current.filter((item) => item.id !== saved.id)]); setEditing(null); await load(); };
 
-  return (
-    <section className="page analytics-page">
-      <div className="page-heading"><div><p className="eyebrow">İNSAN KAYNAKLARI & OPERASYON</p><h1>Rapor & Analizler</h1><p>Personel mesai sürelerini, mola durumlarını ve araç stok kontrollerini takip edin.</p></div><button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} />Verileri Yenile</button></div>
-
-      {isLoading ? <div className="surface analytics-loading"><RefreshCw className="spin-icon" size={28} />Analizler hazırlanıyor…</div> : error ? <div className="surface analytics-loading analytics-error">{error}<button className="secondary-button" onClick={() => void load()}>Tekrar Dene</button></div> : analytics && <>
-        <div className="analytics-kpis">
-          <article className="surface"><span><Users size={20} /></span><div><small>Aktif personel</small><strong>{analytics.activeEmployees}</strong></div></article>
-          <article className="surface"><span className="green"><Clock3 size={20} /></span><div><small>Şu an mesaide</small><strong>{analytics.workingEmployees}</strong></div></article>
-          <article className="surface"><span className="purple"><CheckCircle2 size={20} /></span><div><small>Mesaiyi bitiren</small><strong>{analytics.completedEmployees}</strong></div></article>
-          <article className="surface"><span className="orange"><BarChart3 size={20} /></span><div><small>{periodLabels[period]}</small><strong>{formatDuration(period === 'day' ? analytics.totalWorkedMinutes : period === 'week' ? analytics.weekWorkedMinutes : analytics.monthWorkedMinutes)}</strong></div></article>
-        </div>
-
-        <div className="surface workforce-table-card">
-          <div className="analytics-section-heading"><div><p className="eyebrow">PERSONEL ÇALIŞMA RAPORU</p><h2>{formatDate(analytics.date)}</h2></div><div className="analytics-period-switch"><button className={period === 'day' ? 'active' : ''} onClick={() => setPeriod('day')}>Günlük</button><button className={period === 'week' ? 'active' : ''} onClick={() => setPeriod('week')}>Son 7 Gün</button><button className={period === 'month' ? 'active' : ''} onClick={() => setPeriod('month')}>Aylık</button></div></div>
-          {analytics.employees.length === 0 ? <div className="analytics-empty"><Users size={31} /><strong>Henüz personel bulunmuyor</strong><span>Ekip bölümünden çalışan hesabı oluşturabilirsiniz.</span></div> : <div className="workforce-table-wrap"><table className="workforce-table"><thead><tr><th>Personel</th><th>Durum</th><th>Başlangıç</th><th>Mola</th><th>Bugün</th><th>Son 7 Gün</th><th>Bu Ay</th><th>Araç Kontrolü</th></tr></thead><tbody>{analytics.employees.map((employee) => <tr key={employee.employeeId}><td><strong>{employee.name}</strong><span>{employee.email}</span></td><td><span className={`analytics-status status-${employee.status}`}>{statusLabels[employee.status]}</span></td><td>{formatTime(employee.startedAt)}</td><td><span className="table-icon-value"><Coffee size={14} />{formatDuration(employee.todayBreakMinutes)}</span></td><td className={period === 'day' ? 'period-highlight' : ''}><strong>{formatDuration(employee.todayWorkedMinutes)}</strong></td><td className={period === 'week' ? 'period-highlight' : ''}>{formatDuration(employee.weekWorkedMinutes)}</td><td className={period === 'month' ? 'period-highlight' : ''}>{formatDuration(employee.monthWorkedMinutes)}</td><td>{employee.lastStockCheckAt ? <span className="table-icon-value stock-ok-text"><PackageCheck size={14} />{formatDateTime(employee.lastStockCheckAt)}</span> : '—'}</td></tr>)}</tbody></table></div>}
-        </div>
-      </>}
-    </section>
-  );
+  return <section className="page analytics-page phase3-reports-page">
+    <div className="page-heading"><div><p className="eyebrow">SAHA KALİTE & UYUM</p><h1>Rapor & Analizler</h1><p>Uygulama raporlarını, istasyon trendlerini, riskleri ve personel performansını tek merkezden yönetin.</p></div><button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} />Verileri Yenile</button></div>
+    <nav className="report-module-tabs"><button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}><FileText size={17} /> Saha Raporları</button><button className={tab === 'trends' ? 'active' : ''} onClick={() => setTab('trends')}><BarChart3 size={17} /> Trend & Risk</button><button className={tab === 'workforce' ? 'active' : ''} onClick={() => setTab('workforce')}><Users size={17} /> Personel Analizi</button></nav>
+    {loading ? <div className="surface analytics-loading"><RefreshCw className="spin-icon" size={28} />Analizler hazırlanıyor…</div> : error ? <div className="surface analytics-loading analytics-error">{error}<button className="secondary-button" onClick={() => void load()}>Tekrar Dene</button></div> : <>
+      {tab === 'reports' && <ReportsTab orders={reportableOrders} reportByOrder={reportByOrder} onEdit={(order, report) => setEditing({ order, report })} onPreview={setPreview} />}
+      {tab === 'trends' && analytics && <TrendsTab analytics={analytics} reports={reports} customers={customers} branches={branches} customerId={customerId} branchId={branchId} from={from} to={to} onCustomer={(value) => { setCustomerId(value); setBranchId(''); }} onBranch={setBranchId} onFrom={setFrom} onTo={setTo} />}
+      {tab === 'workforce' && workforce && <WorkforceTab analytics={workforce} />}
+    </>}
+    {editing && <ServiceReportModal order={editing.order} existing={editing.report} companyName={companyName} operatorName={editing.order.technician || userName} onClose={() => setEditing(null)} onSave={save} />}
+    {preview && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>{preview.reportNumber}</strong><span>{preview.customerName} · {preview.branchName}</span></div><button onClick={() => exportServiceReportExcel(preview)}><FileSpreadsheet size={16} /> Excel</button><button onClick={print}><Printer size={16} /> PDF / Yazdır</button><button className="icon-button" onClick={() => setPreview(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={printRef}><ServiceReportPrintSheet report={preview} accessToken={accessToken} /></div></div></div></div>}
+  </section>;
 }
 
-const statusLabels = {
-  notStarted: 'Başlamadı',
-  working: 'Mesaide',
-  onBreak: 'Molada',
-  completed: 'Tamamlandı',
-  inactive: 'Pasif',
-};
-
-const periodLabels = {
-  day: 'Bugün toplam çalışma',
-  week: 'Son 7 gün toplam çalışma',
-  month: 'Bu ay toplam çalışma',
-};
-
-function formatDuration(minutes: number) {
-  return `${Math.floor(minutes / 60)}s ${minutes % 60}dk`;
+function ReportsTab({ orders, reportByOrder, onEdit, onPreview }: { orders: WorkOrder[]; reportByOrder: Map<string, ServiceReportRecord>; onEdit: (order: WorkOrder, report?: ServiceReportRecord) => void; onPreview: (report: ServiceReportRecord) => void }) {
+  return <div className="surface field-report-list"><div className="analytics-section-heading"><div><p className="eyebrow">UYGULAMA KAYITLARI</p><h2>Saha hizmet raporları</h2></div><span>{orders.length} raporlanabilir iş</span></div>{orders.length === 0 ? <div className="analytics-empty"><FileText size={31} /><strong>Raporlanabilir saha işi bulunmuyor</strong><span>İş başlatıldığında veya tamamlandığında rapor formu burada açılır.</span></div> : <div className="field-report-grid">{orders.map((order) => { const report = reportByOrder.get(order.recordId); return <article key={order.recordId}><div className="field-report-heading"><span className={`report-state ${report?.status.toLowerCase() ?? 'missing'}`}>{report?.status === 'Finalized' ? 'Onaylandı' : report ? 'Taslak' : 'Rapor bekliyor'}</span><small>{order.id}</small></div><h3>{order.client}</h3><p>{order.branch}</p><dl><div><dt>Uygulayıcı</dt><dd>{order.technician}</dd></div><div><dt>Tarih</dt><dd>{order.date}</dd></div>{report && <><div><dt>İstasyon</dt><dd>{report.activeStations}/{report.totalStations} aktif</dd></div><div><dt>Risk</dt><dd><span className={`risk-chip risk-${report.riskLevel.toLowerCase()}`}>{riskLabel(report.riskLevel)}</span></dd></div></>}</dl><div className="field-report-actions">{report && <button onClick={() => onPreview(report)}><FileText size={15} /> Görüntüle</button>}<button className="primary-button" onClick={() => onEdit(order, report)}>{report ? <FileText size={15} /> : <FilePlus2 size={15} />}{report ? 'Düzenle' : 'Rapor oluştur'}</button></div></article>; })}</div>}</div>;
 }
 
-function formatTime(value?: string) {
-  return value ? new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—';
+function TrendsTab({ analytics, reports, customers, branches, customerId, branchId, from, to, onCustomer, onBranch, onFrom, onTo }: { analytics: ServiceReportAnalytics; reports: ServiceReportRecord[]; customers: { id: string; name: string }[]; branches: { id: string; name: string }[]; customerId: string; branchId: string; from: string; to: string; onCustomer: (value: string) => void; onBranch: (value: string) => void; onFrom: (value: string) => void; onTo: (value: string) => void }) {
+  const [granularity, setGranularity] = useState<'month' | 'quarter'>('month');
+  const periods = granularity === 'month' ? analytics.periods : aggregateQuarters(analytics.periods);
+  const maxCaught = Math.max(1, ...periods.map((item) => item.totalCaught));
+  return <><div className="surface report-filter-bar"><label>Müşteri<select value={customerId} onChange={(event) => onCustomer(event.target.value)}><option value="">Tüm müşteriler</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Şube<select value={branchId} onChange={(event) => onBranch(event.target.value)}><option value="">Tüm şubeler</option>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Başlangıç<input type="date" value={from} onChange={(event) => onFrom(event.target.value)} /></label><label>Bitiş<input type="date" value={to} onChange={(event) => onTo(event.target.value)} /></label><button className="secondary-button" onClick={() => exportTrendExcel(analytics, reports)}><Download size={16} /> Excel dışa aktar</button></div>
+    <div className="analytics-kpis report-risk-kpis"><article className="surface"><span><FileText size={20} /></span><div><small>Onaylı rapor</small><strong>{analytics.reportCount}</strong></div></article><article className="surface"><span className="green"><Activity size={20} /></span><div><small>Aktivite oranı</small><strong>%{formatNumber(analytics.activityRate)}</strong></div></article><article className="surface"><span className="orange"><Gauge size={20} /></span><div><small>Toplam yakalanan</small><strong>{analytics.totalCaught}</strong></div></article><article className={`surface risk-kpi risk-${analytics.riskLevel.toLowerCase()}`}><span><ShieldAlert size={20} /></span><div><small>Risk seviyesi</small><strong>{riskLabel(analytics.riskLevel)}</strong><em>{analytics.riskScore}/100</em></div></article></div>
+    <div className="trend-layout"><section className="surface trend-chart-card"><div className="analytics-section-heading"><div><p className="eyebrow">DÖNEMSEL KARŞILAŞTIRMA</p><h2>Yakalanan zararlı & aktivite</h2></div><div className="analytics-period-switch"><button className={granularity === 'month' ? 'active' : ''} onClick={() => setGranularity('month')}>Aylık</button><button className={granularity === 'quarter' ? 'active' : ''} onClick={() => setGranularity('quarter')}>Çeyreklik</button></div></div>{periods.length ? <div className="trend-bars">{periods.map((item) => <div key={item.period}><div className="trend-bar-track"><span style={{ height: `${Math.max(8, item.totalCaught / maxCaught * 100)}%` }}><b>{item.totalCaught}</b></span></div><strong>{granularity === 'month' ? formatPeriod(item.period) : item.period}</strong><small>%{formatNumber(item.activityRate)} aktivite</small></div>)}</div> : <EmptyTrend />}</section><section className="surface pest-distribution"><div className="analytics-section-heading"><div><p className="eyebrow">ZARARLI DAĞILIMI</p><h2>Tür bazlı toplam</h2></div></div>{analytics.pestTotals.length ? analytics.pestTotals.map((item) => <div key={item.pest}><span>{item.pest}</span><div><i style={{ width: `${Math.max(5, item.totalCaught / Math.max(1, analytics.totalCaught) * 100)}%` }} /></div><strong>{item.totalCaught}</strong></div>) : <EmptyTrend />}</section></div>
+    <div className="surface risk-methodology"><ShieldAlert size={23} /><div><strong>Açıklanabilir risk değerlendirmesi</strong><p>Düşük risk 1–19, orta risk 20–29, yüksek risk 30+ yakalama üzerinden değerlendirilir. Hamamböceği ve kemirgende tek aktivite; sineklerde bir istasyonda 5 ve üzeri yakalama istilâ göstergesi kabul edilir. Aktivite oranı risk puanını ayrıca yükseltir.</p></div></div></>;
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
-}
+function WorkforceTab({ analytics }: { analytics: WorkforceAnalytics }) { return <><div className="analytics-kpis"><article className="surface"><span><Users size={20} /></span><div><small>Aktif personel</small><strong>{analytics.activeEmployees}</strong></div></article><article className="surface"><span className="green"><Clock3 size={20} /></span><div><small>Şu an mesaide</small><strong>{analytics.workingEmployees}</strong></div></article><article className="surface"><span className="purple"><CheckCircle2 size={20} /></span><div><small>Mesaiyi bitiren</small><strong>{analytics.completedEmployees}</strong></div></article><article className="surface"><span className="orange"><BarChart3 size={20} /></span><div><small>Bugün toplam çalışma</small><strong>{formatDuration(analytics.totalWorkedMinutes)}</strong></div></article></div><div className="surface workforce-table-card"><div className="analytics-section-heading"><div><p className="eyebrow">PERSONEL ÇALIŞMA RAPORU</p><h2>{formatDate(analytics.date)}</h2></div></div><div className="workforce-table-wrap"><table className="workforce-table"><thead><tr><th>Personel</th><th>Durum</th><th>Başlangıç</th><th>Bugün</th><th>Son 7 gün</th><th>Bu ay</th><th>Araç kontrolü</th></tr></thead><tbody>{analytics.employees.map((employee) => <tr key={employee.employeeId}><td><strong>{employee.name}</strong><span>{employee.email}</span></td><td><span className={`analytics-status status-${employee.status}`}>{statusLabels[employee.status]}</span></td><td>{formatTime(employee.startedAt)}</td><td><strong>{formatDuration(employee.todayWorkedMinutes)}</strong></td><td>{formatDuration(employee.weekWorkedMinutes)}</td><td>{formatDuration(employee.monthWorkedMinutes)}</td><td>{employee.lastStockCheckAt ? formatDateTime(employee.lastStockCheckAt) : '—'}</td></tr>)}</tbody></table></div></div></>; }
+function EmptyTrend() { return <div className="analytics-empty"><BarChart3 size={28} /><strong>Seçilen dönemde veri yok</strong><span>Onaylanan saha raporları burada karşılaştırılır.</span></div>; }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+const statusLabels = { notStarted: 'Başlamadı', working: 'Mesaide', onBreak: 'Molada', completed: 'Tamamlandı', inactive: 'Pasif' };
+const riskLabel = (value: string) => ({ Low: 'Düşük', Medium: 'Orta', High: 'Yüksek' }[value] ?? value);
+const formatNumber = (value: number) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 }).format(value);
+const formatDuration = (minutes: number) => `${Math.floor(minutes / 60)}s ${minutes % 60}dk`;
+const formatTime = (value?: string) => value ? new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—';
+const formatDateTime = (value: string) => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+const formatDate = (value: string) => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+const formatPeriod = (value: string) => new Intl.DateTimeFormat('tr-TR', { month: 'short', year: '2-digit' }).format(new Date(`${value}-01T12:00:00`));
+const dateKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+function defaultFrom() { const value = new Date(); value.setMonth(value.getMonth() - 5, 1); return dateKey(value); }
+function aggregateQuarters(periods: ServiceReportAnalytics['periods']): ServiceReportAnalytics['periods'] {
+  const groups = new Map<string, ServiceReportAnalytics['periods']>();
+  periods.forEach((item) => { const [year, month] = item.period.split('-').map(Number); const key = `${year} Q${Math.ceil(month / 3)}`; groups.set(key, [...(groups.get(key) ?? []), item]); });
+  return Array.from(groups, ([period, items]) => { const totalStations = items.reduce((sum, item) => sum + item.totalStations, 0); const activeStations = items.reduce((sum, item) => sum + item.activeStations, 0); const totalCaught = items.reduce((sum, item) => sum + item.totalCaught, 0); const riskScore = Math.min(100, Math.round((totalStations ? activeStations / totalStations * 50 : 0) + Math.min(50, totalCaught))); return { period, reportCount: items.reduce((sum, item) => sum + item.reportCount, 0), totalStations, activeStations, plateChanges: items.reduce((sum, item) => sum + item.plateChanges, 0), totalCaught, activityRate: totalStations ? activeStations / totalStations * 100 : 0, riskScore, riskLevel: riskScore >= 70 || totalCaught >= 30 ? 'High' : riskScore >= 40 || totalCaught >= 20 ? 'Medium' : 'Low' }; });
 }
