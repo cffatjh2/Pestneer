@@ -762,9 +762,14 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<Guid?>("VehicleStockItemId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ServiceReportId");
+
+                    b.HasIndex("VehicleStockItemId");
 
                     b.HasIndex("CompanyId", "ServiceReportId", "ProductName");
 
@@ -829,6 +834,57 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.ToTable("ServiceReportStations");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignedEmployeeAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Brand")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int?>("ModelYear")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NormalizedPlate")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Plate")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedEmployeeAccountId");
+
+                    b.HasIndex("CompanyId", "NormalizedPlate")
+                        .IsUnique();
+
+                    b.ToTable("Vehicles");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>
                 {
                     b.Property<Guid>("Id")
@@ -844,9 +900,14 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Property<Guid>("EmployeeAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EmployeeAccountId");
+
+                    b.HasIndex("VehicleId");
 
                     b.HasIndex("CompanyId", "EmployeeAccountId", "CheckedAt");
 
@@ -882,11 +943,126 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Property<Guid>("VehicleStockCheckId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("VehicleStockItemId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("VehicleStockCheckId");
 
+                    b.HasIndex("VehicleStockItemId");
+
                     b.ToTable("VehicleStockCheckItems");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InventoryItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("LastMovementAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid>("VehicleId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("VehicleId");
+
+                    b.HasIndex("CompanyId", "VehicleId", "InventoryItemId");
+
+                    b.ToTable("VehicleStockItems");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InventoryItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PerformedByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)");
+
+                    b.Property<Guid?>("ServiceReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid>("VehicleStockItemId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("PerformedByAccountId");
+
+                    b.HasIndex("ServiceReportId");
+
+                    b.HasIndex("VehicleStockItemId");
+
+                    b.HasIndex("CompanyId", "ServiceReportId");
+
+                    b.HasIndex("CompanyId", "VehicleStockItemId", "OccurredAt");
+
+                    b.ToTable("VehicleStockMovements");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrder", b =>
@@ -1291,7 +1467,14 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.VehicleStockItem", "VehicleStockItem")
+                        .WithMany()
+                        .HasForeignKey("VehicleStockItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("ServiceReport");
+
+                    b.Navigation("VehicleStockItem");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportStation", b =>
@@ -1305,6 +1488,16 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("ServiceReport");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "AssignedEmployeeAccount")
+                        .WithMany()
+                        .HasForeignKey("AssignedEmployeeAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AssignedEmployeeAccount");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.Account", "EmployeeAccount")
@@ -1313,7 +1506,14 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("EmployeeAccount");
+
+                    b.Navigation("Vehicle");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheckItem", b =>
@@ -1324,7 +1524,64 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.VehicleStockItem", "VehicleStockItem")
+                        .WithMany()
+                        .HasForeignKey("VehicleStockItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("VehicleStockCheck");
+
+                    b.Navigation("VehicleStockItem");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockItem", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Vehicle", "Vehicle")
+                        .WithMany("StockItems")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockMovement", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Account", "PerformedByAccount")
+                        .WithMany()
+                        .HasForeignKey("PerformedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.ServiceReport", "ServiceReport")
+                        .WithMany()
+                        .HasForeignKey("ServiceReportId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.VehicleStockItem", "VehicleStockItem")
+                        .WithMany()
+                        .HasForeignKey("VehicleStockItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("PerformedByAccount");
+
+                    b.Navigation("ServiceReport");
+
+                    b.Navigation("VehicleStockItem");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrder", b =>
@@ -1419,6 +1676,11 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("Products");
 
                     b.Navigation("Stations");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>
+                {
+                    b.Navigation("StockItems");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>

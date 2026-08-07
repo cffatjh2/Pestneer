@@ -157,7 +157,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'work-orders':
         return <WorkOrders accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} workOrders={workOrders} customers={customers} isLoading={isPlanningLoading} loadError={planningError} onReload={() => void loadPlanningData()} onCreate={() => setIsNewOrderModalOpen(true)} onManageCustomers={() => openCustomerManagement(false)} onEdit={setEditingOrder} onView={setSelectedOrder} />;
       case 'calendar': return <Calendar accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} onNotify={showToast} />;
-      case 'stock': return <Stock accessToken={session.accessToken} onSessionExpired={onLogout} />;
+      case 'stock': return <Stock accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;
       case 'team': return <Team accessToken={session.accessToken} companyCode={session.company.code} onNotify={showToast} onSessionExpired={onLogout} />;
       case 'reports': return <ReportsAnalytics accessToken={session.accessToken} companyName={session.company.name} userName={session.user.name} workOrders={workOrders} onSessionExpired={onLogout} />;
       default: return <section className="page"><h1>Yapım aşamasında</h1></section>;

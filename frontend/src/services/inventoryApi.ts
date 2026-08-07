@@ -9,6 +9,8 @@ export type InventoryItem = {
   minimumQuantity: number;
   lotNumber?: string;
   lastMovementAt: string;
+  vehicleQuantity: number;
+  totalQuantity: number;
   status: 'Yeterli' | 'Düşük' | 'Kritik';
 };
 
@@ -29,7 +31,48 @@ export type CreateInventoryExit = {
 
 export type InventorySummary = {
   thisMonthExitCount: number;
+  vehicleCount: number;
+  vehicleStockItemCount: number;
 };
+
+export type VehicleStockItem = {
+  id: string;
+  inventoryItemId?: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  lastMovementAt: string;
+  isManual: boolean;
+};
+
+export type VehicleRecord = {
+  id: string;
+  plate: string;
+  brand: string;
+  model: string;
+  modelYear?: number;
+  assignedEmployeeAccountId?: string;
+  assignedEmployeeName: string;
+  isActive: boolean;
+  stockItems: VehicleStockItem[];
+};
+
+export type CreateVehicleInput = {
+  plate: string;
+  brand: string;
+  model: string;
+  modelYear?: number;
+  assignedEmployeeAccountId?: string;
+};
+
+export type TransferInventoryInput = {
+  inventoryItemId: string;
+  vehicleId: string;
+  quantity: number;
+  note?: string;
+};
+
+export type TransferInventoryResult = { inventory: InventoryItem; vehicle: VehicleRecord };
 
 export const getInventory = (token: string) => request<InventoryItem[]>('/api/company/inventory', token);
 
@@ -41,6 +84,18 @@ export const createInventoryExit = (token: string, input: CreateInventoryExit) =
 
 export const getInventorySummary = (token: string) =>
   request<InventorySummary>('/api/company/inventory/summary', token);
+
+export const getVehicles = (token: string) =>
+  request<VehicleRecord[]>('/api/company/inventory/vehicles', token);
+
+export const createVehicle = (token: string, input: CreateVehicleInput) =>
+  request<VehicleRecord>('/api/company/inventory/vehicles', token, { method: 'POST', body: JSON.stringify(input) });
+
+export const updateVehicle = (token: string, vehicleId: string, input: CreateVehicleInput) =>
+  request<VehicleRecord>(`/api/company/inventory/vehicles/${vehicleId}`, token, { method: 'PUT', body: JSON.stringify(input) });
+
+export const transferInventoryToVehicle = (token: string, input: TransferInventoryInput) =>
+  request<TransferInventoryResult>('/api/company/inventory/transfers', token, { method: 'POST', body: JSON.stringify(input) });
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;

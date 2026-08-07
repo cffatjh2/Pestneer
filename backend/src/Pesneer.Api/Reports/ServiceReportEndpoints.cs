@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
+using Pesneer.Api.Inventory;
 
 namespace Pesneer.Api.Reports;
 
@@ -72,12 +73,16 @@ public static class ServiceReportEndpoints
         var validation = Validate(request);
         if (validation.Count > 0) return Results.ValidationProblem(validation);
 
-        var report = await dbContext.ServiceReports.SingleOrDefaultAsync(item => item.WorkOrderId == workOrderId, cancellationToken);
+        var report = await dbContext.ServiceReports
+            .Include(item => item.Stations)
+            .Include(item => item.Products)
+            .SingleOrDefaultAsync(item => item.WorkOrderId == workOrderId, cancellationToken);
         if (report is not null && report.Status == "Finalized" && companyContext.Portal == PortalType.Employee)
         {
             return Results.Conflict(new { message = "Tamamlanmış rapor yalnızca firma sahibi tarafından yeniden düzenlenebilir." });
         }
 
+        var now = DateTimeOffset.UtcNow;
         if (report is null)
         {
             report = new ServiceReport
@@ -95,14 +100,28 @@ public static class ServiceReportEndpoints
         }
         else
         {
-            await dbContext.ServiceReportStations.Where(item => item.ServiceReportId == report.Id).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.ServiceReportProducts.Where(item => item.ServiceReportId == report.Id).ExecuteDeleteAsync(cancellationToken);
+            dbContext.ServiceReportStations.RemoveRange(report.Stations);
+            dbContext.ServiceReportProducts.RemoveRange(report.Products);
         }
 
+        var previousUsages = await dbContext.VehicleStockMovements
+            .Include(item => item.VehicleStockItem)
+            .Where(item => item.ServiceReportId == report.Id && item.Type == "ApplicationUse")
+            .ToListAsync(cancellationToken);
+        foreach (var usage in previousUsages)
+        {
+            usage.VehicleStockItem.Quantity += usage.Quantity;
+            usage.VehicleStockItem.LastMovementAt = now;
+        }
+        dbContext.VehicleStockMovements.RemoveRange(previousUsages);
+
+        var stockValidation = await ApplyVehicleConsumptionAsync(request, report, workOrder, dbContext, companyContext, now, cancellationToken);
+        if (stockValidation is not null) return Results.ValidationProblem(stockValidation);
+
         Apply(report, request);
-        report.UpdatedAt = DateTimeOffset.UtcNow;
+        report.UpdatedAt = now;
         report.Status = request.Finalize ? "Finalized" : "Draft";
-        report.FinalizedAt = request.Finalize ? DateTimeOffset.UtcNow : null;
+        report.FinalizedAt = request.Finalize ? now : null;
         var stations = request.Stations.Select(item => new ServiceReportStation
         {
             Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, ServiceReportId = report.Id,
@@ -114,6 +133,7 @@ public static class ServiceReportEndpoints
         var products = request.Products.Select(item => new ServiceReportProduct
         {
             Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, ServiceReportId = report.Id,
+            VehicleStockItemId = item.VehicleStockItemId,
             ProductName = item.ProductName.Trim(), LicenseNumber = NullIfEmpty(item.LicenseNumber),
             ApplicationMethod = NullIfEmpty(item.ApplicationMethod), DilutionRate = NullIfEmpty(item.DilutionRate),
             ActiveIngredient = NullIfEmpty(item.ActiveIngredient), Antidote = NullIfEmpty(item.Antidote),
@@ -207,6 +227,64 @@ public static class ServiceReportEndpoints
         return errors;
     }
 
+    private static async Task<Dictionary<string, string[]>?> ApplyVehicleConsumptionAsync(
+        UpsertServiceReportRequest request,
+        ServiceReport report,
+        WorkOrder workOrder,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (!request.Finalize) return null;
+        var usedProducts = request.Products.Where(item => item.AmountUsed > 0).ToArray();
+        if (usedProducts.Length == 0) return null;
+        if (usedProducts.Any(item => !item.VehicleStockItemId.HasValue))
+            return new Dictionary<string, string[]> { ["products"] = ["Kullanılan her ürün için personele atanmış araç stoğundan bir ürün seçin."] };
+        if (!workOrder.AssignedEmployeeAccountId.HasValue)
+            return new Dictionary<string, string[]> { ["products"] = ["İlaç tüketimi kaydetmek için iş emrine önce saha personeli atayın."] };
+
+        var itemIds = usedProducts.Select(item => item.VehicleStockItemId!.Value).Distinct().ToArray();
+        var stockItems = await dbContext.VehicleStockItems
+            .Include(item => item.Vehicle)
+            .Where(item => itemIds.Contains(item.Id) && item.IsActive && item.Vehicle.IsActive)
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        if (stockItems.Count != itemIds.Length || stockItems.Values.Any(item => item.Vehicle.AssignedEmployeeAccountId != workOrder.AssignedEmployeeAccountId))
+            return new Dictionary<string, string[]> { ["products"] = ["Seçilen ürünlerden biri iş emrine atanmış personelin aktif aracında bulunmuyor."] };
+
+        var deductions = new Dictionary<Guid, decimal>();
+        foreach (var product in usedProducts)
+        {
+            var stockItem = stockItems[product.VehicleStockItemId!.Value];
+            if (!InventoryUnitConverter.TryConvert(product.AmountUsed, product.Unit, stockItem.Unit, out var quantity))
+                return new Dictionary<string, string[]> { ["products"] = [$"{product.ProductName} için {product.Unit} ile araç stok birimi {stockItem.Unit} uyumlu değil."] };
+            deductions[stockItem.Id] = deductions.GetValueOrDefault(stockItem.Id) + quantity;
+        }
+
+        foreach (var deduction in deductions)
+        {
+            var stockItem = stockItems[deduction.Key];
+            if (stockItem.Quantity < deduction.Value)
+                return new Dictionary<string, string[]> { ["products"] = [$"{stockItem.ProductName} için araç stoğu yetersiz. Mevcut: {stockItem.Quantity:0.###} {stockItem.Unit}."] };
+        }
+
+        foreach (var deduction in deductions)
+        {
+            var stockItem = stockItems[deduction.Key];
+            stockItem.Quantity -= deduction.Value;
+            stockItem.LastMovementAt = now;
+            dbContext.VehicleStockMovements.Add(new VehicleStockMovement
+            {
+                Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId!.Value, VehicleStockItemId = stockItem.Id,
+                InventoryItemId = stockItem.InventoryItemId, ServiceReportId = report.Id,
+                PerformedByAccountId = companyContext.AccountId, Type = "ApplicationUse", Quantity = deduction.Value,
+                Unit = stockItem.Unit, Note = $"{workOrder.Number} numaralı iş emri saha uygulaması", OccurredAt = now
+            });
+        }
+
+        return null;
+    }
+
     private static void Apply(ServiceReport report, UpsertServiceReportRequest request)
     {
         report.FirmName = request.FirmName.Trim(); report.FirmAddress = NullIfEmpty(request.FirmAddress); report.FirmPhone = NullIfEmpty(request.FirmPhone); report.FirmWeb = NullIfEmpty(request.FirmWeb);
@@ -242,7 +320,7 @@ public static class ServiceReportEndpoints
             report.VerificationCode, report.UpdatedAt, report.FinalizedAt, report.Stations.Count, report.Stations.Count(item => item.HasActivity),
             report.Stations.Count(item => item.PlateChanged), report.Stations.Sum(item => item.CaughtCount), risk.ActivityRate, risk.Score, risk.Level, risk.Infestation,
             report.Stations.OrderBy(item => item.DeviceNumber).Select(item => new ServiceReportStationResponse(item.Id, item.DeviceNumber, item.Area, item.DeviceType, item.TargetPest, item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.Notes)).ToArray(),
-            report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
+            report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
             report.WorkOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new ServiceReportPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}")).ToArray());
     }
 

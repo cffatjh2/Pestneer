@@ -12,6 +12,7 @@ public sealed record ServiceReportStationInput(
     string? Notes);
 
 public sealed record ServiceReportProductInput(
+    Guid? VehicleStockItemId,
     string ProductName,
     string? LicenseNumber,
     string? ApplicationMethod,
@@ -61,6 +62,7 @@ public sealed record ServiceReportStationResponse(
 
 public sealed record ServiceReportProductResponse(
     Guid Id,
+    Guid? VehicleStockItemId,
     string ProductName,
     string? LicenseNumber,
     string? ApplicationMethod,

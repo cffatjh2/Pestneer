@@ -50,6 +50,22 @@
   }
 }
 
+@media (max-width: 920px) {
+  .vehicle-stock-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1280px) and (min-width: 921px) {
+  .stock-overview { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .inventory-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .inventory-tabs button { justify-content: center; padding: 0 8px; }
+  .vehicle-inventory-heading { align-items: stretch; flex-direction: column; }
+  .vehicle-inventory-heading button { justify-content: center; }
+  .inventory-transfer-summary { align-items: flex-start; flex-direction: column; gap: 6px; }
+}
+
 /* ── Tablet / Mobil Geçişi ─────────────────────────────────────── */
 @media (max-width: 1100px) {
   .sidebar {

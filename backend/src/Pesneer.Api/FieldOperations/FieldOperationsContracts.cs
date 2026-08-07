@@ -11,6 +11,7 @@ public sealed record AttendanceResponse(
     DateTimeOffset CalculatedAt);
 
 public sealed record VehicleStockItemRequest(
+    Guid? VehicleStockItemId,
     string ProductName,
     decimal Quantity,
     string Unit,
@@ -20,6 +21,8 @@ public sealed record CreateVehicleStockCheckRequest(IReadOnlyList<VehicleStockIt
 
 public sealed record VehicleStockItemResponse(
     Guid Id,
+    Guid? VehicleStockItemId,
+    Guid? InventoryItemId,
     string ProductName,
     decimal Quantity,
     string Unit,
@@ -28,6 +31,9 @@ public sealed record VehicleStockItemResponse(
 public sealed record VehicleStockCheckResponse(
     Guid Id,
     DateTimeOffset CheckedAt,
+    Guid? VehicleId,
+    string? Plate,
+    string? VehicleDescription,
     IReadOnlyList<VehicleStockItemResponse> Items);
 
 public sealed record WorkforceEmployeeResponse(

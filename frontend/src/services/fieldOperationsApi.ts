@@ -12,6 +12,7 @@ export type AttendanceRecord = {
 };
 
 export type VehicleStockItemInput = {
+  vehicleStockItemId?: string;
   productName: string;
   quantity: number;
   unit: string;
@@ -21,7 +22,10 @@ export type VehicleStockItemInput = {
 export type VehicleStockCheck = {
   id: string;
   checkedAt: string;
-  items: Array<VehicleStockItemInput & { id: string }>;
+  vehicleId?: string;
+  plate?: string;
+  vehicleDescription?: string;
+  items: Array<VehicleStockItemInput & { id: string; inventoryItemId?: string }>;
 };
 
 export type WorkforceEmployee = {

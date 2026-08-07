@@ -1,83 +1,49 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Package, PackageMinus, PackagePlus, RefreshCw, Search } from 'lucide-react';
+import { CarFront, Download, Package, PackageMinus, PackagePlus, Pencil, RefreshCw, Search, Warehouse } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
 import StockEntryModal from '../components/modals/StockEntryModal';
 import StockExitModal from '../components/modals/StockExitModal';
+import VehicleModal from '../components/modals/VehicleModal';
+import VehicleTransferModal from '../components/modals/VehicleTransferModal';
+import type { EmployeeRecord } from '../services/employeeApi';
 import { FieldSessionExpiredError } from '../services/fieldOperationsApi';
-import { createInventoryEntry, createInventoryExit, getInventory, getInventorySummary, type CreateInventoryEntry, type CreateInventoryExit, type InventoryItem } from '../services/inventoryApi';
+import { createInventoryEntry, createInventoryExit, createVehicle, getInventory, getInventorySummary, getVehicles, transferInventoryToVehicle, updateVehicle, type CreateInventoryEntry, type CreateInventoryExit, type CreateVehicleInput, type InventoryItem, type TransferInventoryInput, type VehicleRecord } from '../services/inventoryApi';
 
-export default function Stock({ accessToken, onSessionExpired }: { accessToken: string; onSessionExpired: () => void }) {
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
-  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
-  const [thisMonthExitCount, setThisMonthExitCount] = useState(0);
+type Props = { accessToken: string; employees: EmployeeRecord[]; onSessionExpired: () => void };
 
-  const load = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [inventory, summary] = await Promise.all([getInventory(accessToken), getInventorySummary(accessToken)]);
-      setItems(inventory);
-      setThisMonthExitCount(summary.thisMonthExitCount);
-    }
-    catch (loadError) {
-      if (loadError instanceof FieldSessionExpiredError) return onSessionExpired();
-      setError(loadError instanceof Error ? loadError.message : 'Stok listesi yüklenemedi.');
-    } finally { setIsLoading(false); }
-  };
+export default function Stock({ accessToken, employees, onSessionExpired }: Props) {
+  const [items, setItems] = useState<InventoryItem[]>([]); const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'general' | 'vehicles'>('general'); const [query, setQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState<string | null>(null);
+  const [entryOpen, setEntryOpen] = useState(false); const [exitOpen, setExitOpen] = useState(false); const [transferOpen, setTransferOpen] = useState(false);
+  const [transferVehicleId, setTransferVehicleId] = useState<string | undefined>();
+  const [vehicleModal, setVehicleModal] = useState<VehicleRecord | 'new' | null>(null);
+  const [summary, setSummary] = useState({ thisMonthExitCount: 0, vehicleCount: 0, vehicleStockItemCount: 0 });
 
+  const load = async () => { setIsLoading(true); setError(null); try { const [inventory, summaryResult, vehicleResult] = await Promise.all([getInventory(accessToken), getInventorySummary(accessToken), getVehicles(accessToken)]); setItems(inventory); setSummary(summaryResult); setVehicles(vehicleResult); } catch (loadError) { if (loadError instanceof FieldSessionExpiredError) return onSessionExpired(); setError(loadError instanceof Error ? loadError.message : 'Stok listesi yüklenemedi.'); } finally { setIsLoading(false); } };
   useEffect(() => { void load(); }, [accessToken]);
 
-  const filteredItems = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase('tr-TR');
-    return normalized ? items.filter((item) => item.name.toLocaleLowerCase('tr-TR').includes(normalized)) : items;
-  }, [items, query]);
-
-  const handleAddStock = async (input: CreateInventoryEntry) => {
-    const saved = await createInventoryEntry(accessToken, input);
-    setItems((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
-    setIsEntryModalOpen(false);
-  };
-
-  const handleExitStock = async (input: CreateInventoryExit) => {
-    const saved = await createInventoryExit(accessToken, input);
-    setItems((current) => current.map((item) => item.id === saved.id ? saved : item));
-    setThisMonthExitCount((current) => current + 1);
-    setIsExitModalOpen(false);
-  };
+  const filteredItems = useMemo(() => { const normalized = query.trim().toLocaleLowerCase('tr-TR'); return normalized ? items.filter((item) => item.name.toLocaleLowerCase('tr-TR').includes(normalized)) : items; }, [items, query]);
+  const addStock = async (input: CreateInventoryEntry) => { await createInventoryEntry(accessToken, input); setEntryOpen(false); await load(); };
+  const exitStock = async (input: CreateInventoryExit) => { await createInventoryExit(accessToken, input); setExitOpen(false); await load(); };
+  const saveVehicle = async (input: CreateVehicleInput) => { if (vehicleModal && vehicleModal !== 'new') await updateVehicle(accessToken, vehicleModal.id, input); else await createVehicle(accessToken, input); setVehicleModal(null); await load(); };
+  const transfer = async (input: TransferInventoryInput) => { await transferInventoryToVehicle(accessToken, input); setTransferOpen(false); setTransferVehicleId(undefined); await load(); };
 
   const exportInventory = () => {
-    const worksheet = utils.json_to_sheet(filteredItems.map((item) => ({
-      'Ürün Adı': item.name,
-      Kategori: item.category,
-      'Mevcut Miktar': item.quantity,
-      Birim: item.unit,
-      'Minimum Eşik': item.minimumQuantity,
-      'Lot / Parti No': item.lotNumber ?? '',
-      Durum: item.status,
-      'Son Hareket': formatDateTime(item.lastMovementAt),
-    })));
-    worksheet['!cols'] = [{ wch: 32 }, { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 12 }, { wch: 22 }];
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, 'Stok Durumu');
-    writeFile(workbook, `Pesneer_Stok_Durumu_${new Date().toISOString().slice(0, 10)}.xlsx`, { compression: true });
+    const rows = filteredItems.map((item) => ({ 'Ürün Adı': item.name, Kategori: item.category, 'Depo Miktarı': item.quantity, 'Araçlardaki Miktar': item.vehicleQuantity, 'Toplam Miktar': item.totalQuantity, Birim: item.unit, 'Minimum Eşik': item.minimumQuantity, 'Lot / Parti No': item.lotNumber ?? '', Durum: item.status, 'Son Hareket': formatDateTime(item.lastMovementAt) }));
+    const vehicleRows = vehicles.flatMap((vehicle) => vehicle.stockItems.map((item) => ({ Plaka: vehicle.plate, Araç: `${vehicle.brand} ${vehicle.model}`, Personel: vehicle.assignedEmployeeName, Ürün: item.productName, Miktar: item.quantity, Birim: item.unit, 'Son Hareket': formatDateTime(item.lastMovementAt) })));
+    const workbook = utils.book_new(); utils.book_append_sheet(workbook, utils.json_to_sheet(rows), 'Genel Stok'); utils.book_append_sheet(workbook, utils.json_to_sheet(vehicleRows), 'Araç Stokları'); writeFile(workbook, `Pestneer_Stok_Durumu_${new Date().toISOString().slice(0, 10)}.xlsx`, { compression: true });
   };
 
-  return (
-    <section className="page">
-      <div className="page-heading"><div><p className="eyebrow">ENVANTER & DEPO</p><h1>Stok Yönetimi</h1><p>Kullanılan biyosidal ürünleri, sarf malzemelerini ve ekipmanları yönetin.</p></div><div className="heading-actions"><button className="secondary-button" onClick={() => setIsExitModalOpen(true)}><PackageMinus size={17} />Stok çıkışı</button><button className="primary-button" onClick={() => setIsEntryModalOpen(true)}><PackagePlus size={19} />Stok girişi</button></div></div>
-      {error && <div className="field-operation-error"><span>{error}</span><button onClick={() => void load()}><RefreshCw size={15} />Yenile</button></div>}
-      <div className="stock-overview"><article className="surface stock-highlight"><div><span>Toplam Ürün Kalemi</span><strong>{items.length}</strong><small>Depoda kayıtlı aktif ürün çeşidi</small></div><div className="stock-orbit blue-orbit"><Package size={22} /></div></article><article className="surface stock-highlight"><div><span>Kritik Seviyedeki Ürünler</span><strong>{items.filter((item) => item.status === 'Kritik').length}</strong><small>Asgari stok seviyesindeki ürünler</small></div><div className="stock-orbit orange-orbit"><PackageMinus size={22} /></div></article><article className="surface stock-highlight"><div><span>Bu Ay Yapılan Çıkış</span><strong>{thisMonthExitCount}</strong><small>Kaydedilen stok çıkış hareketi</small></div><div className="stock-orbit green-orbit"><PackagePlus size={22} /></div></article></div>
-      <section className="surface full-table-surface"><div className="section-heading"><div><p className="eyebrow">TÜM ENVANTER</p><h2>Depo durumu</h2></div><div className="heading-actions"><div className="search-field"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ürün adı ara…" /></div><button className="secondary-button" onClick={exportInventory} disabled={filteredItems.length === 0}><Download size={17} />Dışa Aktar</button></div></div><div className="table-wrap"><table><thead><tr><th>Ürün Bilgisi</th><th>Kategori</th><th>Mevcut Miktar</th><th>Minimum Eşik</th><th>Son Hareket</th><th>Durum</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={6} className="stock-table-empty"><RefreshCw className="spin-icon" size={20} />Stok yükleniyor…</td></tr> : filteredItems.length > 0 ? filteredItems.map((item) => <tr key={item.id}><td><div className="stock-name"><span>{item.name.charAt(0)}</span><div><strong>{item.name}</strong><span>Lot: {item.lotNumber || '—'}</span></div></div></td><td>{item.category}</td><td><strong>{formatQuantity(item.quantity)} {item.unit}</strong></td><td>{formatQuantity(item.minimumQuantity)} {item.unit}</td><td>{formatDateTime(item.lastMovementAt)}</td><td><span className={`stock-status ${statusClass(item.status)}`}>{item.status}</span></td></tr>) : <tr><td colSpan={6} className="stock-table-empty">Depoda kayıtlı ürün bulunmuyor. “Stok girişi” ile ilk ürünü ekleyebilirsiniz.</td></tr>}</tbody></table></div></section>
-      {isEntryModalOpen && <StockEntryModal onClose={() => setIsEntryModalOpen(false)} onSubmit={handleAddStock} />}
-      {isExitModalOpen && <StockExitModal items={items} onClose={() => setIsExitModalOpen(false)} onSubmit={handleExitStock} />}
-    </section>
-  );
+  return <section className="page"><div className="page-heading"><div><p className="eyebrow">ENVANTER & FİLO</p><h1>Stok Yönetimi</h1><p>Depodan araca, araçtan saha uygulamasına kadar tüm stok zincirini yönetin.</p></div><div className="heading-actions"><button className="secondary-button" onClick={() => setExitOpen(true)}><PackageMinus size={17} />Stok çıkışı</button><button className="secondary-button" onClick={() => setTransferOpen(true)} disabled={!items.some((item) => item.quantity > 0) || !vehicles.length}><CarFront size={17} />Araca aktar</button><button className="primary-button" onClick={() => setEntryOpen(true)}><PackagePlus size={19} />Stok girişi</button></div></div>
+    {error && <div className="field-operation-error"><span>{error}</span><button onClick={() => void load()}><RefreshCw size={15} />Yenile</button></div>}
+    <div className="stock-overview"><article className="surface stock-highlight"><div><span>Toplam Ürün Kalemi</span><strong>{items.length}</strong><small>Depo ve araçlarla entegre ürün çeşidi</small></div><div className="stock-orbit blue-orbit"><Package size={22} /></div></article><article className="surface stock-highlight"><div><span>Kritik Depo Stoğu</span><strong>{items.filter((item) => item.status === 'Kritik').length}</strong><small>Minimum seviyeye ulaşan ürünler</small></div><div className="stock-orbit orange-orbit"><PackageMinus size={22} /></div></article><article className="surface stock-highlight"><div><span>Aktif Araç Stoğu</span><strong>{summary.vehicleStockItemCount}</strong><small>{summary.vehicleCount} araçta bulunan ürün kalemi</small></div><div className="stock-orbit green-orbit"><CarFront size={22} /></div></article><article className="surface stock-highlight"><div><span>Bu Ay Depo Çıkışı</span><strong>{summary.thisMonthExitCount}</strong><small>Transfer harici çıkış hareketi</small></div><div className="stock-orbit blue-orbit"><PackageMinus size={22} /></div></article></div>
+    <div className="inventory-tabs"><button className={activeTab === 'general' ? 'active' : ''} onClick={() => setActiveTab('general')}><Warehouse size={17} />Genel Stok</button><button className={activeTab === 'vehicles' ? 'active' : ''} onClick={() => setActiveTab('vehicles')}><CarFront size={17} />Araç Stokları <span>{vehicles.length}</span></button></div>
+    {activeTab === 'general' ? <section className="surface full-table-surface"><div className="section-heading"><div><p className="eyebrow">BİRLEŞİK ENVANTER</p><h2>Depo + tüm araçlar</h2></div><div className="heading-actions"><div className="search-field"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ürün adı ara…" /></div><button className="secondary-button" onClick={exportInventory} disabled={!filteredItems.length}><Download size={17} />Dışa Aktar</button></div></div><div className="table-wrap"><table><thead><tr><th>Ürün Bilgisi</th><th>Kategori</th><th>Depo</th><th>Araçlar</th><th>Genel Toplam</th><th>Minimum Eşik</th><th>Durum</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={7} className="stock-table-empty"><RefreshCw className="spin-icon" size={20} />Stok yükleniyor…</td></tr> : filteredItems.length ? filteredItems.map((item) => <tr key={item.id}><td><div className="stock-name"><span>{item.name.charAt(0)}</span><div><strong>{item.name}</strong><span>Lot: {item.lotNumber || '—'}</span></div></div></td><td>{item.category}</td><td><strong>{formatQuantity(item.quantity)} {item.unit}</strong></td><td>{formatQuantity(item.vehicleQuantity)} {item.unit}</td><td><strong>{formatQuantity(item.totalQuantity)} {item.unit}</strong></td><td>{formatQuantity(item.minimumQuantity)} {item.unit}</td><td><span className={`stock-status ${statusClass(item.status)}`}>{item.status}</span></td></tr>) : <tr><td colSpan={7} className="stock-table-empty">Henüz stok kaydı bulunmuyor.</td></tr>}</tbody></table></div></section> : <section className="vehicle-inventory-section"><div className="vehicle-inventory-heading"><div><p className="eyebrow">ARAÇ BAZLI ENVANTER</p><h2>Mobil depolar</h2><p>Her aracın sorumlusunu ve güncel ürün bakiyesini tek ekrandan izleyin.</p></div><button className="primary-button" onClick={() => setVehicleModal('new')}><CarFront size={17} />Araç Tanımla</button></div>{isLoading ? <div className="surface stock-table-empty"><RefreshCw className="spin-icon" size={20} />Araçlar yükleniyor…</div> : vehicles.length ? <div className="vehicle-stock-grid">{vehicles.map((vehicle) => <article className="surface vehicle-inventory-card" key={vehicle.id}><header><div className="vehicle-plate"><CarFront size={18} /><strong>{vehicle.plate}</strong></div><button className="icon-button" onClick={() => setVehicleModal(vehicle)}><Pencil size={16} /></button></header><div className="vehicle-description"><strong>{vehicle.brand} {vehicle.model}{vehicle.modelYear ? ` · ${vehicle.modelYear}` : ''}</strong><span>Sorumlu: {vehicle.assignedEmployeeName}</span></div><div className="vehicle-item-list">{vehicle.stockItems.length ? vehicle.stockItems.map((item) => <div key={item.id}><span>{item.productName}</span><strong>{formatQuantity(item.quantity)} {item.unit}</strong></div>) : <div className="vehicle-empty-stock">Araçta henüz ürün yok.</div>}</div><button className="vehicle-transfer-shortcut" onClick={() => { setTransferVehicleId(vehicle.id); setTransferOpen(true); }}><PackagePlus size={15} />Bu araca ürün aktar</button></article>)}</div> : <div className="surface vehicle-empty-state"><CarFront size={30} /><strong>Henüz araç tanımlanmadı</strong><span>Plaka, marka/model ve sorumlu personeli tanımlayarak araç stok takibini başlatın.</span><button className="primary-button" onClick={() => setVehicleModal('new')}>İlk Aracı Tanımla</button></div>}</section>}
+    {entryOpen && <StockEntryModal onClose={() => setEntryOpen(false)} onSubmit={addStock} />}{exitOpen && <StockExitModal items={items} onClose={() => setExitOpen(false)} onSubmit={exitStock} />}{transferOpen && <VehicleTransferModal items={items} vehicles={vehicles} initialVehicleId={transferVehicleId} onClose={() => { setTransferOpen(false); setTransferVehicleId(undefined); }} onSubmit={transfer} />}{vehicleModal && <VehicleModal employees={employees} vehicle={vehicleModal === 'new' ? undefined : vehicleModal} onClose={() => setVehicleModal(null)} onSubmit={saveVehicle} />}
+  </section>;
 }
 
 const statusClass = (status: InventoryItem['status']) => status === 'Kritik' ? 'stock-critical' : status === 'Düşük' ? 'stock-low' : 'stock-ok';
-const formatQuantity = (quantity: number) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(quantity);
+const formatQuantity = (quantity: number) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 }).format(quantity);
 const formatDateTime = (value: string) => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));

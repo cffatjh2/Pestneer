@@ -4,6 +4,7 @@ export type ReportStationInput = {
 };
 
 export type ReportProductInput = {
+  vehicleStockItemId?: string;
   productName: string; licenseNumber?: string; applicationMethod?: string; dilutionRate?: string;
   activeIngredient?: string; antidote?: string; packingQuantity?: string; amountUsed: number; unit: string;
 };

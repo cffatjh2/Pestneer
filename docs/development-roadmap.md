@@ -116,6 +116,24 @@ Bu plan, canlı sistemdeki operasyon kayıplarını önce giderir; saha hizmeti,
 - Yüksek riskli lokasyonlar iki portalda uygulama içi erken uyarı olarak gösteriliyor; sonuçların saha keşfi yerine geçmediği açıkça belirtiliyor.
 - Ankara koordinatlarıyla güncel hava verisi, altı zararlı modeli, iki firma lokasyonu ve tek şubeyle sınırlı müşteri yetkisi uçtan uca doğrulandı.
 
+## Faz 5.1 — Entegre Depo ve Araç Stok Zinciri
+
+**Durum: Tamamlandı (07 Ağustos 2026)**
+
+- Plaka, marka, model, model yılı ve sorumlu personel bilgileriyle araç yönetimi.
+- Depodan araca transferde depo bakiyesinin düşüp araç bakiyesinin artması.
+- Genel stokta depo, araçlar ve birleşik toplamın ayrı gösterilmesi.
+- Araç bazlı ürün bakiyesi ve fiziksel sayım farkı hareketleri.
+- Saha raporunda kullanılan biyosidal ürünün personelin araç stoğundan otomatik düşmesi.
+- Litre/mililitre ve kilogram/gram birim dönüşümü; rapor düzenlemede mükerrer düşümü önleme.
+
+### Faz 5.1 doğrulama özeti
+
+- 10 L depo stoğundan araca 5 L aktarıldığında depo 5 L, araç 5 L ve genel toplam 10 L olarak doğrulandı.
+- Saha raporunda 30 ml kullanım kaydedildiğinde araç bakiyesi 4,97 L ve genel toplam 9,97 L oldu.
+- Aynı tamamlanmış rapor firma sahibi tarafından yeniden kaydedildiğinde araç stoğunun ikinci kez düşmediği doğrulandı.
+- SQLite ve PostgreSQL için ayrı geçişler üretildi; ondalıklı toplam ve tarih sıralaması sağlayıcıdan bağımsız hale getirildi.
+
 ## Faz 6 — Belgeler, Bildirimler ve Kurumsal Kimlik
 
 - PDF, Excel, Word, metin ve görsel dosyaları için firma/şube/iş emri bazlı belge arşivi.

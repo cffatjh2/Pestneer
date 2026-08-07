@@ -26,6 +26,9 @@ public class PesneerDbContext(
     public DbSet<WorkShiftBreak> WorkShiftBreaks => Set<WorkShiftBreak>();
     public DbSet<VehicleStockCheck> VehicleStockChecks => Set<VehicleStockCheck>();
     public DbSet<VehicleStockCheckItem> VehicleStockCheckItems => Set<VehicleStockCheckItem>();
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+    public DbSet<VehicleStockItem> VehicleStockItems => Set<VehicleStockItem>();
+    public DbSet<VehicleStockMovement> VehicleStockMovements => Set<VehicleStockMovement>();
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
@@ -226,6 +229,7 @@ public class PesneerDbContext(
             entity.Property(item => item.AmountUsed).HasPrecision(12, 3);
             entity.Property(item => item.Unit).HasMaxLength(32);
             entity.HasOne(item => item.ServiceReport).WithMany(report => report.Products).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.VehicleStockItem).WithMany().HasForeignKey(item => item.VehicleStockItemId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -248,6 +252,7 @@ public class PesneerDbContext(
         {
             entity.HasIndex(check => new { check.CompanyId, check.EmployeeAccountId, check.CheckedAt });
             entity.HasOne(check => check.EmployeeAccount).WithMany().HasForeignKey(check => check.EmployeeAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(check => check.Vehicle).WithMany().HasForeignKey(check => check.VehicleId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(check => companyContext.CompanyId.HasValue && check.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -257,6 +262,45 @@ public class PesneerDbContext(
             entity.Property(item => item.Unit).HasMaxLength(24);
             entity.Property(item => item.Quantity).HasPrecision(12, 2);
             entity.HasOne(item => item.VehicleStockCheck).WithMany(check => check.Items).HasForeignKey(item => item.VehicleStockCheckId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.VehicleStockItem).WithMany().HasForeignKey(item => item.VehicleStockItemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<Vehicle>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.NormalizedPlate }).IsUnique();
+            entity.Property(item => item.Plate).HasMaxLength(16);
+            entity.Property(item => item.NormalizedPlate).HasMaxLength(16);
+            entity.Property(item => item.Brand).HasMaxLength(80);
+            entity.Property(item => item.Model).HasMaxLength(80);
+            entity.HasOne(item => item.AssignedEmployeeAccount).WithMany().HasForeignKey(item => item.AssignedEmployeeAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<VehicleStockItem>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.VehicleId, item.InventoryItemId });
+            entity.Property(item => item.ProductName).HasMaxLength(160);
+            entity.Property(item => item.NormalizedName).HasMaxLength(160);
+            entity.Property(item => item.Quantity).HasPrecision(14, 3);
+            entity.Property(item => item.Unit).HasMaxLength(24);
+            entity.HasOne(item => item.Vehicle).WithMany(vehicle => vehicle.StockItems).HasForeignKey(item => item.VehicleId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.InventoryItem).WithMany().HasForeignKey(item => item.InventoryItemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<VehicleStockMovement>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.VehicleStockItemId, item.OccurredAt });
+            entity.HasIndex(item => new { item.CompanyId, item.ServiceReportId });
+            entity.Property(item => item.Type).HasMaxLength(32);
+            entity.Property(item => item.Quantity).HasPrecision(14, 3);
+            entity.Property(item => item.Unit).HasMaxLength(24);
+            entity.Property(item => item.Note).HasMaxLength(500);
+            entity.HasOne(item => item.VehicleStockItem).WithMany().HasForeignKey(item => item.VehicleStockItemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.InventoryItem).WithMany().HasForeignKey(item => item.InventoryItemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.ServiceReport).WithMany().HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.PerformedByAccount).WithMany().HasForeignKey(item => item.PerformedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 

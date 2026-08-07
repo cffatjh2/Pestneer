@@ -268,6 +268,7 @@ public sealed class ServiceReportProduct : ICompanyScoped
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
     public Guid ServiceReportId { get; set; }
+    public Guid? VehicleStockItemId { get; set; }
     public required string ProductName { get; set; }
     public string? LicenseNumber { get; set; }
     public string? ApplicationMethod { get; set; }
@@ -278,6 +279,7 @@ public sealed class ServiceReportProduct : ICompanyScoped
     public decimal AmountUsed { get; set; }
     public required string Unit { get; set; }
     public ServiceReport ServiceReport { get; set; } = null!;
+    public VehicleStockItem? VehicleStockItem { get; set; }
 }
 
 public sealed class WorkShift : ICompanyScoped
@@ -308,8 +310,10 @@ public sealed class VehicleStockCheck : ICompanyScoped
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
     public Guid EmployeeAccountId { get; set; }
+    public Guid? VehicleId { get; set; }
     public DateTimeOffset CheckedAt { get; set; }
     public Account EmployeeAccount { get; set; } = null!;
+    public Vehicle? Vehicle { get; set; }
     public ICollection<VehicleStockCheckItem> Items { get; set; } = [];
 }
 
@@ -318,11 +322,64 @@ public sealed class VehicleStockCheckItem : ICompanyScoped
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
     public Guid VehicleStockCheckId { get; set; }
+    public Guid? VehicleStockItemId { get; set; }
     public required string ProductName { get; set; }
     public decimal Quantity { get; set; }
     public required string Unit { get; set; }
     public bool IsManual { get; set; }
     public VehicleStockCheck VehicleStockCheck { get; set; } = null!;
+    public VehicleStockItem? VehicleStockItem { get; set; }
+}
+
+public sealed class Vehicle : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid? AssignedEmployeeAccountId { get; set; }
+    public required string Plate { get; set; }
+    public required string NormalizedPlate { get; set; }
+    public required string Brand { get; set; }
+    public required string Model { get; set; }
+    public int? ModelYear { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Account? AssignedEmployeeAccount { get; set; }
+    public ICollection<VehicleStockItem> StockItems { get; set; } = [];
+}
+
+public sealed class VehicleStockItem : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid VehicleId { get; set; }
+    public Guid? InventoryItemId { get; set; }
+    public required string ProductName { get; set; }
+    public required string NormalizedName { get; set; }
+    public decimal Quantity { get; set; }
+    public required string Unit { get; set; }
+    public DateTimeOffset LastMovementAt { get; set; }
+    public bool IsActive { get; set; } = true;
+    public Vehicle Vehicle { get; set; } = null!;
+    public InventoryItem? InventoryItem { get; set; }
+}
+
+public sealed class VehicleStockMovement : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid VehicleStockItemId { get; set; }
+    public Guid? InventoryItemId { get; set; }
+    public Guid? ServiceReportId { get; set; }
+    public Guid? PerformedByAccountId { get; set; }
+    public required string Type { get; set; }
+    public decimal Quantity { get; set; }
+    public required string Unit { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
+    public VehicleStockItem VehicleStockItem { get; set; } = null!;
+    public InventoryItem? InventoryItem { get; set; }
+    public ServiceReport? ServiceReport { get; set; }
+    public Account? PerformedByAccount { get; set; }
 }
 
 public sealed class InventoryItem : ICompanyScoped

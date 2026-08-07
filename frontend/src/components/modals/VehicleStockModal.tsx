@@ -53,17 +53,18 @@ export default function VehicleStockModal({ catalog, initialItems, onClose, onSu
           <button className="icon-button" onClick={onClose} aria-label="Pencereyi kapat"><X size={20} /></button>
         </div>
 
-        {catalog.length > 0 && <div className="stock-catalog"><span>Daha önce kullanılan ürünler</span><div>{catalog.map((name) => <button type="button" key={name} onClick={() => addCatalogItem(name)}><Plus size={13} />{name}</button>)}</div></div>}
+        <div className="vehicle-stock-guidance"><strong>Fiziksel araç sayımı</strong><span>Depodan aktarılan ürünleri doğrulayın. Sayım farkı stok hareketi olarak kaydedilir; listede olmayan sarf malzemelerini manuel ekleyebilirsiniz.</span></div>
+        {catalog.length > 0 && <div className="stock-catalog"><span>Manuel ekleme önerileri</span><div>{catalog.filter((name) => !items.some((item) => item.productName === name)).slice(0, 8).map((name) => <button type="button" key={name} onClick={() => addCatalogItem(name)}><Plus size={13} />{name}</button>)}</div></div>}
 
         <form onSubmit={submit}>
           <div className="vehicle-stock-items">
             {items.length === 0 && <div className="vehicle-stock-empty"><PackagePlus size={28} /><strong>Henüz ürün eklenmedi</strong><span>Listeden seçin veya manuel ürün ekleyin.</span></div>}
             {items.map((item) => (
               <div className="vehicle-stock-row" key={item.key}>
-                <label>Ürün / ilaç<input value={item.productName} onChange={(event) => updateItem(item.key, { productName: event.target.value, isManual: true })} placeholder="Ürün adını yazın" maxLength={160} required /></label>
-                <label>Miktar<input type="number" min="0.01" step="0.01" value={item.quantity} onChange={(event) => updateItem(item.key, { quantity: Number(event.target.value) })} required /></label>
-                <label>Birim<select value={item.unit} onChange={(event) => updateItem(item.key, { unit: event.target.value })}><option>Adet</option><option>Litre</option><option>Mililitre</option><option>Kilogram</option><option>Gram</option><option>Paket</option><option>Kutu</option></select></label>
-                <button type="button" onClick={() => setItems((current) => current.filter((entry) => entry.key !== item.key))} aria-label={`${item.productName || 'Ürün'} kaydını kaldır`}><Trash2 size={17} /></button>
+                <label>Ürün / ilaç<input value={item.productName} disabled={Boolean(item.vehicleStockItemId)} onChange={(event) => updateItem(item.key, { productName: event.target.value, isManual: true })} placeholder="Ürün adını yazın" maxLength={160} required /></label>
+                <label>Sayım miktarı<input type="number" min="0" step="0.001" value={item.quantity} onChange={(event) => updateItem(item.key, { quantity: Number(event.target.value) })} required /></label>
+                <label>Birim<select value={item.unit} disabled={Boolean(item.vehicleStockItemId)} onChange={(event) => updateItem(item.key, { unit: event.target.value })}><option>Adet</option><option>Litre</option><option>Mililitre</option><option>Kilogram</option><option>Gram</option><option>Paket</option><option>Kutu</option></select></label>
+                <button type="button" disabled={Boolean(item.vehicleStockItemId)} onClick={() => setItems((current) => current.filter((entry) => entry.key !== item.key))} aria-label={`${item.productName || 'Ürün'} kaydını kaldır`}><Trash2 size={17} /></button>
               </div>
             ))}
           </div>

@@ -7,6 +7,7 @@ import ServiceReportPrintSheet from '../components/report/ServiceReportPrintShee
 import { FieldSessionExpiredError, getWorkforceAnalytics, type WorkforceAnalytics } from '../services/fieldOperationsApi';
 import { getCompanyServiceReports, getServiceReportAnalytics, ReportSessionExpiredError, saveServiceReport, type ServiceReportAnalytics, type ServiceReportRecord, type UpsertServiceReportInput } from '../services/serviceReportApi';
 import { exportServiceReportExcel, exportTrendExcel } from '../utils/serviceReportExcel';
+import { getVehicles, type VehicleRecord } from '../services/inventoryApi';
 
 type Props = { accessToken: string; companyName: string; userName: string; workOrders: WorkOrder[]; onSessionExpired: () => void };
 type Tab = 'reports' | 'trends' | 'workforce';
@@ -14,6 +15,7 @@ type Tab = 'reports' | 'trends' | 'workforce';
 export default function ReportsAnalytics({ accessToken, companyName, userName, workOrders, onSessionExpired }: Props) {
   const [tab, setTab] = useState<Tab>('reports');
   const [reports, setReports] = useState<ServiceReportRecord[]>([]); const [analytics, setAnalytics] = useState<ServiceReportAnalytics | null>(null); const [workforce, setWorkforce] = useState<WorkforceAnalytics | null>(null);
+  const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [editing, setEditing] = useState<{ order: WorkOrder; report?: ServiceReportRecord } | null>(null); const [preview, setPreview] = useState<ServiceReportRecord | null>(null);
   const [customerId, setCustomerId] = useState(''); const [branchId, setBranchId] = useState(''); const [from, setFrom] = useState(defaultFrom()); const [to, setTo] = useState(dateKey(new Date()));
   const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pesneer_Saha_Raporu' });
@@ -22,8 +24,8 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
     setLoading(true); setError(null);
     try {
       const query = new URLSearchParams({ from, to }); if (customerId) query.set('customerId', customerId); if (branchId) query.set('branchId', branchId);
-      const [reportItems, reportAnalytics, workforceAnalytics] = await Promise.all([getCompanyServiceReports(accessToken), getServiceReportAnalytics(accessToken, query.toString()), getWorkforceAnalytics(accessToken)]);
-      setReports(reportItems); setAnalytics(reportAnalytics); setWorkforce(workforceAnalytics);
+      const [reportItems, reportAnalytics, workforceAnalytics, vehicleItems] = await Promise.all([getCompanyServiceReports(accessToken), getServiceReportAnalytics(accessToken, query.toString()), getWorkforceAnalytics(accessToken), getVehicles(accessToken)]);
+      setReports(reportItems); setAnalytics(reportAnalytics); setWorkforce(workforceAnalytics); setVehicles(vehicleItems);
     } catch (loadError) {
       if (loadError instanceof ReportSessionExpiredError || loadError instanceof FieldSessionExpiredError) return onSessionExpired();
       setError(loadError instanceof Error ? loadError.message : 'Rapor verileri yüklenemedi.');
@@ -45,7 +47,7 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
       {tab === 'trends' && analytics && <TrendsTab analytics={analytics} reports={reports} customers={customers} branches={branches} customerId={customerId} branchId={branchId} from={from} to={to} onCustomer={(value) => { setCustomerId(value); setBranchId(''); }} onBranch={setBranchId} onFrom={setFrom} onTo={setTo} />}
       {tab === 'workforce' && workforce && <WorkforceTab analytics={workforce} />}
     </>}
-    {editing && <ServiceReportModal order={editing.order} existing={editing.report} companyName={companyName} operatorName={editing.order.technician || userName} onClose={() => setEditing(null)} onSave={save} />}
+    {editing && <ServiceReportModal order={editing.order} existing={editing.report} companyName={companyName} operatorName={editing.order.technician || userName} vehicleStockItems={(vehicles.find((item) => item.assignedEmployeeAccountId === editing.order.employeeAccountId)?.stockItems ?? []).map((item) => ({ id: item.id, vehicleStockItemId: item.id, inventoryItemId: item.inventoryItemId, productName: item.productName, quantity: item.quantity, unit: item.unit, isManual: item.isManual }))} onClose={() => setEditing(null)} onSave={save} />}
     {preview && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>{preview.reportNumber}</strong><span>{preview.customerName} · {preview.branchName}</span></div><button onClick={() => exportServiceReportExcel(preview)}><FileSpreadsheet size={16} /> Excel</button><button onClick={print}><Printer size={16} /> PDF / Yazdır</button><button className="icon-button" onClick={() => setPreview(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={printRef}><ServiceReportPrintSheet report={preview} accessToken={accessToken} /></div></div></div></div>}
   </section>;
 }

@@ -3,19 +3,21 @@ import { Check, FileCheck2, Plus, Save, Trash2, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import type { ReportProductInput, ReportStationInput, ServiceReportRecord, UpsertServiceReportInput } from '../../services/serviceReportApi';
 import { pesticideCatalog } from '../../data/pesticideCatalog';
+import type { VehicleStockCheck } from '../../services/fieldOperationsApi';
 import SignaturePad from './SignaturePad';
 
 type Props = {
   order: WorkOrder; existing?: ServiceReportRecord; companyName: string; operatorName: string;
+  vehicleStockItems?: VehicleStockCheck['items'];
   readOnly?: boolean; onClose: () => void; onSave: (input: UpsertServiceReportInput) => Promise<void>;
 };
 
 type FormState = Omit<UpsertServiceReportInput, 'finalize' | 'stations' | 'products' | 'areaSquareMeters'> & { areaSquareMeters: string };
 
 const blankStation = (): ReportStationInput => ({ deviceNumber: '', area: '', deviceType: 'EFT', targetPest: '', caughtCount: 0, hasActivity: false, plateChanged: false, deviceStatus: 'Active', notes: '' });
-const blankProduct = (): ReportProductInput => ({ productName: '', licenseNumber: '', applicationMethod: '', dilutionRate: '', activeIngredient: '', antidote: '', packingQuantity: '', amountUsed: 0, unit: 'ml' });
+const blankProduct = (): ReportProductInput => ({ productName: '', licenseNumber: '', applicationMethod: '', dilutionRate: '', activeIngredient: '', antidote: '', packingQuantity: '', amountUsed: 0, unit: 'Mililitre' });
 
-export default function ServiceReportModal({ order, existing, companyName, operatorName, readOnly = false, onClose, onSave }: Props) {
+export default function ServiceReportModal({ order, existing, companyName, operatorName, vehicleStockItems, readOnly = false, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(() => createInitialForm(order, existing, companyName));
   const [stations, setStations] = useState<ReportStationInput[]>(existing?.stations.map(stripStationId) ?? [blankStation()]);
   const [products, setProducts] = useState<ReportProductInput[]>(existing?.products.map(stripProductId) ?? [blankProduct()]);
@@ -71,13 +73,13 @@ export default function ServiceReportModal({ order, existing, companyName, opera
       </tr>)}</tbody></table></div></section>
 
       <section className="report-form-section"><header><span>3</span><div><strong>Kullanılan biyosidal ürünler</strong><small>Ürün, ruhsat, etken madde ve sarf miktarı</small></div>{!readOnly && <button onClick={() => setProducts((current) => [...current, blankProduct()])}><Plus size={15} /> Ürün ekle</button>}</header><div className="report-product-list">{products.map((product, index) => <article key={index}><div className="form-grid report-form-grid">
-        <label className="form-field-wide">Ürün adı<input list={`report-products-${index}`} value={product.productName} disabled={readOnly} placeholder="Listeden seçin veya ürün adını yazın" onChange={(event) => updateProduct(index, { productName: event.target.value })} /><datalist id={`report-products-${index}`}>{pesticideCatalog.map((item) => <option key={item} value={item} />)}</datalist></label>
+        {vehicleStockItems ? <label className="form-field-wide">Araç stoğundan ürün<select value={product.vehicleStockItemId ?? ''} disabled={readOnly} onChange={(event) => { const stock = vehicleStockItems.find((item) => item.vehicleStockItemId === event.target.value); updateProduct(index, { vehicleStockItemId: stock?.vehicleStockItemId, productName: stock?.productName ?? '', unit: stock ? usageUnits(stock.unit)[0] : 'Mililitre' }); }}><option value="">Araç ürünü seçin</option>{vehicleStockItems.filter((item) => item.quantity > 0 || item.vehicleStockItemId === product.vehicleStockItemId).map((item) => <option key={item.vehicleStockItemId ?? item.id} value={item.vehicleStockItemId}>{item.productName} · {item.quantity} {item.unit}</option>)}</select><small className="vehicle-stock-balance">Rapor onaylandığında miktar araç stoğundan otomatik düşer.</small></label> : <label className="form-field-wide">Ürün adı<input list={`report-products-${index}`} value={product.productName} disabled={readOnly} placeholder="Listeden seçin veya ürün adını yazın" onChange={(event) => updateProduct(index, { productName: event.target.value })} /><datalist id={`report-products-${index}`}>{pesticideCatalog.map((item) => <option key={item} value={item} />)}</datalist></label>}
         <Field label="Ruhsat bilgisi" value={product.licenseNumber ?? ''} onChange={(value) => updateProduct(index, { licenseNumber: value })} disabled={readOnly} />
         <Field label="Uygulama yöntemi" value={product.applicationMethod ?? ''} onChange={(value) => updateProduct(index, { applicationMethod: value })} disabled={readOnly} />
         <Field label="Etken madde" value={product.activeIngredient ?? ''} onChange={(value) => updateProduct(index, { activeIngredient: value })} disabled={readOnly} />
         <Field label="Seyreltme oranı" value={product.dilutionRate ?? ''} onChange={(value) => updateProduct(index, { dilutionRate: value })} disabled={readOnly} />
         <Field label="Kullanılan miktar" value={String(product.amountUsed)} onChange={(value) => updateProduct(index, { amountUsed: Number(value) })} disabled={readOnly} type="number" />
-        <Field label="Birim" value={product.unit} onChange={(value) => updateProduct(index, { unit: value })} disabled={readOnly} />
+        {vehicleStockItems ? <label>Birim<select value={product.unit} disabled={readOnly || !product.vehicleStockItemId} onChange={(event) => updateProduct(index, { unit: event.target.value })}>{usageUnits(vehicleStockItems.find((item) => item.vehicleStockItemId === product.vehicleStockItemId)?.unit).map((unit) => <option key={unit}>{unit}</option>)}</select></label> : <Field label="Birim" value={product.unit} onChange={(value) => updateProduct(index, { unit: value })} disabled={readOnly} />}
       </div>{!readOnly && products.length > 1 && <button className="report-product-remove" onClick={() => setProducts((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={14} /> Ürünü kaldır</button>}</article>)}</div></section>
 
       <section className="report-form-section"><header><span>4</span><div><strong>Sonuç ve öneriler</strong><small>Saha bulguları ve düzeltici faaliyet</small></div></header><div className="form-grid report-form-grid">
@@ -118,3 +120,4 @@ function createInitialForm(order: WorkOrder, report: ServiceReportRecord | undef
 }
 function stripStationId({ id: _, ...station }: ServiceReportRecord['stations'][number]): ReportStationInput { return station; }
 function stripProductId({ id: _, ...product }: ServiceReportRecord['products'][number]): ReportProductInput { return product; }
+function usageUnits(stockUnit?: string) { if (stockUnit === 'Litre') return ['Mililitre', 'Litre']; if (stockUnit === 'Kilogram') return ['Gram', 'Kilogram']; return [stockUnit ?? 'Mililitre']; }

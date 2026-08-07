@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
+using Pesneer.Api.Inventory;
 
 namespace Pesneer.Api.FieldOperations;
 
@@ -160,12 +161,14 @@ public static class FieldOperationsEndpoints
         CancellationToken cancellationToken)
     {
         if (!TryGetEmployeeIdentity(companyContext, out var employeeId)) return Results.Forbid();
+        var vehicle = await dbContext.Vehicles.AsNoTracking().Include(item => item.StockItems)
+            .SingleOrDefaultAsync(item => item.AssignedEmployeeAccountId == employeeId && item.IsActive, cancellationToken);
+        if (vehicle is null) return Results.NoContent();
         var checks = await dbContext.VehicleStockChecks.AsNoTracking()
-            .Include(item => item.Items)
-            .Where(item => item.EmployeeAccountId == employeeId)
+            .Where(item => item.EmployeeAccountId == employeeId && item.VehicleId == vehicle.Id)
             .ToListAsync(cancellationToken);
-        var check = checks.OrderByDescending(item => item.CheckedAt).FirstOrDefault();
-        return check is null ? Results.NoContent() : Results.Ok(ToVehicleStockResponse(check));
+        var lastCheck = checks.OrderByDescending(item => item.CheckedAt).FirstOrDefault();
+        return Results.Ok(ToCurrentVehicleStockResponse(vehicle, lastCheck));
     }
 
     private static async Task<IResult> CreateVehicleStockCheckAsync(
@@ -178,25 +181,90 @@ public static class FieldOperationsEndpoints
         var errors = ValidateStockItems(request.Items);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
+        var vehicle = await dbContext.Vehicles.Include(item => item.StockItems)
+            .SingleOrDefaultAsync(item => item.AssignedEmployeeAccountId == employeeId && item.IsActive, cancellationToken);
+        if (vehicle is null) return Results.Conflict(new { message = "Araç stok kontrolü için önce firma sahibi tarafından personelinize araç atanmalıdır." });
+        var now = DateTimeOffset.UtcNow;
+        var snapshotItems = new List<VehicleStockCheckItem>();
+        foreach (var input in request.Items)
+        {
+            VehicleStockItem? stockItem = null;
+            if (input.VehicleStockItemId.HasValue)
+            {
+                stockItem = vehicle.StockItems.SingleOrDefault(item => item.Id == input.VehicleStockItemId.Value && item.IsActive);
+                if (stockItem is null) return Results.ValidationProblem(new Dictionary<string, string[]> { ["items"] = ["Araçta bulunmayan bir stok kalemi seçildi."] });
+                if (!InventoryUnitConverter.TryConvert(input.Quantity, input.Unit, stockItem.Unit, out var countedQuantity))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["unit"] = [$"{input.ProductName} için {input.Unit} ile {stockItem.Unit} birimleri uyumlu değil."] });
+                var difference = countedQuantity - stockItem.Quantity;
+                if (difference != 0)
+                {
+                    stockItem.Quantity = countedQuantity; stockItem.LastMovementAt = now;
+                    dbContext.VehicleStockMovements.Add(new VehicleStockMovement
+                    {
+                        Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, VehicleStockItemId = stockItem.Id,
+                        InventoryItemId = stockItem.InventoryItemId, PerformedByAccountId = employeeId, Type = "CountAdjustment",
+                        Quantity = Math.Abs(difference), Unit = stockItem.Unit,
+                        Note = difference > 0 ? "Personel araç sayımı: fazla" : "Personel araç sayımı: eksik", OccurredAt = now
+                    });
+                }
+            }
+            else
+            {
+                var normalizedUnit = InventoryUnitConverter.Normalize(input.Unit);
+                stockItem = vehicle.StockItems.SingleOrDefault(item => !item.InventoryItemId.HasValue && item.NormalizedName == input.ProductName.Trim().ToUpperInvariant() && item.Unit == normalizedUnit);
+                if (stockItem is null)
+                {
+                    stockItem = new VehicleStockItem
+                    {
+                        Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, VehicleId = vehicle.Id,
+                        ProductName = input.ProductName.Trim(), NormalizedName = input.ProductName.Trim().ToUpperInvariant(),
+                        Quantity = input.Quantity, Unit = normalizedUnit, LastMovementAt = now
+                    };
+                    dbContext.VehicleStockItems.Add(stockItem);
+                    vehicle.StockItems.Add(stockItem);
+                    dbContext.VehicleStockMovements.Add(new VehicleStockMovement
+                    {
+                        Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, VehicleStockItemId = stockItem.Id,
+                        PerformedByAccountId = employeeId, Type = "ManualEntry", Quantity = input.Quantity,
+                        Unit = stockItem.Unit, Note = "Personel tarafından manuel araç stoğu eklendi", OccurredAt = now
+                    });
+                }
+                else
+                {
+                    var difference = input.Quantity - stockItem.Quantity;
+                    if (difference != 0)
+                    {
+                        stockItem.Quantity = input.Quantity;
+                        stockItem.LastMovementAt = now;
+                        dbContext.VehicleStockMovements.Add(new VehicleStockMovement
+                        {
+                            Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, VehicleStockItemId = stockItem.Id,
+                            PerformedByAccountId = employeeId, Type = "CountAdjustment", Quantity = Math.Abs(difference),
+                            Unit = stockItem.Unit, Note = difference > 0 ? "Personel araç sayımı: fazla" : "Personel araç sayımı: eksik", OccurredAt = now
+                        });
+                    }
+                }
+            }
+
+            snapshotItems.Add(new VehicleStockCheckItem
+            {
+                Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, VehicleStockItemId = stockItem.Id,
+                ProductName = stockItem.ProductName, Quantity = stockItem.Quantity, Unit = stockItem.Unit, IsManual = !stockItem.InventoryItemId.HasValue
+            });
+        }
+
         var check = new VehicleStockCheck
         {
             Id = Guid.NewGuid(),
             CompanyId = companyContext.CompanyId.Value,
             EmployeeAccountId = employeeId,
-            CheckedAt = DateTimeOffset.UtcNow,
-            Items = request.Items.Select(item => new VehicleStockCheckItem
-            {
-                Id = Guid.NewGuid(),
-                CompanyId = companyContext.CompanyId.Value,
-                ProductName = item.ProductName.Trim(),
-                Quantity = item.Quantity,
-                Unit = item.Unit.Trim(),
-                IsManual = item.IsManual
-            }).ToList()
+            VehicleId = vehicle.Id,
+            CheckedAt = now,
+            Items = snapshotItems
         };
         dbContext.VehicleStockChecks.Add(check);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Results.Created($"/api/employee/operations/vehicle-stock/checks/{check.Id}", ToVehicleStockResponse(check));
+        return Results.Created($"/api/employee/operations/vehicle-stock/checks/{check.Id}", ToCurrentVehicleStockResponse(vehicle, check));
     }
 
     private static async Task<IResult> GetWorkforceAnalyticsAsync(
@@ -282,12 +350,26 @@ public static class FieldOperationsEndpoints
     private static VehicleStockCheckResponse ToVehicleStockResponse(VehicleStockCheck check) => new(
         check.Id,
         check.CheckedAt,
+        check.VehicleId,
+        check.Vehicle?.Plate,
+        check.Vehicle is null ? null : $"{check.Vehicle.Brand} {check.Vehicle.Model}",
         check.Items.Select(item => new VehicleStockItemResponse(
             item.Id,
+            item.VehicleStockItemId,
+            item.VehicleStockItem?.InventoryItemId,
             item.ProductName,
             item.Quantity,
             item.Unit,
             item.IsManual)).ToList());
+
+    private static VehicleStockCheckResponse ToCurrentVehicleStockResponse(Vehicle vehicle, VehicleStockCheck? check) => new(
+        check?.Id ?? Guid.Empty,
+        check?.CheckedAt ?? vehicle.CreatedAt,
+        vehicle.Id,
+        vehicle.Plate,
+        $"{vehicle.Brand} {vehicle.Model}",
+        vehicle.StockItems.Where(item => item.IsActive).OrderBy(item => item.ProductName).Select(item => new VehicleStockItemResponse(
+            item.Id, item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit, !item.InventoryItemId.HasValue)).ToArray());
 
     private static Dictionary<string, string[]> ValidateStockItems(IReadOnlyList<VehicleStockItemRequest>? items)
     {
@@ -301,7 +383,7 @@ public static class FieldOperationsEndpoints
         if (items.Count > 100) errors["items"] = ["Tek kontrolde en fazla 100 ürün kaydedilebilir."];
         if (items.Any(item => string.IsNullOrWhiteSpace(item.ProductName) || item.ProductName.Trim().Length > 160))
             errors["productName"] = ["Ürün adlarını kontrol edin."];
-        if (items.Any(item => item.Quantity <= 0)) errors["quantity"] = ["Ürün miktarı sıfırdan büyük olmalıdır."];
+        if (items.Any(item => item.Quantity < 0)) errors["quantity"] = ["Ürün miktarı negatif olamaz."];
         if (items.Any(item => string.IsNullOrWhiteSpace(item.Unit) || item.Unit.Trim().Length > 24))
             errors["unit"] = ["Geçerli bir birim seçin."];
         return errors;

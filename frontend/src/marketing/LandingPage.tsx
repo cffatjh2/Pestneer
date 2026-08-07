@@ -42,7 +42,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
       <header className="landing-header">
         <a className="landing-brand" href="#top" aria-label="Pesneer ana sayfa">
           <span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span>
-          <div><strong>pesneer</strong><small>PEST KONTROL YÖNETİM SİSTEMİ</small></div>
+          <div><strong>Pestneer</strong><small>PEST KONTROL YÖNETİM SİSTEMİ</small></div>
         </a>
         <nav aria-label="Tanıtım menüsü"><a href="#features">Özellikler</a><a href="#workflow">Nasıl çalışır?</a><a href="#security">Güvenlik</a></nav>
         <button className="landing-login-button" onClick={onLogin}>Giriş Yap <ArrowRight size={17} /></button>
@@ -96,7 +96,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
       <section className="landing-section landing-workflow" id="workflow">
         <div className="workflow-visual">
           <div className="workflow-glow" />
-          <div className="workflow-phone"><div className="phone-speaker" /><div className="phone-brand"><span className="phone-logo"><img src="/pesneer-mark.jpeg" alt="" /></span><strong>pesneer</strong><span>SAHA</span></div><div className="phone-greeting"><small>07 AĞUSTOS 2026</small><strong>Merhaba, Fatih</strong><span>Bugün 4 görevin var</span></div><div className="phone-shift"><div><span>Çalışma süresi</span><strong>04:32:18</strong></div><button>Öğle Molası</button></div><div className="phone-job"><small>SIRADAKİ İŞ · 10:30</small><strong>Arabica Coffee</strong><span><MapPin size={11} /> Kızılay Şubesi</span><button>İş emrini aç <ChevronRight size={13} /></button></div><div className="phone-home"><i /><i /><i /></div></div>
+          <div className="workflow-phone"><div className="phone-speaker" /><div className="phone-brand"><span className="phone-logo"><img src="/pesneer-mark.jpeg" alt="" /></span><strong>Pestneer</strong><span>SAHA</span></div><div className="phone-greeting"><small>07 AĞUSTOS 2026</small><strong>Merhaba, Fatih</strong><span>Bugün 4 görevin var</span></div><div className="phone-shift"><div><span>Çalışma süresi</span><strong>04:32:18</strong></div><button>Öğle Molası</button></div><div className="phone-job"><small>SIRADAKİ İŞ · 10:30</small><strong>Arabica Coffee</strong><span><MapPin size={11} /> Kızılay Şubesi</span><button>İş emrini aç <ChevronRight size={13} /></button></div><div className="phone-home"><i /><i /><i /></div></div>
           <div className="workflow-scan-line" />
           <div className="workflow-badge badge-sign"><Signature size={18} /><span><strong>Dijital imza</strong><small>Sahada tamamlandı</small></span></div>
           <div className="workflow-badge badge-stock"><PackageCheck size={18} /><span><strong>Araç stoku</strong><small>Kontrol edildi</small></span></div>
@@ -110,7 +110,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
       </section>
 
       <section className="landing-cta"><div className="cta-orb" /><div><span><i className="cta-logo"><img src="/pesneer-mark.jpeg" alt="" /></i> PESNEER OPERASYON MERKEZİ</span><h2>Pest kontrol şirketinizi<br />geleceğe hazırlayın.</h2><p>Daha düzenli ekipler, daha hızlı saha operasyonları ve daha güçlü müşteri deneyimi.</p></div><button onClick={onLogin}>Giriş yap ve sistemi keşfet <ArrowRight size={18} /></button></section>
-      <footer className="landing-footer"><a className="landing-brand" href="#top"><span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span><div><strong>pesneer</strong><small>OPERASYONUN GÜVENLİ MERKEZİ</small></div></a><p>© 2026 Pesneer. Pest kontrol operasyon yönetim sistemi.</p><div><a href="#features">Özellikler</a><a href="#security">Güvenlik</a><button onClick={onLogin}>Giriş Yap</button></div></footer>
+      <footer className="landing-footer"><a className="landing-brand" href="#top"><span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span><div><strong>Pestneer</strong><small>OPERASYONUN GÜVENLİ MERKEZİ</small></div></a><p>© 2026 Pestneer. Pest kontrol operasyon yönetim sistemi.</p><div><a href="#features">Özellikler</a><a href="#security">Güvenlik</a><button onClick={onLogin}>Giriş Yap</button></div></footer>
     </main>
   );
 }
