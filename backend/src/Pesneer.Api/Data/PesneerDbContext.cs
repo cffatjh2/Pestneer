@@ -14,6 +14,8 @@ public class PesneerDbContext(
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerBranch> CustomerBranches => Set<CustomerBranch>();
     public DbSet<CustomerMembership> CustomerMemberships => Set<CustomerMembership>();
+    public DbSet<EmergencyRequest> EmergencyRequests => Set<EmergencyRequest>();
+    public DbSet<EmergencyRequestHistory> EmergencyRequestHistories => Set<EmergencyRequestHistory>();
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
     public DbSet<WorkOrderStatusHistory> WorkOrderStatusHistories => Set<WorkOrderStatusHistory>();
     public DbSet<WorkOrderPhoto> WorkOrderPhotos => Set<WorkOrderPhoto>();
@@ -93,12 +95,40 @@ public class PesneerDbContext(
 
         modelBuilder.Entity<CustomerMembership>(entity =>
         {
-            entity.HasIndex(membership => new { membership.AccountId, membership.CompanyId, membership.CustomerId }).IsUnique();
+            entity.HasIndex(membership => new { membership.AccountId, membership.CompanyId }).IsUnique();
             entity.Property(membership => membership.Role).HasConversion<string>().HasMaxLength(40);
             entity.HasOne(membership => membership.Account).WithMany().HasForeignKey(membership => membership.AccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(membership => membership.Company).WithMany().HasForeignKey(membership => membership.CompanyId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(membership => membership.Customer).WithMany().HasForeignKey(membership => membership.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(membership => membership.CustomerBranch).WithMany().HasForeignKey(membership => membership.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(membership => companyContext.CompanyId.HasValue && membership.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<EmergencyRequest>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.Number }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.Status, item.RequestedAt });
+            entity.Property(item => item.Number).HasMaxLength(40);
+            entity.Property(item => item.ServiceType).HasMaxLength(32);
+            entity.Property(item => item.Priority).HasMaxLength(16);
+            entity.Property(item => item.Status).HasMaxLength(20);
+            entity.Property(item => item.Description).HasMaxLength(2000);
+            entity.Property(item => item.ContactPhone).HasMaxLength(24);
+            entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.AssignedEmployeeAccount).WithMany().HasForeignKey(item => item.AssignedEmployeeAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<EmergencyRequestHistory>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.EmergencyRequestId, item.OccurredAt });
+            entity.Property(item => item.Status).HasMaxLength(20);
+            entity.Property(item => item.Note).HasMaxLength(1000);
+            entity.HasOne(item => item.EmergencyRequest).WithMany(request => request.History).HasForeignKey(item => item.EmergencyRequestId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.ChangedByAccount).WithMany().HasForeignKey(item => item.ChangedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
         modelBuilder.Entity<WorkOrder>(entity =>

@@ -11,14 +11,14 @@ public sealed record TokenResult(string Value, DateTimeOffset ExpiresAt);
 
 public interface IJwtTokenService
 {
-    TokenResult Create(Account account, Company company, CompanyRole role, Guid? customerId);
+    TokenResult Create(Account account, Company company, CompanyRole role, Guid? customerId, Guid? customerBranchId);
 }
 
 public sealed class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
 {
     private readonly JwtOptions _options = options.Value;
 
-    public TokenResult Create(Account account, Company company, CompanyRole role, Guid? customerId)
+    public TokenResult Create(Account account, Company company, CompanyRole role, Guid? customerId, Guid? customerBranchId)
     {
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(_options.AccessTokenMinutes);
         var claims = new List<Claim>
@@ -34,6 +34,11 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenSer
         if (customerId.HasValue)
         {
             claims.Add(new Claim("customer_id", customerId.Value.ToString()));
+        }
+
+        if (customerBranchId.HasValue)
+        {
+            claims.Add(new Claim("customer_branch_id", customerBranchId.Value.ToString()));
         }
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));

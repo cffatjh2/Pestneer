@@ -332,6 +332,9 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("TEXT");
 
@@ -347,12 +350,129 @@ namespace Pesneer.Api.Data.Migrations
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("CustomerBranchId");
+
                     b.HasIndex("CustomerId");
 
-                    b.HasIndex("AccountId", "CompanyId", "CustomerId")
+                    b.HasIndex("AccountId", "CompanyId")
                         .IsUnique();
 
                     b.ToTable("CustomerMemberships");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("AcknowledgedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AssignedEmployeeAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ServiceType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedEmployeeAccountId");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("CustomerBranchId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Status", "RequestedAt");
+
+                    b.ToTable("EmergencyRequests");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequestHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChangedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmergencyRequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByAccountId");
+
+                    b.HasIndex("EmergencyRequestId");
+
+                    b.HasIndex("CompanyId", "EmergencyRequestId", "OccurredAt");
+
+                    b.ToTable("EmergencyRequestHistories");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.InventoryItem", b =>
@@ -1056,6 +1176,11 @@ namespace Pesneer.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -1067,6 +1192,60 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("Company");
 
                     b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequest", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "AssignedEmployeeAccount")
+                        .WithMany()
+                        .HasForeignKey("AssignedEmployeeAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedEmployeeAccount");
+
+                    b.Navigation("CreatedByAccount");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequestHistory", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "ChangedByAccount")
+                        .WithMany()
+                        .HasForeignKey("ChangedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.EmergencyRequest", "EmergencyRequest")
+                        .WithMany("History")
+                        .HasForeignKey("EmergencyRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChangedByAccount");
+
+                    b.Navigation("EmergencyRequest");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.InventoryMovement", b =>
@@ -1223,6 +1402,11 @@ namespace Pesneer.Api.Data.Migrations
             modelBuilder.Entity("Pesneer.Api.Domain.Customer", b =>
                 {
                     b.Navigation("Branches");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequest", b =>
+                {
+                    b.Navigation("History");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>

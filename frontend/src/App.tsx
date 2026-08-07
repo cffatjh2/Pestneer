@@ -155,7 +155,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'dashboard':
         return <Dashboard workOrders={workOrders} onCreate={() => setIsNewOrderModalOpen(true)} onReport={() => setActiveReport(demoReport)} />;
       case 'work-orders':
-        return <WorkOrders workOrders={workOrders} customers={customers} isLoading={isPlanningLoading} loadError={planningError} onReload={() => void loadPlanningData()} onCreate={() => setIsNewOrderModalOpen(true)} onManageCustomers={() => openCustomerManagement(false)} onEdit={setEditingOrder} onView={setSelectedOrder} />;
+        return <WorkOrders accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} workOrders={workOrders} customers={customers} isLoading={isPlanningLoading} loadError={planningError} onReload={() => void loadPlanningData()} onCreate={() => setIsNewOrderModalOpen(true)} onManageCustomers={() => openCustomerManagement(false)} onEdit={setEditingOrder} onView={setSelectedOrder} />;
       case 'calendar': return <Calendar accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} onNotify={showToast} />;
       case 'stock': return <Stock accessToken={session.accessToken} onSessionExpired={onLogout} />;
       case 'team': return <Team accessToken={session.accessToken} companyCode={session.company.code} onNotify={showToast} onSessionExpired={onLogout} />;

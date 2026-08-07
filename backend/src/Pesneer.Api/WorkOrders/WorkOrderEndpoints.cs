@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Mail;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
@@ -35,7 +36,7 @@ public static class WorkOrderEndpoints
         employeeWorkOrders.MapPost("/{workOrderId:guid}/complete", CompleteWorkOrderAsync).DisableAntiforgery();
 
         app.MapGet("/api/work-orders/photos/{photoId:guid}", GetWorkOrderPhotoAsync)
-            .RequireAuthorization("CompanyStaff");
+            .RequireAuthorization();
 
         return app;
     }
@@ -53,8 +54,11 @@ public static class WorkOrderEndpoints
     private static async Task<IResult> CreateCustomerAsync(
         CreateCustomerRequest request,
         PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        IPasswordHasher<Account> passwordHasher,
         CancellationToken cancellationToken)
     {
+        if (!companyContext.CompanyId.HasValue) return Results.Forbid();
         var name = request.LegalName.Trim();
         if (name.Length is < 2 or > 240)
         {
@@ -76,6 +80,14 @@ public static class WorkOrderEndpoints
             return Validation("mapUrl", "Geçerli bir Google Haritalar bağlantısı girin.");
         }
 
+        var portalError = ValidatePortalAccount(request.PortalEmail, request.PortalPassword, "portal");
+        if (portalError is not null) return portalError;
+        var normalizedPortalEmail = NormalizeEmail(request.PortalEmail);
+        if (normalizedPortalEmail is not null && await dbContext.Accounts.AnyAsync(item => item.Portal == PortalType.Customer && item.NormalizedEmail == normalizedPortalEmail, cancellationToken))
+        {
+            return Results.Conflict(new { message = "Bu e-posta adresiyle daha önce müşteri hesabı oluşturulmuş." });
+        }
+
         var requestedCode = string.IsNullOrWhiteSpace(request.Code) ? ToCode(name) : ToCode(request.Code);
         var customer = new Customer
         {
@@ -94,6 +106,16 @@ public static class WorkOrderEndpoints
         };
 
         dbContext.Customers.Add(customer);
+        if (normalizedPortalEmail is not null)
+        {
+            var account = NewCustomerAccount(request.PortalEmail!, request.PortalContactName ?? request.ContactName ?? name, request.PhoneNumber, request.PortalPassword!, passwordHasher);
+            dbContext.Accounts.Add(account);
+            dbContext.CustomerMemberships.Add(new CustomerMembership
+            {
+                Id = Guid.NewGuid(), AccountId = account.Id, CompanyId = companyContext.CompanyId.Value,
+                CustomerId = customer.Id, Role = CompanyRole.CustomerAdministrator
+            });
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Created($"/api/company/customers/{customer.Id}", ToResponse(customer));
     }
@@ -102,8 +124,11 @@ public static class WorkOrderEndpoints
         Guid customerId,
         BulkCreateCustomerBranchesRequest request,
         PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        IPasswordHasher<Account> passwordHasher,
         CancellationToken cancellationToken)
     {
+        if (!companyContext.CompanyId.HasValue) return Results.Forbid();
         if (request.Branches.Count is < 1 or > 250)
         {
             return Validation("branches", "Tek işlemde 1 ile 250 arasında şube ekleyebilirsiniz.");
@@ -115,6 +140,16 @@ public static class WorkOrderEndpoints
 
         var errors = ValidateBranches(request.Branches);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
+
+        var portalEmails = request.Branches.Select(item => NormalizeEmail(item.PortalEmail)).Where(item => item is not null).Cast<string>().ToArray();
+        if (portalEmails.Length != portalEmails.Distinct(StringComparer.Ordinal).Count())
+        {
+            return Validation("branches", "Aynı portal e-posta adresi birden fazla şubede kullanılamaz.");
+        }
+        if (portalEmails.Length > 0 && await dbContext.Accounts.AnyAsync(item => item.Portal == PortalType.Customer && portalEmails.Contains(item.NormalizedEmail), cancellationToken))
+        {
+            return Results.Conflict(new { message = "Şube listesindeki portal e-postalarından biri daha önce kullanılmış." });
+        }
 
         var usedCodes = customer.Branches.Select(item => item.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var branches = request.Branches.Select(input =>
@@ -141,6 +176,19 @@ public static class WorkOrderEndpoints
         }).ToList();
 
         dbContext.CustomerBranches.AddRange(branches);
+        for (var index = 0; index < branches.Count; index++)
+        {
+            var input = request.Branches[index];
+            if (NormalizeEmail(input.PortalEmail) is null) continue;
+            var branch = branches[index];
+            var account = NewCustomerAccount(input.PortalEmail!, input.PortalContactName ?? input.ContactName ?? branch.Name, input.PhoneNumber, input.PortalPassword!, passwordHasher);
+            dbContext.Accounts.Add(account);
+            dbContext.CustomerMemberships.Add(new CustomerMembership
+            {
+                Id = Guid.NewGuid(), AccountId = account.Id, CompanyId = companyContext.CompanyId.Value,
+                CustomerId = customer.Id, CustomerBranchId = branch.Id, Role = CompanyRole.CustomerViewer
+            });
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(branches.Select(ToResponse));
     }
@@ -410,6 +458,8 @@ public static class WorkOrderEndpoints
             .SingleOrDefaultAsync(item => item.Id == photoId, cancellationToken);
         if (photo is null) return Results.NotFound();
         if (companyContext.Portal == PortalType.Employee && photo.WorkOrder.AssignedEmployeeAccountId != companyContext.AccountId.Value) return Results.Forbid();
+        if (companyContext.Portal == PortalType.Customer &&
+            (photo.WorkOrder.CustomerId != companyContext.CustomerId || companyContext.CustomerBranchId.HasValue && photo.WorkOrder.CustomerBranchId != companyContext.CustomerBranchId)) return Results.Forbid();
         return Results.File(photo.Data, photo.ContentType, photo.FileName);
     }
 
@@ -469,6 +519,8 @@ public static class WorkOrderEndpoints
             if (!string.IsNullOrWhiteSpace(branch.Email) && !MailAddress.TryCreate(branch.Email.Trim(), out _)) errors[$"branches[{index}].email"] = [$"{index + 1}. satırdaki e-posta adresi geçerli değil."];
             if (!CoordinatesAreValid(branch.Latitude, branch.Longitude)) errors[$"branches[{index}].location"] = [$"{index + 1}. satırdaki harita koordinatları geçerli değil."];
             if (!UrlIsValid(branch.MapUrl)) errors[$"branches[{index}].mapUrl"] = [$"{index + 1}. satırdaki harita bağlantısı geçerli değil."];
+            var portalError = ValidatePortalAccountValues(branch.PortalEmail, branch.PortalPassword);
+            if (portalError is not null) errors[$"branches[{index}].portal"] = [$"{index + 1}. satır: {portalError}"];
         }
         return errors;
     }
@@ -517,6 +569,30 @@ public static class WorkOrderEndpoints
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NormalizeEmail(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+    private static IResult? ValidatePortalAccount(string? email, string? password, string key)
+    {
+        var message = ValidatePortalAccountValues(email, password);
+        return message is null ? null : Validation(key, message);
+    }
+    private static string? ValidatePortalAccountValues(string? email, string? password)
+    {
+        if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(password)) return null;
+        if (string.IsNullOrWhiteSpace(email) || !MailAddress.TryCreate(email.Trim(), out _)) return "Portal hesabı için geçerli bir e-posta girin.";
+        if (string.IsNullOrWhiteSpace(password) || password.Length is < 6 or > 100) return "Portal şifresi 6-100 karakter arasında olmalıdır.";
+        return null;
+    }
+    private static Account NewCustomerAccount(string email, string displayName, string? phoneNumber, string password, IPasswordHasher<Account> passwordHasher)
+    {
+        var account = new Account
+        {
+            Id = Guid.NewGuid(), Email = email.Trim(), NormalizedEmail = email.Trim().ToUpperInvariant(),
+            DisplayName = displayName.Trim(), PhoneNumber = NullIfEmpty(phoneNumber), PasswordHash = string.Empty,
+            Portal = PortalType.Customer
+        };
+        account.PasswordHash = passwordHasher.HashPassword(account, password);
+        return account;
+    }
     private static bool CoordinatesAreValid(decimal? latitude, decimal? longitude) => (!latitude.HasValue && !longitude.HasValue) || (latitude is >= -90 and <= 90 && longitude is >= -180 and <= 180);
     private static bool UrlIsValid(string? value) => string.IsNullOrWhiteSpace(value) || (Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https");
     private static IResult Validation(string key, string message) => Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });

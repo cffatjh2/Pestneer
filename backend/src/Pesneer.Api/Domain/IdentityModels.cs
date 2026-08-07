@@ -109,11 +109,50 @@ public sealed class CustomerMembership : ICompanyScoped
     public Guid AccountId { get; set; }
     public Guid CompanyId { get; set; }
     public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
     public CompanyRole Role { get; set; }
     public bool IsActive { get; set; } = true;
     public Account Account { get; set; } = null!;
     public Company Company { get; set; } = null!;
     public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+}
+
+public sealed class EmergencyRequest : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public Guid? AssignedEmployeeAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string ServiceType { get; set; }
+    public required string Priority { get; set; }
+    public required string Status { get; set; }
+    public required string Description { get; set; }
+    public string? ContactPhone { get; set; }
+    public DateTimeOffset RequestedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? AcknowledgedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public Account? AssignedEmployeeAccount { get; set; }
+    public ICollection<EmergencyRequestHistory> History { get; set; } = [];
+}
+
+public sealed class EmergencyRequestHistory : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid EmergencyRequestId { get; set; }
+    public Guid ChangedByAccountId { get; set; }
+    public required string Status { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
+    public EmergencyRequest EmergencyRequest { get; set; } = null!;
+    public Account ChangedByAccount { get; set; } = null!;
 }
 
 public sealed class WorkOrder : ICompanyScoped

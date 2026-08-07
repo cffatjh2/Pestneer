@@ -80,11 +80,22 @@ Bu plan, canlı sistemdeki operasyon kayıplarını önce giderir; saha hizmeti,
 
 ## Faz 4 — Müşteri Portalı ve Acil Çağrı
 
+**Durum: Tamamlandı (07 Ağustos 2026)**
+
 - Çatı müşteri veya şube oluşturulurken e-posta ve şifreyle müşteri hesabı açma.
 - Müşterinin yalnızca yetkili olduğu çatı/şube verilerini görmesi.
 - Yaklaşan işler, tamamlanan hizmetler, imzalı raporlar ve belgeler.
 - Müşteri acil çağrı talebi; sahibine ve ilgili personele eş zamanlı düşmesi.
 - Talep durumu, yanıt süresi ve işlem geçmişi.
+
+### Faz 4 doğrulama özeti
+
+- Çatı müşteri hesabının tüm şubeleri, şube hesabının ise yalnızca yetkili lokasyonu gördüğü API seviyesinde doğrulandı.
+- Müşteri ve toplu şube oluşturma sırasında portal e-postası/geçici şifreyle giriş hesabı açılması sağlandı; Excel şablonu portal hesap alanlarıyla genişletildi.
+- Müşteri portalındaki örnek veriler kaldırıldı; yaklaşan işler, tamamlanan hizmetler, imzalı raporlar ve acil çağrılar gerçek veritabanına bağlandı.
+- Acil çağrının son sorumlu personele otomatik yönlendirilmesi, firma sahibi ekranına eş zamanlı düşmesi ve personelin çağrıyı kabul etmesi doğrulandı.
+- Talep önceliği, ücret türü, atanan personel, kabul/tamamlanma zamanı, yanıt süresi ve işlem geçmişi kalıcı hale getirildi.
+- Müşteri girişini bloke eden firma bağlamı filtresi düzeltilerek çatı ve şube hesaplarının oturum açması uçtan uca test edildi.
 
 ## Faz 5 — Hava Durumu ve Konum Bazlı Risk
 

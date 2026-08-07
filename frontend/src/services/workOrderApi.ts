@@ -2,8 +2,8 @@ import type { WorkOrder, WorkStatus } from '../types';
 
 export type CustomerBranchRecord = { id: string; name: string; code: string; address: string; city?: string; district?: string; contactName?: string; phoneNumber?: string; email?: string; latitude?: number; longitude?: number; mapUrl?: string; isActive: boolean };
 export type CustomerRecord = { id: string; legalName: string; code: string; contactName?: string; phoneNumber?: string; email?: string; address?: string; city?: string; district?: string; latitude?: number; longitude?: number; mapUrl?: string; isActive: boolean; branches: CustomerBranchRecord[] };
-export type CreateCustomerInput = { legalName: string; code?: string; contactName?: string; phoneNumber?: string; email?: string; address?: string; city?: string; district?: string; latitude?: number; longitude?: number; mapUrl?: string };
-export type CreateBranchInput = { name: string; code?: string; address: string; city?: string; district?: string; contactName?: string; phoneNumber?: string; email?: string; latitude?: number; longitude?: number; mapUrl?: string };
+export type CreateCustomerInput = { legalName: string; code?: string; contactName?: string; phoneNumber?: string; email?: string; address?: string; city?: string; district?: string; latitude?: number; longitude?: number; mapUrl?: string; portalContactName?: string; portalEmail?: string; portalPassword?: string };
+export type CreateBranchInput = { name: string; code?: string; address: string; city?: string; district?: string; contactName?: string; phoneNumber?: string; email?: string; latitude?: number; longitude?: number; mapUrl?: string; portalContactName?: string; portalEmail?: string; portalPassword?: string };
 export type BranchEmployeeAssignmentInput = { branchId: string; employeeAccountId?: string };
 
 export type CreateWorkOrdersInput = {

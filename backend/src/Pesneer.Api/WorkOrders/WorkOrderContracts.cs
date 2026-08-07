@@ -11,7 +11,10 @@ public sealed record CreateCustomerRequest(
     string? District,
     decimal? Latitude,
     decimal? Longitude,
-    string? MapUrl);
+    string? MapUrl,
+    string? PortalContactName,
+    string? PortalEmail,
+    string? PortalPassword);
 
 public sealed record CreateCustomerBranchRequest(
     string Name,
@@ -24,7 +27,10 @@ public sealed record CreateCustomerBranchRequest(
     string? Email,
     decimal? Latitude,
     decimal? Longitude,
-    string? MapUrl);
+    string? MapUrl,
+    string? PortalContactName,
+    string? PortalEmail,
+    string? PortalPassword);
 
 public sealed record BulkCreateCustomerBranchesRequest(
     IReadOnlyList<CreateCustomerBranchRequest> Branches);

@@ -32,14 +32,16 @@ public sealed class LoginService(
 
         CompanyRole role;
         Guid? customerId = null;
+        Guid? customerBranchId = null;
 
         if (portal == PortalType.Customer)
         {
-            var membership = await dbContext.CustomerMemberships.AsNoTracking()
+            var membership = await dbContext.CustomerMemberships.IgnoreQueryFilters().AsNoTracking()
                 .SingleOrDefaultAsync(item => item.AccountId == account.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
             if (membership is null) return null;
             role = membership.Role;
             customerId = membership.CustomerId;
+            customerBranchId = membership.CustomerBranchId;
         }
         else
         {
@@ -49,13 +51,14 @@ public sealed class LoginService(
             role = membership.Role;
         }
 
-        var token = jwtTokenService.Create(account, company, role, customerId);
+        var token = jwtTokenService.Create(account, company, role, customerId, customerBranchId);
         return new LoginResponse(
             token.Value,
             token.ExpiresAt,
             portal.ToString().ToLowerInvariant(),
             new CompanySummary(company.Id, company.LegalName, company.Code),
             new UserSummary(account.Id, account.DisplayName, account.Email, role.ToString()),
-            customerId);
+            customerId,
+            customerBranchId);
     }
 }

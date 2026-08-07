@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Pesneer.Api.Auth;
 using Pesneer.Api.Calendar;
+using Pesneer.Api.Customers;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.Employees;
@@ -120,7 +121,7 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "ok",
     service = "Pesneer.Api",
-    version = "0.2.0"
+    version = "0.4.0"
 }));
 
 var auth = app.MapGroup("/api/auth");
@@ -149,21 +150,7 @@ app.MapInventoryEndpoints();
 app.MapWorkOrderEndpoints();
 app.MapCalendarEndpoints();
 app.MapServiceReportEndpoints();
-
-app.MapGet("/api/customer/work-orders", async (
-    PesneerDbContext dbContext,
-    ICompanyContext companyContext,
-    CancellationToken cancellationToken) =>
-{
-    if (!companyContext.CustomerId.HasValue) return Results.Forbid();
-
-    var workOrders = await dbContext.WorkOrders.AsNoTracking()
-        .Where(item => item.CustomerId == companyContext.CustomerId.Value)
-        .OrderByDescending(item => item.ScheduledAt)
-        .Select(item => new { item.Id, item.Number, item.ServiceType, item.ScheduledAt, item.Status })
-        .ToListAsync(cancellationToken);
-    return Results.Ok(workOrders);
-}).RequireAuthorization("CustomerPortal");
+app.MapCustomerPortalEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();

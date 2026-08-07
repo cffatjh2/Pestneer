@@ -9,4 +9,5 @@ public sealed record LoginResponse(
     string Portal,
     CompanySummary Company,
     UserSummary User,
-    Guid? CustomerId);
+    Guid? CustomerId,
+    Guid? CustomerBranchId);

@@ -20,6 +20,7 @@ public static class ServiceReportEndpoints
         company.MapGet("/analytics", GetAnalyticsAsync);
 
         app.MapGet("/api/employee/service-reports", GetEmployeeReportsAsync).RequireAuthorization("EmployeePortal");
+        app.MapGet("/api/customer/service-reports", GetCustomerReportsAsync).RequireAuthorization("CustomerPortal");
         return app;
     }
 
@@ -45,6 +46,16 @@ public static class ServiceReportEndpoints
             .Where(item => item.WorkOrder.AssignedEmployeeAccountId == companyContext.AccountId.Value)
             .ToListAsync(cancellationToken);
         return Results.Ok(reports.OrderByDescending(item => item.UpdatedAt).Select(ToResponse));
+    }
+
+    private static async Task<IResult> GetCustomerReportsAsync(PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
+    {
+        if (!companyContext.CustomerId.HasValue) return Results.Forbid();
+        var reports = await ReportQuery(dbContext)
+            .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == companyContext.CustomerId.Value)
+            .Where(item => !companyContext.CustomerBranchId.HasValue || item.WorkOrder.CustomerBranchId == companyContext.CustomerBranchId.Value)
+            .ToListAsync(cancellationToken);
+        return Results.Ok(reports.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).Select(ToResponse));
     }
 
     private static async Task<IResult> UpsertAsync(

@@ -15,6 +15,9 @@ const headerAliases = {
   latitude: ['enlem', 'latitude', 'lat'],
   longitude: ['boylam', 'longitude', 'lng', 'lon'],
   mapUrl: ['google haritalar', 'google maps', 'harita linki', 'harita baglantisi', 'konum linki'],
+  portalContactName: ['portal yetkilisi', 'hesap yetkilisi'],
+  portalEmail: ['portal e posta', 'portal eposta', 'giris e posta', 'giris email'],
+  portalPassword: ['gecici sifre', 'portal sifresi', 'giris sifresi'],
 } satisfies Record<keyof CreateBranchInput, string[]>;
 
 export async function parseBranchWorkbook(file: File): Promise<CreateBranchInput[]> {
@@ -71,18 +74,21 @@ export function parseBranchRows(rows: unknown[][]): CreateBranchInput[] {
       latitude: optionalCoordinate(row, indexes.latitude, excelRow, 'enlem'),
       longitude: optionalCoordinate(row, indexes.longitude, excelRow, 'boylam'),
       mapUrl: optionalCell(row, indexes.mapUrl),
+      portalContactName: optionalCell(row, indexes.portalContactName),
+      portalEmail: optionalCell(row, indexes.portalEmail),
+      portalPassword: optionalCell(row, indexes.portalPassword),
     };
   });
 }
 
 export function downloadBranchTemplate() {
   const worksheet = utils.aoa_to_sheet([
-    ['Şube Adı', 'Şube Kodu', 'İl', 'İlçe', 'Açık Adres', 'Yetkili', 'Telefon', 'E-posta', 'Enlem', 'Boylam', 'Google Haritalar'],
-    ['ATG Şube', 'ARB-ATG', 'Ankara', 'Altındağ', 'Zübeyde Hanım Mah. No:10', 'Ayşe Yılmaz', '0500 000 00 00', 'atg@arabica.com', '39,950000', '32,850000', 'https://maps.google.com/'],
+    ['Şube Adı', 'Şube Kodu', 'İl', 'İlçe', 'Açık Adres', 'Yetkili', 'Telefon', 'E-posta', 'Enlem', 'Boylam', 'Google Haritalar', 'Portal Yetkilisi', 'Portal E-posta', 'Geçici Şifre'],
+    ['ATG Şube', 'ARB-ATG', 'Ankara', 'Altındağ', 'Zübeyde Hanım Mah. No:10', 'Ayşe Yılmaz', '0500 000 00 00', 'atg@arabica.com', '39,950000', '32,850000', 'https://maps.google.com/', 'Ayşe Yılmaz', 'atg.portal@arabica.com', 'Degistir123'],
   ]);
   worksheet['!cols'] = [
     { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 42 },
-    { wch: 22 }, { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 38 },
+    { wch: 22 }, { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 38 }, { wch: 22 }, { wch: 30 }, { wch: 18 },
   ];
 
   const workbook = utils.book_new();

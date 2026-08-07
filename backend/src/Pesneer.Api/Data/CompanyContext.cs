@@ -8,6 +8,7 @@ public interface ICompanyContext
     Guid? AccountId { get; }
     Guid? CompanyId { get; }
     Guid? CustomerId { get; }
+    Guid? CustomerBranchId { get; }
     PortalType? Portal { get; }
 }
 
@@ -18,6 +19,7 @@ public sealed class HttpCompanyContext(IHttpContextAccessor httpContextAccessor)
     public Guid? AccountId => ParseGuidClaim(ClaimTypes.NameIdentifier) ?? ParseGuidClaim("sub");
     public Guid? CompanyId => ParseGuidClaim("company_id");
     public Guid? CustomerId => ParseGuidClaim("customer_id");
+    public Guid? CustomerBranchId => ParseGuidClaim("customer_branch_id");
 
     public PortalType? Portal => Enum.TryParse<PortalType>(User?.FindFirstValue("portal"), true, out var portal)
         ? portal

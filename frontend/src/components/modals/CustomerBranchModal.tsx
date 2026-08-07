@@ -89,6 +89,9 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
       latitude: optionalNumber(formData.get('latitude')),
       longitude: optionalNumber(formData.get('longitude')),
       mapUrl: String(formData.get('mapUrl') || '') || undefined,
+      portalContactName: String(formData.get('portalContactName') || '') || undefined,
+      portalEmail: String(formData.get('portalEmail') || '') || undefined,
+      portalPassword: String(formData.get('portalPassword') || '') || undefined,
     } : null;
 
     setIsSubmitting(true);
@@ -118,6 +121,15 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
               <label className="form-field-wide">Merkez adresi<input name="address" placeholder="Açık adres" /></label>
               <label className="form-field-wide">Google Haritalar bağlantısı<input name="mapUrl" type="url" placeholder="https://maps.app.goo.gl/..." /></label>
               <label>Enlem<input name="latitude" type="number" step="0.000001" placeholder="39.933365" /></label><label>Boylam<input name="longitude" type="number" step="0.000001" placeholder="32.859742" /></label>
+            </div>
+            <div className="customer-portal-account-block">
+              <div className="modal-subheading"><CheckCircle2 size={18} /><div><strong>Çatı müşteri portal hesabı</strong><span>Bu hesap müşteri altındaki tüm şubeleri, işleri ve raporları görür.</span></div></div>
+              <div className="form-grid customer-data-grid">
+                <label>Hesap yetkilisi<input name="portalContactName" placeholder="Ad Soyad" /></label>
+                <label>Giriş e-postası<input name="portalEmail" type="email" placeholder="portal@firma.com" /></label>
+                <label>Geçici şifre<input name="portalPassword" type="password" minLength={6} placeholder="En az 6 karakter" /></label>
+                <div className="portal-account-note">E-posta ve şifre birlikte girildiğinde müşteri hesabı anında açılır.</div>
+              </div>
             </div>
           </section>}
 
@@ -151,7 +163,7 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
                 <div className="excel-preview-table-wrap"><table><thead><tr><th>Şube</th><th>Konum</th><th>Yetkili</th><th>İletişim</th></tr></thead><tbody>{excelBranches.slice(0, 5).map((branch, index) => <tr key={`${branch.code ?? branch.name}-${index}`}><td><strong>{branch.name}</strong>{branch.code && <small>{branch.code}</small>}</td><td>{[branch.district, branch.city].filter(Boolean).join(' / ') || '—'}<small>{branch.address}</small></td><td>{branch.contactName || '—'}</td><td>{branch.phoneNumber || branch.email || '—'}{branch.phoneNumber && branch.email && <small>{branch.email}</small>}</td></tr>)}</tbody></table></div>
               </div>}
             </> : <>
-              <textarea value={branchText} onChange={(event) => setBranchText(event.target.value)} rows={7} placeholder={'Şube Adı | İl | İlçe | Açık Adres | Yetkili | Telefon | E-posta | Enlem | Boylam | Google Haritalar\nATG Şube | Ankara | Altındağ | Zübeyde Hanım Mah. No:10 | Ayşe Yılmaz | 0500 000 00 00 | atg@arabica.com | 39.950000 | 32.850000 | https://maps.app.goo.gl/...'} />
+              <textarea value={branchText} onChange={(event) => setBranchText(event.target.value)} rows={7} placeholder={'Şube Adı | İl | İlçe | Açık Adres | Yetkili | Telefon | E-posta | Enlem | Boylam | Google Haritalar | Portal Yetkilisi | Portal E-posta | Geçici Şifre\nATG Şube | Ankara | Altındağ | Zübeyde Hanım Mah. No:10 | Ayşe Yılmaz | 0500 000 00 00 | atg@arabica.com | 39.950000 | 32.850000 | https://maps.app.goo.gl/... | Ayşe Yılmaz | atg.portal@arabica.com | Degistir123'} />
               <div className="bulk-format-note"><MapPin size={15} /><span>Zorunlu alanlar: <strong>Şube adı</strong> ve <strong>açık adres</strong>. Kullanılmayan sütunları boş bırakabilirsiniz; ayırıcı olarak <strong>|</strong> kullanın.</span></div>
             </>}
           </section>
@@ -166,8 +178,8 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
 
 function parseBranches(value: string): CreateBranchInput[] {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-    const [name = '', city = '', district = '', address = '', contactName = '', phoneNumber = '', email = '', latitude = '', longitude = '', mapUrl = ''] = line.split('|').map((part) => part.trim());
-    return { name, city: city || undefined, district: district || undefined, address, contactName: contactName || undefined, phoneNumber: phoneNumber || undefined, email: email || undefined, latitude: optionalNumber(latitude), longitude: optionalNumber(longitude), mapUrl: mapUrl || undefined };
+    const [name = '', city = '', district = '', address = '', contactName = '', phoneNumber = '', email = '', latitude = '', longitude = '', mapUrl = '', portalContactName = '', portalEmail = '', portalPassword = ''] = line.split('|').map((part) => part.trim());
+    return { name, city: city || undefined, district: district || undefined, address, contactName: contactName || undefined, phoneNumber: phoneNumber || undefined, email: email || undefined, latitude: optionalNumber(latitude), longitude: optionalNumber(longitude), mapUrl: mapUrl || undefined, portalContactName: portalContactName || undefined, portalEmail: portalEmail || undefined, portalPassword: portalPassword || undefined };
   }).filter((branch) => branch.name.length > 0 && branch.address.length > 0).slice(0, 250);
 }
 

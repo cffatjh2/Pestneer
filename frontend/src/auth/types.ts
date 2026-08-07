@@ -22,4 +22,5 @@ export type AuthenticatedSession = {
     role: string;
   };
   customerId?: string;
+  customerBranchId?: string;
 };
