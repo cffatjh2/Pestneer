@@ -6,7 +6,8 @@ public sealed record CreateEmployeeRequest(
     string PhoneNumber,
     string Email,
     string Role,
-    string Password);
+    string Password,
+    bool CanSelfSchedule = false);
 
 public sealed record UpdateEmployeeRequest(
     string FirstName,
@@ -15,7 +16,8 @@ public sealed record UpdateEmployeeRequest(
     string Email,
     string Role,
     bool IsActive,
-    string? NewPassword);
+    string? NewPassword,
+    bool CanSelfSchedule = false);
 
 public sealed record EmployeeResponse(
     Guid Id,
@@ -23,4 +25,5 @@ public sealed record EmployeeResponse(
     string Email,
     string PhoneNumber,
     string Role,
-    bool IsActive);
+    bool IsActive,
+    bool CanSelfSchedule);

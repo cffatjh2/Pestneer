@@ -39,6 +39,8 @@ Bu plan, canlı sistemdeki operasyon kayıplarını önce giderir; saha hizmeti,
 
 ## Faz 2 — İş Emri ve Saha Operasyonu
 
+**Durum: Tamamlandı (07 Ağustos 2026)**
+
 - İş emrinde atanmış personeli sonradan değiştirme.
 - Aynı çatı müşterinin şubelerini farklı personele toplu dağıtma.
 - Tek seferlik, haftalık, aylık ve manuel tekrar planları.
@@ -46,6 +48,15 @@ Bu plan, canlı sistemdeki operasyon kayıplarını önce giderir; saha hizmeti,
 - Firma sahibinin personele kendi programını yapma ve kendine iş atama yetkisi vermesi.
 - İş başlatma ve bitirmede açıklama, öneri ve fotoğraf ekleme.
 - İş durum geçmişi ve denetlenebilir değişiklik kaydı.
+
+### Faz 2 doğrulama özeti
+
+- İki şubenin farklı personele atanması ve haftalık tekrar ile dört bağımsız iş emri oluşturulması doğrulandı.
+- Planlanmış iş emrinin zamanı, hizmet türü, ticari türü ve atanmış personeli sonradan güncellendi.
+- Firma sahibi tarafından verilen kendi planını oluşturma yetkisi çalışan portalında uygulandı.
+- Çalışan hesabıyla iş başlatma, işlem açıklaması, öneri ve fotoğrafla tamamlama doğrulandı.
+- Firma sahibinin saha kapanışını, fotoğrafı ve üç aşamalı durum geçmişini görmesi doğrulandı.
+- SQLite geliştirme ve PostgreSQL canlı ortam şemaları için aynı veri geçişi üretildi.
 
 ## Faz 3 — Resmî İş Raporu, Trend ve Risk
 

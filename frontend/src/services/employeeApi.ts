@@ -7,6 +7,7 @@ export type EmployeeRecord = {
   phoneNumber: string;
   role: EmployeeRole;
   isActive: boolean;
+  canSelfSchedule: boolean;
 };
 
 export type CreateEmployeeInput = {
@@ -16,6 +17,7 @@ export type CreateEmployeeInput = {
   email: string;
   role: EmployeeRole;
   password: string;
+  canSelfSchedule: boolean;
 };
 
 export type UpdateEmployeeInput = Omit<CreateEmployeeInput, 'password'> & {

@@ -326,6 +326,11 @@
   .calendar-toolbar > div > strong { width: 100%; margin-top: var(--space-2); margin-left: 0; }
   .day-agenda-list, .employee-task-list { grid-template-columns: 1fr; }
   .employee-portal-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .employee-work-list, .assignment-list, .work-detail-grid { grid-template-columns: 1fr; }
+  .assignment-list label { grid-template-columns: 1fr; }
+  .assignment-heading { align-items: stretch; flex-direction: column; }
+  .assignment-heading select { width: 100%; }
+  .work-photo-section > div { grid-template-columns: repeat(2, 1fr); }
   .day-view-heading { align-items: stretch; flex-direction: column; }
 
   .modal {

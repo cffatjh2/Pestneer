@@ -13,7 +13,24 @@ export type ViewId =
   | 'team';
 
 /* ---- İş Emri ----------------------------------------------------- */
-export type WorkStatus = 'Planlandı' | 'Sahada' | 'Tamamlandı';
+export type WorkStatus = 'Planlandı' | 'Sahada' | 'Tamamlandı' | 'İptal';
+
+export type WorkOrderHistory = {
+  id: string;
+  fromStatus?: string;
+  toStatus: string;
+  note?: string;
+  occurredAt: string;
+  changedBy: string;
+};
+
+export type WorkOrderPhoto = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  uploadedAt: string;
+  url: string;
+};
 
 export interface WorkOrder {
   recordId: string;
@@ -24,14 +41,26 @@ export interface WorkOrder {
   branch: string;
   branchAddress: string;
   branchMapUrl?: string;
+  employeeAccountId?: string;
   scheduledAt: string;
+  durationMinutes: number;
   date: string;
   time: string;
   service: string;
+  visitType: string;
+  recurrenceType: string;
+  recurrenceGroupId?: string;
   technician: string;
+  technicalStatus: string;
   status: WorkStatus;
   area: string;
   notes?: string;
+  startedAt?: string;
+  completedAt?: string;
+  completionNote?: string;
+  recommendation?: string;
+  history: WorkOrderHistory[];
+  photos: WorkOrderPhoto[];
 }
 
 /* ---- Stok -------------------------------------------------------- */
@@ -61,6 +90,7 @@ export interface Employee {
   color: 'blue' | 'purple' | 'green' | 'orange';
   phone?: string;
   email?: string;
+  canSelfSchedule?: boolean;
 }
 
 /* ---- EK-1 Biyosidal Ürün Uygulama İşlem Formu ------------------- */

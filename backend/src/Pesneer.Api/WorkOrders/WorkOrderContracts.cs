@@ -60,6 +60,8 @@ public sealed record CustomerResponse(
     bool IsActive,
     IReadOnlyList<CustomerBranchResponse> Branches);
 
+public sealed record BranchEmployeeAssignmentRequest(Guid BranchId, Guid? EmployeeAccountId);
+
 public sealed record CreateWorkOrdersRequest(
     Guid CustomerId,
     IReadOnlyList<Guid> BranchIds,
@@ -68,7 +70,37 @@ public sealed record CreateWorkOrdersRequest(
     string Time,
     int DurationMinutes,
     Guid? EmployeeAccountId,
-    string? Notes);
+    string? Notes,
+    string VisitType = "Routine",
+    string RecurrenceType = "Once",
+    int? OccurrenceCount = null,
+    IReadOnlyList<DateOnly>? ManualDates = null,
+    IReadOnlyList<BranchEmployeeAssignmentRequest>? BranchAssignments = null);
+
+public sealed record UpdateWorkOrderRequest(
+    Guid? EmployeeAccountId,
+    string ServiceType,
+    string VisitType,
+    DateOnly Date,
+    string Time,
+    int DurationMinutes,
+    string? Notes,
+    string Status);
+
+public sealed record WorkOrderHistoryResponse(
+    Guid Id,
+    string? FromStatus,
+    string ToStatus,
+    string? Note,
+    DateTimeOffset OccurredAt,
+    string ChangedBy);
+
+public sealed record WorkOrderPhotoResponse(
+    Guid Id,
+    string FileName,
+    string ContentType,
+    DateTimeOffset UploadedAt,
+    string Url);
 
 public sealed record WorkOrderResponse(
     Guid Id,
@@ -80,9 +112,24 @@ public sealed record WorkOrderResponse(
     string BranchAddress,
     string? BranchMapUrl,
     string ServiceType,
+    string VisitType,
+    string RecurrenceType,
+    Guid? RecurrenceGroupId,
     DateTimeOffset ScheduledAt,
     int DurationMinutes,
     Guid? EmployeeAccountId,
     string EmployeeName,
     string Status,
-    string? Notes);
+    string? Notes,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? CompletionNote,
+    string? Recommendation,
+    IReadOnlyList<WorkOrderHistoryResponse> History,
+    IReadOnlyList<WorkOrderPhotoResponse> Photos);
+
+public sealed record CompleteWorkOrderRequest(string CompletionNote, string? Recommendation);
+
+public sealed record EmployeePlanningOptionsResponse(
+    bool CanSelfSchedule,
+    IReadOnlyList<CustomerResponse> Customers);

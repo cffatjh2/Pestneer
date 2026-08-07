@@ -15,6 +15,8 @@ public class PesneerDbContext(
     public DbSet<CustomerBranch> CustomerBranches => Set<CustomerBranch>();
     public DbSet<CustomerMembership> CustomerMemberships => Set<CustomerMembership>();
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
+    public DbSet<WorkOrderStatusHistory> WorkOrderStatusHistories => Set<WorkOrderStatusHistory>();
+    public DbSet<WorkOrderPhoto> WorkOrderPhotos => Set<WorkOrderPhoto>();
     public DbSet<WorkShift> WorkShifts => Set<WorkShift>();
     public DbSet<WorkShiftBreak> WorkShiftBreaks => Set<WorkShiftBreak>();
     public DbSet<VehicleStockCheck> VehicleStockChecks => Set<VehicleStockCheck>();
@@ -101,12 +103,36 @@ public class PesneerDbContext(
             entity.HasIndex(workOrder => new { workOrder.CompanyId, workOrder.Number }).IsUnique();
             entity.Property(workOrder => workOrder.Number).HasMaxLength(40);
             entity.Property(workOrder => workOrder.ServiceType).HasMaxLength(120);
+            entity.Property(workOrder => workOrder.VisitType).HasMaxLength(32);
+            entity.Property(workOrder => workOrder.RecurrenceType).HasMaxLength(24);
             entity.Property(workOrder => workOrder.Status).HasMaxLength(24);
             entity.Property(workOrder => workOrder.Notes).HasMaxLength(1000);
+            entity.Property(workOrder => workOrder.CompletionNote).HasMaxLength(2000);
+            entity.Property(workOrder => workOrder.Recommendation).HasMaxLength(2000);
             entity.HasOne(workOrder => workOrder.Customer).WithMany().HasForeignKey(workOrder => workOrder.CustomerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(workOrder => workOrder.CustomerBranch).WithMany().HasForeignKey(workOrder => workOrder.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(workOrder => workOrder.AssignedEmployeeAccount).WithMany().HasForeignKey(workOrder => workOrder.AssignedEmployeeAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(workOrder => companyContext.CompanyId.HasValue && workOrder.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<WorkOrderStatusHistory>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId, item.OccurredAt });
+            entity.Property(item => item.FromStatus).HasMaxLength(24);
+            entity.Property(item => item.ToStatus).HasMaxLength(24);
+            entity.Property(item => item.Note).HasMaxLength(1000);
+            entity.HasOne(item => item.WorkOrder).WithMany(workOrder => workOrder.History).HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.ChangedByAccount).WithMany().HasForeignKey(item => item.ChangedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<WorkOrderPhoto>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId, item.UploadedAt });
+            entity.Property(item => item.FileName).HasMaxLength(240);
+            entity.Property(item => item.ContentType).HasMaxLength(80);
+            entity.HasOne(item => item.WorkOrder).WithMany(workOrder => workOrder.Photos).HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
         modelBuilder.Entity<WorkShift>(entity =>

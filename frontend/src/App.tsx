@@ -12,6 +12,7 @@ import Team from './pages/Team';
 import ReportView from './pages/ReportView';
 import ReportsAnalytics from './pages/ReportsAnalytics';
 import WorkOrderModal from './components/modals/WorkOrderModal';
+import WorkOrderDetailModal from './components/modals/WorkOrderDetailModal';
 import CustomerBranchModal from './components/modals/CustomerBranchModal';
 import LoginPage from './auth/LoginPage';
 import type { AuthenticatedSession } from './auth/types';
@@ -25,10 +26,12 @@ import {
   createWorkOrders,
   getCustomers,
   getWorkOrders,
+  updateWorkOrder,
   WorkOrderSessionExpiredError,
   type CreateBranchInput,
   type CreateCustomerInput,
   type CreateWorkOrdersInput,
+  type UpdateWorkOrderInput,
   type CustomerRecord,
 } from './services/workOrderApi';
 
@@ -41,6 +44,8 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
   const [isPlanningLoading, setIsPlanningLoading] = useState(true);
   const [planningError, setPlanningError] = useState<string | null>(null);
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [reopenOrderAfterCustomer, setReopenOrderAfterCustomer] = useState(false);
   const [activeReport, setActiveReport] = useState<ServiceReport | null>(null);
@@ -91,6 +96,20 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
     }
   };
 
+  const handleUpdateOrder = async (input: UpdateWorkOrderInput) => {
+    if (!editingOrder) return;
+    try {
+      const updated = await updateWorkOrder(session.accessToken, editingOrder.recordId, input);
+      setWorkOrders((current) => current.map((item) => item.recordId === updated.recordId ? updated : item));
+      setEditingOrder(null);
+      setSelectedOrder((current) => current?.recordId === updated.recordId ? updated : current);
+      showToast(`${updated.id} iş emri güncellendi.`);
+    } catch (error) {
+      if (error instanceof WorkOrderSessionExpiredError) { onLogout(); return; }
+      throw error;
+    }
+  };
+
   const openCustomerManagement = (fromWorkOrder = false) => {
     setReopenOrderAfterCustomer(fromWorkOrder);
     if (fromWorkOrder) setIsNewOrderModalOpen(false);
@@ -136,7 +155,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'dashboard':
         return <Dashboard workOrders={workOrders} onCreate={() => setIsNewOrderModalOpen(true)} onReport={() => setActiveReport(demoReport)} />;
       case 'work-orders':
-        return <WorkOrders workOrders={workOrders} customers={customers} isLoading={isPlanningLoading} loadError={planningError} onReload={() => void loadPlanningData()} onCreate={() => setIsNewOrderModalOpen(true)} onManageCustomers={() => openCustomerManagement(false)} onOpenReport={() => setActiveReport(demoReport)} />;
+        return <WorkOrders workOrders={workOrders} customers={customers} isLoading={isPlanningLoading} loadError={planningError} onReload={() => void loadPlanningData()} onCreate={() => setIsNewOrderModalOpen(true)} onManageCustomers={() => openCustomerManagement(false)} onEdit={setEditingOrder} onView={setSelectedOrder} />;
       case 'calendar': return <Calendar accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} onNotify={showToast} />;
       case 'stock': return <Stock accessToken={session.accessToken} onSessionExpired={onLogout} />;
       case 'team': return <Team accessToken={session.accessToken} companyCode={session.company.code} onNotify={showToast} onSessionExpired={onLogout} />;
@@ -151,7 +170,9 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       <div className="sidebar-scrim" style={{ display: isMenuOpen ? 'block' : 'none' }} onClick={() => setIsMenuOpen(false)} />
       <main className="main-content"><Topbar activeView={activeView} onMenuOpen={() => setIsMenuOpen(true)} />{renderContent()}</main>
 
-      {isNewOrderModalOpen && <WorkOrderModal customers={customers} employees={employees} onClose={() => setIsNewOrderModalOpen(false)} onManageCustomers={() => openCustomerManagement(true)} onSubmit={handleCreateOrder} />}
+      {isNewOrderModalOpen && <WorkOrderModal customers={customers} employees={employees} onClose={() => setIsNewOrderModalOpen(false)} onManageCustomers={() => openCustomerManagement(true)} onCreate={handleCreateOrder} />}
+      {editingOrder && <WorkOrderModal customers={customers} employees={employees} editingOrder={editingOrder} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} />}
+      {selectedOrder && <WorkOrderDetailModal order={selectedOrder} accessToken={session.accessToken} onClose={() => setSelectedOrder(null)} onEdit={() => { setEditingOrder(selectedOrder); setSelectedOrder(null); }} />}
       {isCustomerModalOpen && <CustomerBranchModal customers={customers} onClose={() => { setIsCustomerModalOpen(false); setReopenOrderAfterCustomer(false); }} onSubmit={handleCustomerBranches} />}
       {toastMessage && <div className="toast"><AlertCircle size={20} />{toastMessage}</div>}
     </div>

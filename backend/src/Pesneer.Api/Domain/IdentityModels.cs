@@ -52,6 +52,7 @@ public sealed class CompanyMembership
     public Guid AccountId { get; set; }
     public Guid CompanyId { get; set; }
     public CompanyRole Role { get; set; }
+    public bool CanSelfSchedule { get; set; }
     public bool IsActive { get; set; } = true;
     public Account Account { get; set; } = null!;
     public Company Company { get; set; } = null!;
@@ -124,13 +125,48 @@ public sealed class WorkOrder : ICompanyScoped
     public Guid? AssignedEmployeeAccountId { get; set; }
     public required string Number { get; set; }
     public required string ServiceType { get; set; }
+    public required string VisitType { get; set; } = "Routine";
+    public required string RecurrenceType { get; set; } = "Once";
+    public Guid? RecurrenceGroupId { get; set; }
     public DateTimeOffset ScheduledAt { get; set; }
     public int DurationMinutes { get; set; } = 60;
     public string? Notes { get; set; }
     public required string Status { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string? CompletionNote { get; set; }
+    public string? Recommendation { get; set; }
     public Customer Customer { get; set; } = null!;
     public CustomerBranch? CustomerBranch { get; set; }
     public Account? AssignedEmployeeAccount { get; set; }
+    public ICollection<WorkOrderStatusHistory> History { get; set; } = [];
+    public ICollection<WorkOrderPhoto> Photos { get; set; } = [];
+}
+
+public sealed class WorkOrderStatusHistory : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WorkOrderId { get; set; }
+    public Guid ChangedByAccountId { get; set; }
+    public string? FromStatus { get; set; }
+    public required string ToStatus { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
+    public WorkOrder WorkOrder { get; set; } = null!;
+    public Account ChangedByAccount { get; set; } = null!;
+}
+
+public sealed class WorkOrderPhoto : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WorkOrderId { get; set; }
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public required byte[] Data { get; set; }
+    public DateTimeOffset UploadedAt { get; set; } = DateTimeOffset.UtcNow;
+    public WorkOrder WorkOrder { get; set; } = null!;
 }
 
 public sealed class WorkShift : ICompanyScoped

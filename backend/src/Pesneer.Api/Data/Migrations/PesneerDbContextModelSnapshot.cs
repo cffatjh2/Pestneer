@@ -158,6 +158,9 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CanSelfSchedule")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("TEXT");
 
@@ -520,6 +523,13 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompletionNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("CustomerBranchId")
                         .HasColumnType("TEXT");
 
@@ -538,6 +548,18 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Recommendation")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RecurrenceGroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecurrenceType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("ScheduledAt")
                         .HasColumnType("TEXT");
 
@@ -546,9 +568,17 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VisitType")
+                        .IsRequired()
+                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -563,6 +593,86 @@ namespace Pesneer.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("WorkOrders");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkOrderId");
+
+                    b.HasIndex("CompanyId", "WorkOrderId", "UploadedAt");
+
+                    b.ToTable("WorkOrderPhotos");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChangedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByAccountId");
+
+                    b.HasIndex("WorkOrderId");
+
+                    b.HasIndex("CompanyId", "WorkOrderId", "OccurredAt");
+
+                    b.ToTable("WorkOrderStatusHistories");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkShift", b =>
@@ -764,6 +874,36 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("CustomerBranch");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderPhoto", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
+                        .WithMany("Photos")
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WorkOrder");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderStatusHistory", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "ChangedByAccount")
+                        .WithMany()
+                        .HasForeignKey("ChangedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
+                        .WithMany("History")
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChangedByAccount");
+
+                    b.Navigation("WorkOrder");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.WorkShift", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.Account", "EmployeeAccount")
@@ -794,6 +934,13 @@ namespace Pesneer.Api.Data.Migrations
             modelBuilder.Entity("Pesneer.Api.Domain.VehicleStockCheck", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrder", b =>
+                {
+                    b.Navigation("History");
+
+                    b.Navigation("Photos");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkShift", b =>

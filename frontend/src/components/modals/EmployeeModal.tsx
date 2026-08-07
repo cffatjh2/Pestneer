@@ -39,6 +39,7 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
       phoneNumber: String(formData.get('phoneNumber') ?? '').trim(),
       email: String(formData.get('email') ?? '').trim(),
       role: String(formData.get('role') ?? 'Technician') as EmployeeRole,
+      canSelfSchedule: formData.get('canSelfSchedule') === 'on',
     };
     const input: CreateEmployeeInput | UpdateEmployeeInput = isEditing
       ? {
@@ -115,6 +116,10 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
                 </select>
               </label>
             )}
+            <label className="employee-permission-toggle form-field-wide">
+              <input name="canSelfSchedule" type="checkbox" defaultChecked={employee?.canSelfSchedule ?? false} />
+              <span><strong>Kendi iş programını oluşturabilsin</strong><small>Personel, yetkili olduğu çalışan portalından kendisine iş emri planlayabilir.</small></span>
+            </label>
             <label>
               {isEditing ? 'Yeni şifre (isteğe bağlı)' : 'Geçici şifre'}
               <span className="password-input-wrap">

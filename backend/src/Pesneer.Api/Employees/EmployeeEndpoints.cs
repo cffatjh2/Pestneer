@@ -51,7 +51,8 @@ public static class EmployeeEndpoints
                 item.Account.Email,
                 item.Account.PhoneNumber ?? string.Empty,
                 item.Role.ToString(),
-                item.Account.IsActive))
+                item.Account.IsActive,
+                item.CanSelfSchedule))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(employees);
@@ -105,7 +106,8 @@ public static class EmployeeEndpoints
                 Id = Guid.NewGuid(),
                 AccountId = account.Id,
                 CompanyId = companyContext.CompanyId.Value,
-                Role = role
+                Role = role,
+                CanSelfSchedule = request.CanSelfSchedule
             });
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -126,7 +128,8 @@ public static class EmployeeEndpoints
             account.Email,
             account.PhoneNumber,
             role.ToString(),
-            account.IsActive);
+            account.IsActive,
+            request.CanSelfSchedule);
 
         return Results.Created($"/api/company/employees/{account.Id}", response);
     }
@@ -175,6 +178,7 @@ public static class EmployeeEndpoints
 
         var role = Enum.Parse<CompanyRole>(request.Role, true);
         membership.Role = role;
+        membership.CanSelfSchedule = request.CanSelfSchedule;
         membership.Account.DisplayName = $"{request.FirstName.Trim()} {request.LastName.Trim()}";
         membership.Account.Email = request.Email.Trim();
         membership.Account.NormalizedEmail = normalizedEmail;
@@ -206,7 +210,8 @@ public static class EmployeeEndpoints
             membership.Account.Email,
             membership.Account.PhoneNumber ?? string.Empty,
             membership.Role.ToString(),
-            membership.Account.IsActive));
+            membership.Account.IsActive,
+            membership.CanSelfSchedule));
     }
 
     private static IResult? Validate(CreateEmployeeRequest request)

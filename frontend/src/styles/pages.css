@@ -632,6 +632,22 @@
 .employee-portal-tabs button.active { color: var(--blue-700); background: var(--blue-50); }
 .employee-portal-tabs button span { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--radius-full); color: var(--blue-700); background: white; font-size: 9px; }
 .employee-tasks-page { min-height: 420px; padding: var(--space-5); }
+.employee-work-orders-page { min-height: 480px; padding: var(--space-5); }
+.employee-work-actions { display: flex; align-items: center; gap: var(--space-2); }
+.employee-work-actions > button:first-child { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 var(--space-4); border-radius: var(--radius-md); color: white; background: var(--blue-600); font-size: var(--text-xs); font-weight: var(--font-bold); }
+.self-schedule-permission { display: flex; align-items: center; gap: 8px; margin: var(--space-3) 0 var(--space-4); padding: var(--space-3); border-radius: var(--radius-md); color: #08785a; background: #eafbf5; font-size: var(--text-xs); }
+.employee-work-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-4); }
+.employee-work-card { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-xs); }
+.employee-work-card.work-inprogress { border-color: var(--blue-300); box-shadow: 0 8px 24px rgba(37, 99, 235, .09); }
+.employee-work-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.employee-work-card-top div > span, .employee-work-card-top strong, .employee-work-card-top small { display: block; }.employee-work-card-top div > span { color: var(--blue-600); font-size: 10px; font-weight: var(--font-bold); }.employee-work-card-top strong { margin-top: 4px; color: var(--gray-900); }.employee-work-card-top small { margin-top: 3px; color: var(--gray-500); }
+.employee-work-card-top em { padding: 5px 9px; border-radius: var(--radius-full); color: var(--blue-700); background: var(--blue-50); font-size: 9px; font-style: normal; font-weight: var(--font-bold); }
+.employee-work-meta { display: grid; gap: 8px; margin: var(--space-4) 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--gray-50); }
+.employee-work-meta span, .employee-work-meta a { display: flex; align-items: flex-start; gap: 7px; color: var(--gray-600); font-size: var(--text-xs); }
+.employee-work-service { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }.employee-work-service strong { color: var(--gray-800); font-size: var(--text-sm); }.employee-work-service span { color: var(--gray-400); font-size: 10px; }
+.employee-work-card > p { margin: var(--space-3) 0 0; color: var(--gray-500); font-size: var(--text-xs); line-height: 1.5; }
+.employee-work-card-actions { display: flex; justify-content: flex-end; margin-top: var(--space-4); }
+.employee-completion-note, .work-completed-label { display: flex; align-items: flex-start; gap: 7px; color: #08785a; font-size: var(--text-xs); }.employee-completion-note { margin-top: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: #eafbf5; }
 .employee-task-intro { margin: 5px 0 var(--space-5); color: var(--gray-500); font-size: var(--text-xs); }
 .employee-task-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
 .employee-task-list-full { grid-template-columns: repeat(2, minmax(0, 1fr)); }
