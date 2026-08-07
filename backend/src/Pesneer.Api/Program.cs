@@ -14,6 +14,7 @@ using Pesneer.Api.Employees;
 using Pesneer.Api.FieldOperations;
 using Pesneer.Api.Inventory;
 using Pesneer.Api.Reports;
+using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.WorkOrders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -55,6 +56,21 @@ else
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient("OpenMeteo", client =>
+{
+    client.BaseAddress = new Uri("https://api.open-meteo.com/v1/");
+    client.Timeout = TimeSpan.FromSeconds(8);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.5 (+https://pesneer.onrender.com)");
+});
+builder.Services.AddHttpClient("GoogleMapsResolver", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(6);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.5 (+https://pesneer.onrender.com)");
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<IMapLocationResolver, MapLocationResolver>();
+builder.Services.AddScoped<IWeatherService, OpenMeteoWeatherService>();
+builder.Services.AddScoped<IWeatherRiskService, WeatherRiskService>();
 builder.Services.AddProblemDetails();
 
 builder.Services.AddCors(options =>
@@ -110,7 +126,8 @@ var app = builder.Build();
 await MigrateDatabaseAsync(app.Services);
 await DevelopmentDataSeeder.InitializeAsync(app.Services, app.Environment);
 
-app.UseExceptionHandler();
+if (app.Environment.IsDevelopment()) app.UseDeveloperExceptionPage();
+else app.UseExceptionHandler();
 app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -121,7 +138,7 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "ok",
     service = "Pesneer.Api",
-    version = "0.4.0"
+    version = "0.5.0"
 }));
 
 var auth = app.MapGroup("/api/auth");
@@ -151,6 +168,7 @@ app.MapWorkOrderEndpoints();
 app.MapCalendarEndpoints();
 app.MapServiceReportEndpoints();
 app.MapCustomerPortalEndpoints();
+app.MapWeatherRiskEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();

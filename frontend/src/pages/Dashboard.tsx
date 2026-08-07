@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   Activity,
   Archive,
@@ -10,17 +11,37 @@ import {
 } from 'lucide-react';
 import type { WorkOrder } from '../types';
 import StatusBadge from '../components/common/StatusBadge';
+import WeatherRiskPanel from '../components/weather/WeatherRiskPanel';
+import { getCompanyWeatherRisks, WeatherRiskSessionExpiredError, type WeatherRiskOverview } from '../services/weatherRiskApi';
 
 interface DashboardProps {
   workOrders: WorkOrder[];
   onCreate: () => void;
   onReport: () => void;
+  accessToken: string;
+  onSessionExpired: () => void;
 }
 
-export default function Dashboard({ workOrders, onCreate, onReport }: DashboardProps) {
+export default function Dashboard({ workOrders, onCreate, onReport, accessToken, onSessionExpired }: DashboardProps) {
   const activeCount = workOrders.filter(w => w.status === 'Sahada').length;
   const completedCount = workOrders.filter(w => w.status === 'Tamamlandı').length;
   const totalCount = workOrders.length;
+  const [weatherRisk, setWeatherRisk] = useState<WeatherRiskOverview | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const loadWeatherRisk = async (forceRefresh = false) => {
+    setWeatherLoading(true);
+    setWeatherError(null);
+    try {
+      setWeatherRisk(await getCompanyWeatherRisks(accessToken, forceRefresh));
+    } catch (error) {
+      if (error instanceof WeatherRiskSessionExpiredError) return onSessionExpired();
+      setWeatherError(error instanceof Error ? error.message : 'Hava ve risk verileri alınamadı.');
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+  useEffect(() => { void loadWeatherRisk(); }, [accessToken]);
 
   return (
     <section className="page dashboard-page">
@@ -54,6 +75,8 @@ export default function Dashboard({ workOrders, onCreate, onReport }: DashboardP
       </div>
 
       {/* ── Layout ────────────────────────────────────────────── */}
+      <WeatherRiskPanel overview={weatherRisk} loading={weatherLoading} error={weatherError} onRefresh={() => void loadWeatherRisk(true)} compact />
+
       <div className="dashboard-layout">
         <div className="dashboard-main-column">
           {/* Schedule */}

@@ -153,7 +153,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
     if (activeReport) return <ReportView report={activeReport} onBack={() => setActiveReport(null)} />;
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard workOrders={workOrders} onCreate={() => setIsNewOrderModalOpen(true)} onReport={() => setActiveReport(demoReport)} />;
+        return <Dashboard accessToken={session.accessToken} onSessionExpired={onLogout} workOrders={workOrders} onCreate={() => setIsNewOrderModalOpen(true)} onReport={() => setActiveReport(demoReport)} />;
       case 'work-orders':
         return <WorkOrders accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} workOrders={workOrders} customers={customers} isLoading={isPlanningLoading} loadError={planningError} onReload={() => void loadPlanningData()} onCreate={() => setIsNewOrderModalOpen(true)} onManageCustomers={() => openCustomerManagement(false)} onEdit={setEditingOrder} onView={setSelectedOrder} />;
       case 'calendar': return <Calendar accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} onNotify={showToast} />;

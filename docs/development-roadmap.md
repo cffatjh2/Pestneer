@@ -99,11 +99,22 @@ Bu plan, canlı sistemdeki operasyon kayıplarını önce giderir; saha hizmeti,
 
 ## Faz 5 — Hava Durumu ve Konum Bazlı Risk
 
+**Durum: Tamamlandı (07 Ağustos 2026)**
+
 - Koordinat veya Google Haritalar bağlantısından şube konumunu çözümleme.
 - Güncel ve kısa dönem hava verisini şube bazında alma.
 - Türkiye'deki hedef zararlılar için sıcaklık, nem ve yağışa bağlı açıklanabilir risk kuralları.
 - Hamamböceği, sivrisinek, karasinek, kemirgen ve diğer türler için şube bazlı uyarılar.
 - Müşteriye ve firma sahibine hava/risk bildirimi.
+
+### Faz 5 doğrulama özeti
+
+- Google Haritalar bağlantılarındaki `@enlem,boylam`, `q=enlem,boylam` ve Google veri koordinatları otomatik çözümlenerek müşteri/şube kaydına aktarılıyor.
+- Open-Meteo üzerinden güncel sıcaklık, hissedilen sıcaklık, nem, yağış, rüzgâr ve üç günlük tahmin alınıyor; 30 dakikalık önbellek ve servis kesintisinde son geçerli veri desteği bulunuyor.
+- Hamamböceği, sivrisinek, karasinek, kemirgen, karınca ve depo zararlıları için 0-100 arası açıklanabilir risk puanı, neden ve önleyici aksiyon üretiliyor.
+- Firma sahibi operasyon merkezinde tüm müşteri lokasyonlarını; müşteri portalında ise kullanıcı yalnızca yetkili olduğu çatı/şube kapsamını görüyor.
+- Yüksek riskli lokasyonlar iki portalda uygulama içi erken uyarı olarak gösteriliyor; sonuçların saha keşfi yerine geçmediği açıkça belirtiliyor.
+- Ankara koordinatlarıyla güncel hava verisi, altı zararlı modeli, iki firma lokasyonu ve tek şubeyle sınırlı müşteri yetkisi uçtan uca doğrulandı.
 
 ## Faz 6 — Belgeler, Bildirimler ve Kurumsal Kimlik
 

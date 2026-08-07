@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
+using Pesneer.Api.WeatherRisk;
 
 namespace Pesneer.Api.WorkOrders;
 
@@ -89,6 +90,7 @@ public static class WorkOrderEndpoints
         }
 
         var requestedCode = string.IsNullOrWhiteSpace(request.Code) ? ToCode(name) : ToCode(request.Code);
+        MapLocationResolver.TryParse(request.MapUrl, out var resolvedLocation);
         var customer = new Customer
         {
             Id = Guid.NewGuid(),
@@ -100,8 +102,8 @@ public static class WorkOrderEndpoints
             Address = NullIfEmpty(request.Address),
             City = NullIfEmpty(request.City),
             District = NullIfEmpty(request.District),
-            Latitude = request.Latitude,
-            Longitude = request.Longitude,
+            Latitude = request.Latitude ?? resolvedLocation?.Latitude,
+            Longitude = request.Longitude ?? resolvedLocation?.Longitude,
             MapUrl = NullIfEmpty(request.MapUrl)
         };
 
@@ -157,6 +159,7 @@ public static class WorkOrderEndpoints
             var baseCode = ToCode(string.IsNullOrWhiteSpace(input.Code) ? input.Name : input.Code);
             var code = FindAvailableCode(baseCode, usedCodes);
             usedCodes.Add(code);
+            MapLocationResolver.TryParse(input.MapUrl, out var resolvedLocation);
             return new CustomerBranch
             {
                 Id = Guid.NewGuid(),
@@ -169,8 +172,8 @@ public static class WorkOrderEndpoints
                 ContactName = NullIfEmpty(input.ContactName),
                 PhoneNumber = NullIfEmpty(input.PhoneNumber),
                 Email = NullIfEmpty(input.Email),
-                Latitude = input.Latitude,
-                Longitude = input.Longitude,
+                Latitude = input.Latitude ?? resolvedLocation?.Latitude,
+                Longitude = input.Longitude ?? resolvedLocation?.Longitude,
                 MapUrl = NullIfEmpty(input.MapUrl)
             };
         }).ToList();
