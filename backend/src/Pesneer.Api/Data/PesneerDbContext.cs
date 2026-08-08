@@ -24,6 +24,7 @@ public class PesneerDbContext(
     public DbSet<ServiceReportProduct> ServiceReportProducts => Set<ServiceReportProduct>();
     public DbSet<QualityAnalysis> QualityAnalyses => Set<QualityAnalysis>();
     public DbSet<QualityDocument> QualityDocuments => Set<QualityDocument>();
+    public DbSet<SitePlan> SitePlans => Set<SitePlan>();
     public DbSet<WorkShift> WorkShifts => Set<WorkShift>();
     public DbSet<WorkShiftBreak> WorkShiftBreaks => Set<WorkShiftBreak>();
     public DbSet<VehicleStockCheck> VehicleStockChecks => Set<VehicleStockCheck>();
@@ -266,6 +267,23 @@ public class PesneerDbContext(
             entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.QualityAnalysis).WithMany(item => item.Documents).HasForeignKey(item => item.QualityAnalysisId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.SitePlan).WithMany(item => item.Documents).HasForeignKey(item => item.SitePlanId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<SitePlan>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.Number }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.CustomerId, item.CustomerBranchId, item.UpdatedAt });
+            entity.Property(item => item.Number).HasMaxLength(48);
+            entity.Property(item => item.Title).HasMaxLength(240);
+            entity.Property(item => item.AreaName).HasMaxLength(240);
+            entity.Property(item => item.FieldGuide).HasMaxLength(240);
+            entity.Property(item => item.Status).HasMaxLength(20);
+            entity.Property(item => item.RevisionNote).HasMaxLength(1000);
+            entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 

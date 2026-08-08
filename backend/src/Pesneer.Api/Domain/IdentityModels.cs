@@ -318,6 +318,7 @@ public sealed class QualityDocument : ICompanyScoped
     public Guid? CustomerBranchId { get; set; }
     public Guid CreatedByAccountId { get; set; }
     public Guid? QualityAnalysisId { get; set; }
+    public Guid? SitePlanId { get; set; }
     public required string Category { get; set; }
     public required string Title { get; set; }
     public string? Description { get; set; }
@@ -330,6 +331,30 @@ public sealed class QualityDocument : ICompanyScoped
     public CustomerBranch? CustomerBranch { get; set; }
     public Account CreatedByAccount { get; set; } = null!;
     public QualityAnalysis? QualityAnalysis { get; set; }
+    public SitePlan? SitePlan { get; set; }
+}
+
+public sealed class SitePlan : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string Title { get; set; }
+    public required string AreaName { get; set; }
+    public required string FieldGuide { get; set; }
+    public required string Status { get; set; }
+    public int Revision { get; set; }
+    public string? RevisionNote { get; set; }
+    public required string CanvasJson { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public ICollection<QualityDocument> Documents { get; set; } = [];
 }
 
 public sealed class WorkShift : ICompanyScoped

@@ -711,6 +711,9 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<Guid?>("QualityAnalysisId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("SitePlanId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("INTEGER");
 
@@ -728,6 +731,8 @@ namespace Pesneer.Api.Data.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("QualityAnalysisId");
+
+                    b.HasIndex("SitePlanId");
 
                     b.HasIndex("CompanyId", "Category", "CreatedAt");
 
@@ -990,6 +995,82 @@ namespace Pesneer.Api.Data.Migrations
                     b.HasIndex("CompanyId", "ServiceReportId", "DeviceNumber");
 
                     b.ToTable("ServiceReportStations");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.SitePlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AreaName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CanvasJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FieldGuide")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RevisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("CustomerBranchId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "CustomerId", "CustomerBranchId", "UpdatedAt");
+
+                    b.ToTable("SitePlans");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>
@@ -1647,6 +1728,11 @@ namespace Pesneer.Api.Data.Migrations
                         .HasForeignKey("QualityAnalysisId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("Pesneer.Api.Domain.SitePlan", "SitePlan")
+                        .WithMany("Documents")
+                        .HasForeignKey("SitePlanId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.Navigation("CreatedByAccount");
 
                     b.Navigation("Customer");
@@ -1654,6 +1740,8 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("CustomerBranch");
 
                     b.Navigation("QualityAnalysis");
+
+                    b.Navigation("SitePlan");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
@@ -1702,6 +1790,32 @@ namespace Pesneer.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("ServiceReport");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.SitePlan", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAccount");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>
@@ -1897,6 +2011,11 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("Products");
 
                     b.Navigation("Stations");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.SitePlan", b =>
+                {
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>

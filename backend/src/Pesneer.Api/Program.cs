@@ -15,6 +15,7 @@ using Pesneer.Api.FieldOperations;
 using Pesneer.Api.Inventory;
 using Pesneer.Api.Reports;
 using Pesneer.Api.Quality;
+using Pesneer.Api.SitePlans;
 using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.WorkOrders;
 
@@ -63,12 +64,12 @@ builder.Services.AddHttpClient("OpenMeteo", client =>
 {
     client.BaseAddress = new Uri("https://api.open-meteo.com/v1/");
     client.Timeout = TimeSpan.FromSeconds(8);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.7.2 (+https://pesneer.onrender.com)");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.8.0 (+https://pesneer.onrender.com)");
 });
 builder.Services.AddHttpClient("GoogleMapsResolver", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(6);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.7.2 (+https://pesneer.onrender.com)");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.8.0 (+https://pesneer.onrender.com)");
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IMapLocationResolver, MapLocationResolver>();
 builder.Services.AddScoped<IWeatherService, OpenMeteoWeatherService>();
@@ -140,7 +141,7 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "ok",
     service = "Pesneer.Api",
-    version = "0.7.2"
+    version = "0.8.0"
 }));
 
 var auth = app.MapGroup("/api/auth");
@@ -172,6 +173,7 @@ app.MapServiceReportEndpoints();
 app.MapCustomerPortalEndpoints();
 app.MapWeatherRiskEndpoints();
 app.MapQualityEndpoints();
+app.MapSitePlanEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();
