@@ -10,6 +10,7 @@ export type ViewId =
   | 'calendar'
   | 'stock'
   | 'reports'
+  | 'documents'
   | 'team';
 
 /* ---- İş Emri ----------------------------------------------------- */

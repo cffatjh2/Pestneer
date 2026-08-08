@@ -365,3 +365,23 @@
     max-width: none;
   }
 }
+@media (max-width: 980px) {
+  .quality-analysis-grid { grid-template-columns: 1fr; }
+  .quality-module-heading { flex-direction: column; }
+  .quality-module-heading .primary-button { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 700px) {
+  .quality-tabs { grid-template-columns: 1fr; }
+  .quality-tabs button { min-height: 48px; }
+  .quality-card-top { grid-template-columns: 40px minmax(0,1fr); }
+  .quality-score { grid-column: 1 / -1; display: flex; justify-content: center; gap: 7px; align-items: center; }
+  .quality-score b { font-size: 17px; }.quality-score small { font-size: 10px; }
+  .quality-card-metrics { grid-template-columns: repeat(2,1fr); }
+  .quality-card-footer { align-items: flex-start; flex-direction: column; }
+  .quality-card-footer > div,.quality-card-footer button { width: 100%; }.quality-card-footer button { justify-content: center; }
+  .document-filter-row { align-items: stretch; flex-direction: column; gap: 10px; }.document-filter-row select { width: 100%; min-width: 0; }
+  .risk-score-guide { align-items: flex-start; flex-direction: column; }
+  .risk-question-list article { grid-template-columns: 34px minmax(0,1fr); }.risk-question-list select { grid-column: 1 / -1; width: 100%; }
+  .period-presets { align-items: stretch; flex-wrap: wrap; }.period-presets span { width: 100%; }.period-presets button { flex: 1; }
+}

@@ -11,6 +11,7 @@ public static class InventoryEndpoints
         var group = app.MapGroup("/api/company/inventory").RequireAuthorization("OwnerPortal");
         group.MapGet("/", GetInventoryAsync);
         group.MapGet("/summary", GetSummaryAsync);
+        group.MapGet("/alerts", GetAlertsAsync);
         group.MapPost("/entries", CreateEntryAsync);
         group.MapPost("/exits", CreateExitAsync);
         group.MapGet("/vehicles", GetVehiclesAsync);
@@ -48,6 +49,27 @@ public static class InventoryEndpoints
             exitCount,
             await dbContext.Vehicles.AsNoTracking().CountAsync(item => item.IsActive, cancellationToken),
             await dbContext.VehicleStockItems.AsNoTracking().CountAsync(item => item.IsActive && item.Quantity > 0, cancellationToken)));
+    }
+
+    private static async Task<IResult> GetAlertsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var criticalItems = await dbContext.InventoryItems.AsNoTracking()
+            .Where(item => item.IsActive && item.Quantity <= item.MinimumQuantity)
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(criticalItems
+            .OrderBy(item => item.Quantity == 0 ? 0 : 1)
+            .ThenBy(item => item.Quantity)
+            .ThenBy(item => item.Name)
+            .Select(item => new InventoryAlertResponse(
+                item.Id,
+                item.Quantity == 0 ? "Stok tükendi" : "Kritik stok seviyesi",
+                $"{item.Name}: {item.Quantity:0.###} {item.Unit} kaldı. Minimum eşik {item.MinimumQuantity:0.###} {item.Unit}.",
+                item.Quantity == 0 ? "Critical" : "Warning",
+                item.Quantity,
+                item.MinimumQuantity,
+                item.Unit,
+                item.LastMovementAt)));
     }
 
     private static async Task<IResult> CreateEntryAsync(

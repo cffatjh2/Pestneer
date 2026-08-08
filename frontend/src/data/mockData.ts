@@ -13,6 +13,7 @@ export const navigation: NavItem[] = [
   { id: 'calendar',    label: 'Takvim',             iconName: 'CalendarDays' },
   { id: 'stock',       label: 'Stok Yönetimi',      iconName: 'Package' },
   { id: 'reports',     label: 'Rapor & Analizler',  iconName: 'FileText' },
+  { id: 'documents',   label: 'Belgeler',           iconName: 'FolderArchive' },
   { id: 'team',        label: 'Ekip',               iconName: 'Users' },
 ];
 

@@ -559,8 +559,8 @@ namespace Pesneer.Api.Data.PostgresMigrations
 
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("Unit")
                         .IsRequired()
@@ -574,6 +574,169 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.HasIndex("CompanyId", "OccurredAt");
 
                     b.ToTable("InventoryMovements");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.QualityAnalysis", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AnalysisType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Findings")
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<string>("Level")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("PeriodEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Recommendations")
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)");
+
+                    b.Property<string>("TemplateCode")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("CustomerBranchId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "AnalysisType", "CustomerId", "CustomerBranchId", "PeriodEnd");
+
+                    b.ToTable("QualityAnalyses");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.QualityDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<byte[]>("FileData")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<Guid?>("QualityAnalysisId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("CustomerBranchId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("QualityAnalysisId");
+
+                    b.HasIndex("CompanyId", "Category", "CreatedAt");
+
+                    b.ToTable("QualityDocuments");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
@@ -1440,6 +1603,64 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("InventoryItem");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.QualityAnalysis", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAccount");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.QualityDocument", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.QualityAnalysis", "QualityAnalysis")
+                        .WithMany("Documents")
+                        .HasForeignKey("QualityAnalysisId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("CreatedByAccount");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
+
+                    b.Navigation("QualityAnalysis");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
@@ -1669,6 +1890,11 @@ namespace Pesneer.Api.Data.PostgresMigrations
             modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequest", b =>
                 {
                     b.Navigation("History");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.QualityAnalysis", b =>
+                {
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>

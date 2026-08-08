@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ClipboardList,
   FileText,
+  FolderArchive,
   LayoutDashboard,
   LogOut,
   Package,
@@ -22,6 +23,7 @@ const iconMap: Record<string, React.ElementType> = {
   CalendarDays,
   Package,
   FileText,
+  FolderArchive,
   Users,
 };
 

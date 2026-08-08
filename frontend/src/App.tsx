@@ -11,6 +11,7 @@ import Stock from './pages/Stock';
 import Team from './pages/Team';
 import ReportView from './pages/ReportView';
 import ReportsAnalytics from './pages/ReportsAnalytics';
+import QualityCenter from './components/quality/QualityCenter';
 import WorkOrderModal from './components/modals/WorkOrderModal';
 import WorkOrderDetailModal from './components/modals/WorkOrderDetailModal';
 import CustomerBranchModal from './components/modals/CustomerBranchModal';
@@ -160,6 +161,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'stock': return <Stock accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;
       case 'team': return <Team accessToken={session.accessToken} companyCode={session.company.code} onNotify={showToast} onSessionExpired={onLogout} />;
       case 'reports': return <ReportsAnalytics accessToken={session.accessToken} companyName={session.company.name} userName={session.user.name} workOrders={workOrders} onSessionExpired={onLogout} />;
+      case 'documents': return <QualityCenter accessToken={session.accessToken} mode="staff" onSessionExpired={onLogout} standalone />;
       default: return <section className="page"><h1>Yapım aşamasında</h1></section>;
     }
   };
@@ -168,7 +170,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
     <div className="app-shell">
       <Sidebar activeView={activeView} setActiveView={(view) => { setActiveView(view); setActiveReport(null); }} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} onNotify={showToast} companyName={session.company.name} userName={session.user.name} userRole={session.user.role} onLogout={onLogout} />
       <div className="sidebar-scrim" style={{ display: isMenuOpen ? 'block' : 'none' }} onClick={() => setIsMenuOpen(false)} />
-      <main className="main-content"><Topbar activeView={activeView} onMenuOpen={() => setIsMenuOpen(true)} />{renderContent()}</main>
+      <main className="main-content"><Topbar activeView={activeView} onMenuOpen={() => setIsMenuOpen(true)} accessToken={session.accessToken} onStockOpen={() => setActiveView('stock')} />{renderContent()}</main>
 
       {isNewOrderModalOpen && <WorkOrderModal customers={customers} employees={employees} onClose={() => setIsNewOrderModalOpen(false)} onManageCustomers={() => openCustomerManagement(true)} onCreate={handleCreateOrder} />}
       {editingOrder && <WorkOrderModal customers={customers} employees={employees} editingOrder={editingOrder} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} />}

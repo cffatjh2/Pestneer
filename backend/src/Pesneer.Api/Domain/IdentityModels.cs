@@ -282,6 +282,56 @@ public sealed class ServiceReportProduct : ICompanyScoped
     public VehicleStockItem? VehicleStockItem { get; set; }
 }
 
+public sealed class QualityAnalysis : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string AnalysisType { get; set; }
+    public required string TemplateCode { get; set; }
+    public required string Title { get; set; }
+    public required string Status { get; set; } = "Published";
+    public DateOnly PeriodStart { get; set; }
+    public DateOnly PeriodEnd { get; set; }
+    public int? Score { get; set; }
+    public string? Level { get; set; }
+    public string? Summary { get; set; }
+    public string? Findings { get; set; }
+    public string? Recommendations { get; set; }
+    public required string PayloadJson { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public ICollection<QualityDocument> Documents { get; set; } = [];
+}
+
+public sealed class QualityDocument : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid? CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public Guid? QualityAnalysisId { get; set; }
+    public required string Category { get; set; }
+    public required string Title { get; set; }
+    public string? Description { get; set; }
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public long SizeBytes { get; set; }
+    public byte[]? FileData { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer? Customer { get; set; }
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public QualityAnalysis? QualityAnalysis { get; set; }
+}
+
 public sealed class WorkShift : ICompanyScoped
 {
     public Guid Id { get; set; }

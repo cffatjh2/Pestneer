@@ -18,6 +18,16 @@ public sealed record InventorySummaryResponse(
     int VehicleCount,
     int VehicleStockItemCount);
 
+public sealed record InventoryAlertResponse(
+    Guid InventoryItemId,
+    string Title,
+    string Message,
+    string Severity,
+    decimal CurrentQuantity,
+    decimal MinimumQuantity,
+    string Unit,
+    DateTimeOffset OccurredAt);
+
 public sealed record InventoryItemResponse(
     Guid Id,
     string Name,

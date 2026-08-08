@@ -35,6 +35,17 @@ export type InventorySummary = {
   vehicleStockItemCount: number;
 };
 
+export type InventoryAlert = {
+  inventoryItemId: string;
+  title: string;
+  message: string;
+  severity: 'Critical' | 'Warning';
+  currentQuantity: number;
+  minimumQuantity: number;
+  unit: string;
+  occurredAt: string;
+};
+
 export type VehicleStockItem = {
   id: string;
   inventoryItemId?: string;
@@ -84,6 +95,9 @@ export const createInventoryExit = (token: string, input: CreateInventoryExit) =
 
 export const getInventorySummary = (token: string) =>
   request<InventorySummary>('/api/company/inventory/summary', token);
+
+export const getInventoryAlerts = (token: string) =>
+  request<InventoryAlert[]>('/api/company/inventory/alerts', token);
 
 export const getVehicles = (token: string) =>
   request<VehicleRecord[]>('/api/company/inventory/vehicles', token);

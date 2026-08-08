@@ -24,10 +24,11 @@ export default function Stock({ accessToken, employees, onSessionExpired }: Prop
   useEffect(() => { void load(); }, [accessToken]);
 
   const filteredItems = useMemo(() => { const normalized = query.trim().toLocaleLowerCase('tr-TR'); return normalized ? items.filter((item) => item.name.toLocaleLowerCase('tr-TR').includes(normalized)) : items; }, [items, query]);
-  const addStock = async (input: CreateInventoryEntry) => { await createInventoryEntry(accessToken, input); setEntryOpen(false); await load(); };
-  const exitStock = async (input: CreateInventoryExit) => { await createInventoryExit(accessToken, input); setExitOpen(false); await load(); };
+  const notifyInventoryChanged = () => window.dispatchEvent(new Event('pestneer:inventory-changed'));
+  const addStock = async (input: CreateInventoryEntry) => { await createInventoryEntry(accessToken, input); setEntryOpen(false); await load(); notifyInventoryChanged(); };
+  const exitStock = async (input: CreateInventoryExit) => { await createInventoryExit(accessToken, input); setExitOpen(false); await load(); notifyInventoryChanged(); };
   const saveVehicle = async (input: CreateVehicleInput) => { if (vehicleModal && vehicleModal !== 'new') await updateVehicle(accessToken, vehicleModal.id, input); else await createVehicle(accessToken, input); setVehicleModal(null); await load(); };
-  const transfer = async (input: TransferInventoryInput) => { await transferInventoryToVehicle(accessToken, input); setTransferOpen(false); setTransferVehicleId(undefined); await load(); };
+  const transfer = async (input: TransferInventoryInput) => { await transferInventoryToVehicle(accessToken, input); setTransferOpen(false); setTransferVehicleId(undefined); await load(); notifyInventoryChanged(); };
 
   const exportInventory = () => {
     const rows = filteredItems.map((item) => ({ 'Ürün Adı': item.name, Kategori: item.category, 'Depo Miktarı': item.quantity, 'Araçlardaki Miktar': item.vehicleQuantity, 'Toplam Miktar': item.totalQuantity, Birim: item.unit, 'Minimum Eşik': item.minimumQuantity, 'Lot / Parti No': item.lotNumber ?? '', Durum: item.status, 'Son Hareket': formatDateTime(item.lastMovementAt) }));
