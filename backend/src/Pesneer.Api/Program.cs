@@ -19,6 +19,7 @@ using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.WorkOrders;
 
 var builder = WebApplication.CreateBuilder(args);
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 var railwayDatabaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 var databaseProvider = string.IsNullOrWhiteSpace(railwayDatabaseUrl)
     ? builder.Configuration["DatabaseProvider"]
@@ -62,12 +63,12 @@ builder.Services.AddHttpClient("OpenMeteo", client =>
 {
     client.BaseAddress = new Uri("https://api.open-meteo.com/v1/");
     client.Timeout = TimeSpan.FromSeconds(8);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.7 (+https://pesneer.onrender.com)");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.7.1 (+https://pesneer.onrender.com)");
 });
 builder.Services.AddHttpClient("GoogleMapsResolver", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(6);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.7 (+https://pesneer.onrender.com)");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.7.1 (+https://pesneer.onrender.com)");
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IMapLocationResolver, MapLocationResolver>();
 builder.Services.AddScoped<IWeatherService, OpenMeteoWeatherService>();
@@ -139,7 +140,7 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "ok",
     service = "Pesneer.Api",
-    version = "0.7.0"
+    version = "0.7.1"
 }));
 
 var auth = app.MapGroup("/api/auth");

@@ -47,7 +47,7 @@ export async function downloadQualityDocument(token: string, document: QualityDo
   if (response.status === 401 || response.status === 403) throw new QualitySessionExpiredError();
   if (!response.ok) throw new Error('Belge indirilemedi.');
   const blob = await response.blob(); const url = URL.createObjectURL(blob);
-  if (open && document.contentType.includes('html')) { window.open(url, '_blank', 'noopener,noreferrer'); window.setTimeout(() => URL.revokeObjectURL(url), 60_000); return; }
+  if (open && document.contentType === 'application/pdf') { window.open(url, '_blank', 'noopener,noreferrer'); window.setTimeout(() => URL.revokeObjectURL(url), 60_000); return; }
   const anchor = window.document.createElement('a'); anchor.href = url; anchor.download = document.fileName; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
 }
 

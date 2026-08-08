@@ -99,7 +99,7 @@ public static class QualityEndpoints
         if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
         if (document.FileData is not null) return Results.File(document.FileData, document.ContentType, document.FileName);
         if (document.QualityAnalysis is null) return Results.NotFound(new { message = "Belge içeriği bulunamadı." });
-        return Results.File(QualityDocumentRenderer.Render(document.QualityAnalysis), "text/html; charset=utf-8", document.FileName);
+        return Results.File(QualityDocumentRenderer.Render(document.QualityAnalysis), "application/pdf", Path.ChangeExtension(document.FileName, ".pdf"));
     }
 
     private static async Task<IResult> CreateTrendAnalysisAsync(CreateTrendAnalysisRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -252,7 +252,7 @@ public static class QualityEndpoints
     {
         Id = Guid.NewGuid(), CompanyId = analysis.CompanyId, CustomerId = analysis.CustomerId, CustomerBranchId = analysis.CustomerBranchId,
         CreatedByAccountId = analysis.CreatedByAccountId, QualityAnalysisId = analysis.Id, Category = category, Title = analysis.Title,
-        Description = analysis.Summary, FileName = $"{analysis.Number}.html", ContentType = "text/html; charset=utf-8", SizeBytes = 0, CreatedAt = analysis.CreatedAt
+        Description = analysis.Summary, FileName = $"{analysis.Number}.pdf", ContentType = "application/pdf", SizeBytes = 0, CreatedAt = analysis.CreatedAt
     };
 
     private static QualityAnalysisResponse ToAnalysisResponse(QualityAnalysis item, Guid? documentId) => new(
@@ -261,7 +261,9 @@ public static class QualityEndpoints
         item.Summary, item.Findings, item.Recommendations, item.CreatedByAccount.DisplayName, item.CreatedAt, PayloadElement(item.PayloadJson), documentId);
 
     private static QualityDocumentResponse ToDocumentResponse(QualityDocument item) => new(
-        item.Id, item.Category, item.Title, item.Description, item.FileName, item.ContentType, item.SizeBytes, item.CustomerId,
+        item.Id, item.Category, item.Title, item.Description,
+        item.QualityAnalysisId.HasValue ? Path.ChangeExtension(item.FileName, ".pdf") : item.FileName,
+        item.QualityAnalysisId.HasValue ? "application/pdf" : item.ContentType, item.SizeBytes, item.CustomerId,
         item.Customer?.LegalName ?? "Firma içi", item.CustomerBranchId, item.CustomerBranch?.Name ?? (item.CustomerId.HasValue ? "Genel" : "Firma içi"),
         item.CreatedByAccount.DisplayName, item.CreatedAt, item.QualityAnalysisId, item.QualityAnalysis?.AnalysisType, $"/api/quality/documents/{item.Id}/download");
 
