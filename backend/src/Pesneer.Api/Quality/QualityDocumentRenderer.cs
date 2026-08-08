@@ -232,7 +232,10 @@ internal static class QualityDocumentRenderer
             });
         });
 
-        if (root.TryGetProperty("weather", out var weather) && weather.ValueKind == JsonValueKind.Object && weather.TryGetProperty("weather", out var observation))
+        if (root.TryGetProperty("weather", out var weather)
+            && weather.ValueKind == JsonValueKind.Object
+            && weather.TryGetProperty("weather", out var observation)
+            && observation.ValueKind == JsonValueKind.Object)
         {
             column.Item().Background("#EAF4FC").Padding(11).Row(row =>
             {
@@ -315,6 +318,7 @@ internal static class QualityDocumentRenderer
 
     private static string Read(JsonElement item, string property)
     {
+        if (item.ValueKind != JsonValueKind.Object) return "-";
         if (!item.TryGetProperty(property, out var value)) return "-";
         return value.ValueKind switch
         {
