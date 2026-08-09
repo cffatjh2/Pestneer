@@ -147,6 +147,16 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Property<Guid?>("CustomerBranchId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("CustomerDecisionAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CustomerDecisionByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerDecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 

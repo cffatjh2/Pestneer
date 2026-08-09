@@ -153,6 +153,7 @@ public class PesneerDbContext(
             entity.Property(item => item.TotalAmount).HasPrecision(14, 2);
             entity.Property(item => item.Notes).HasMaxLength(3000);
             entity.Property(item => item.Terms).HasMaxLength(5000);
+            entity.Property(item => item.CustomerDecisionNote).HasMaxLength(1000);
             entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);

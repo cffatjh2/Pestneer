@@ -173,6 +173,9 @@ public sealed class CommercialProposal : ICompanyScoped
     public decimal TotalAmount { get; set; }
     public string? Notes { get; set; }
     public string? Terms { get; set; }
+    public Guid? CustomerDecisionByAccountId { get; set; }
+    public DateTimeOffset? CustomerDecisionAt { get; set; }
+    public string? CustomerDecisionNote { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public Customer Customer { get; set; } = null!;

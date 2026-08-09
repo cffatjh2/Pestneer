@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Pesneer.Api.Commercial;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 
@@ -19,6 +20,10 @@ public static class CustomerPortalEndpoints
         customer.MapPost("/requests", CreateRequestAsync);
         customer.MapPost("/requests/{requestId:guid}/messages", AddCustomerMessageAsync);
         customer.MapPost("/requests/{requestId:guid}/closure-approval", ApproveClosureAsync);
+        customer.MapGet("/commercial", GetCommercialSummaryAsync);
+        customer.MapPost("/commercial/proposals/{proposalId:guid}/decision", DecideProposalAsync);
+        customer.MapGet("/commercial/proposals/{proposalId:guid}/pdf", GetCustomerProposalPdfAsync);
+        customer.MapGet("/commercial/contracts/{contractId:guid}/pdf", GetCustomerContractPdfAsync);
 
         var company = app.MapGroup("/api/company/requests").RequireAuthorization("OwnerPortal");
         company.MapGet("/", GetCompanyRequestsAsync);
@@ -98,6 +103,60 @@ public static class CustomerPortalEndpoints
         await dbContext.SaveChangesAsync(cancellationToken);
         dbContext.ChangeTracker.Clear();
         return Results.Created($"/api/customer/portal/requests/{item.Id}", ToResponse(await RequestQuery(dbContext).SingleAsync(value => value.Id == item.Id, cancellationToken)));
+    }
+
+    private static async Task<IResult> GetCommercialSummaryAsync(PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        if (!context.CustomerId.HasValue) return Results.Forbid();
+        var proposals = (await CustomerProposalQuery(dbContext, context).ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
+        var contracts = (await CustomerContractQuery(dbContext, context).ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
+        var receivables = (await CustomerReceivableQuery(dbContext, context).ToListAsync(cancellationToken)).OrderBy(item => item.DueDate).ToList();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var receivableResponses = receivables.Select(item => ToCustomerReceivable(item, today)).ToArray();
+        return Results.Ok(new CustomerCommercialSummaryResponse(
+            receivableResponses.Sum(item => item.Balance),
+            receivableResponses.Count(item => item.Status == "Overdue"),
+            proposals.Count(item => item.Status is "PendingApproval" or "Draft"),
+            proposals.Select(ToCustomerProposal).ToArray(),
+            contracts.Select(ToCustomerContract).ToArray(),
+            receivableResponses));
+    }
+
+    private static async Task<IResult> DecideProposalAsync(Guid proposalId, CustomerProposalDecisionRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        if (!context.CustomerId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
+        var proposal = await dbContext.CommercialProposals.Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.Lines)
+            .SingleOrDefaultAsync(item => item.Id == proposalId && item.CustomerId == context.CustomerId.Value && (!context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value), cancellationToken);
+        if (proposal is null) return Results.NotFound(new { message = "Teklif bulunamadı." });
+        if (proposal.Status is not ("PendingApproval" or "Draft")) return Validation("proposal", "Bu teklif için daha önce karar verilmiş veya teklif sözleşmeye dönüştürülmüş.");
+        var note = NullIfEmpty(request.Note);
+        if (!request.Accepted && string.IsNullOrWhiteSpace(note)) return Validation("note", "Teklif reddedilirken kısa bir açıklama girilmelidir.");
+        if (note?.Length > 1000) return Validation("note", "Karar açıklaması en fazla 1000 karakter olabilir.");
+        proposal.Status = request.Accepted ? "Accepted" : "Rejected";
+        proposal.CustomerDecisionByAccountId = context.AccountId.Value;
+        proposal.CustomerDecisionAt = DateTimeOffset.UtcNow;
+        proposal.CustomerDecisionNote = note;
+        proposal.UpdatedAt = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToCustomerProposal(proposal));
+    }
+
+    private static async Task<IResult> GetCustomerProposalPdfAsync(Guid proposalId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        if (!context.CustomerId.HasValue || !context.CompanyId.HasValue) return Results.Forbid();
+        var proposal = await CustomerProposalQuery(dbContext, context).SingleOrDefaultAsync(item => item.Id == proposalId, cancellationToken);
+        if (proposal is null) return Results.NotFound();
+        var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == context.CompanyId.Value, cancellationToken);
+        return Results.File(CommercialPdfRenderer.Proposal(proposal, company), "application/pdf", $"{proposal.Number}.pdf");
+    }
+
+    private static async Task<IResult> GetCustomerContractPdfAsync(Guid contractId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        if (!context.CustomerId.HasValue || !context.CompanyId.HasValue) return Results.Forbid();
+        var contract = await CustomerContractQuery(dbContext, context).SingleOrDefaultAsync(item => item.Id == contractId, cancellationToken);
+        if (contract is null) return Results.NotFound();
+        var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == context.CompanyId.Value, cancellationToken);
+        return Results.File(CommercialPdfRenderer.Contract(contract, company), "application/pdf", $"{contract.Number}.pdf");
     }
 
     private static async Task<int> NextSequenceAsync(PesneerDbContext dbContext, string prefix, CancellationToken cancellationToken)
@@ -187,6 +246,25 @@ public static class CustomerPortalEndpoints
     private static IQueryable<EmergencyRequest> RequestQuery(PesneerDbContext dbContext) => dbContext.EmergencyRequests.AsNoTracking()
         .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.AssignedEmployeeAccount)
         .Include(item => item.History).ThenInclude(item => item.ChangedByAccount).AsSplitQuery();
+
+    private static IQueryable<CommercialProposal> CustomerProposalQuery(PesneerDbContext dbContext, ICompanyContext context) => dbContext.CommercialProposals.AsNoTracking()
+        .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.Lines).AsSplitQuery()
+        .Where(item => item.CustomerId == context.CustomerId!.Value)
+        .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
+
+    private static IQueryable<CustomerContract> CustomerContractQuery(PesneerDbContext dbContext, ICompanyContext context) => dbContext.CustomerContracts.AsNoTracking()
+        .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.Receivables).AsSplitQuery()
+        .Where(item => item.CustomerId == context.CustomerId!.Value)
+        .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
+
+    private static IQueryable<ReceivableEntry> CustomerReceivableQuery(PesneerDbContext dbContext, ICompanyContext context) => dbContext.ReceivableEntries.AsNoTracking()
+        .Include(item => item.CustomerBranch).Include(item => item.CustomerContract)
+        .Where(item => item.CustomerId == context.CustomerId!.Value)
+        .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
+
+    private static CustomerProposalResponse ToCustomerProposal(CommercialProposal item) => new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.Title, item.Status == "Draft" ? "PendingApproval" : item.Status, item.IssueDate, item.ValidUntil, item.Currency, item.Subtotal, item.DiscountAmount, item.VatRate, item.VatAmount, item.TotalAmount, item.Notes, item.Terms, item.CustomerDecisionAt, item.CustomerDecisionNote, item.Status is "PendingApproval" or "Draft", item.Lines.OrderBy(line => line.SortOrder).Select(line => new CustomerProposalLineResponse(line.Id, line.Description, line.Quantity, line.Unit, line.UnitPrice, line.LineTotal)).ToArray());
+    private static CustomerContractResponse ToCustomerContract(CustomerContract item) => new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.Title, item.Status, item.StartDate, item.EndDate, item.BillingFrequency, item.PaymentTermDays, item.PeriodAmount, item.Currency, item.Scope, item.Terms, item.Receivables.Count, item.Receivables.Sum(value => value.Amount - value.PaidAmount));
+    private static CustomerReceivableResponse ToCustomerReceivable(ReceivableEntry item, DateOnly today) { var status = item.Status == "Paid" ? "Paid" : item.DueDate < today ? "Overdue" : item.Status; return new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.CustomerContract?.Number ?? "—", item.Description, item.IssueDate, item.DueDate, item.Amount, item.PaidAmount, item.Amount - item.PaidAmount, item.Currency, status, item.PaidAt); }
 
     private static CustomerPortalWorkOrderResponse ToWorkOrderResponse(WorkOrder item) => new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.ServiceType, item.VisitType, item.ScheduledAt, item.DurationMinutes, item.Status, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.CompletionNote, item.Recommendation);
     private static EmergencyRequestResponse ToResponse(EmergencyRequest item) => new(item.Id, item.Number, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.RequestType, item.Subject, item.ServiceType, item.Priority, item.Status, item.Description, item.ContactPhone, item.AssignedEmployeeAccountId, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.RequestedAt, item.DueAt, item.RequestedAppointmentAt, item.ClosureApprovalStatus, item.ClosureApprovedAt, item.ClosureApprovalNote, item.AcknowledgedAt, item.CompletedAt, item.History.OrderBy(history => history.OccurredAt).Select(history => new EmergencyHistoryResponse(history.Status, history.Note, history.OccurredAt, history.ChangedByAccount.DisplayName)).ToArray());

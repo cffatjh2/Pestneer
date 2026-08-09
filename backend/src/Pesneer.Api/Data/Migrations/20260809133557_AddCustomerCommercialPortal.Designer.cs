@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Pesneer.Api.Data;
 
@@ -10,9 +11,11 @@ using Pesneer.Api.Data;
 namespace Pesneer.Api.Data.Migrations
 {
     [DbContext(typeof(PesneerDbContext))]
-    partial class PesneerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809133557_AddCustomerCommercialPortal")]
+    partial class AddCustomerCommercialPortal
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.8");
