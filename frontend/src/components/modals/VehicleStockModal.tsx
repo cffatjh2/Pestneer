@@ -62,7 +62,7 @@ export default function VehicleStockModal({ catalog, initialItems, onClose, onSu
             {items.map((item) => (
               <div className="vehicle-stock-row" key={item.key}>
                 <label>Ürün / ilaç<input value={item.productName} disabled={Boolean(item.vehicleStockItemId)} onChange={(event) => updateItem(item.key, { productName: event.target.value, isManual: true })} placeholder="Ürün adını yazın" maxLength={160} required /></label>
-                <label>Sayım miktarı<input type="number" min="0" step="0.001" value={item.quantity} onChange={(event) => updateItem(item.key, { quantity: Number(event.target.value) })} required /></label>
+                <label>Sayım miktarı<input type="number" min="0" step="0.001" value={item.quantity || ''} onChange={(event) => updateItem(item.key, { quantity: Number(event.target.value) })} required /></label>
                 <label>Birim<select value={item.unit} disabled={Boolean(item.vehicleStockItemId)} onChange={(event) => updateItem(item.key, { unit: event.target.value })}><option>Adet</option><option>Litre</option><option>Mililitre</option><option>Kilogram</option><option>Gram</option><option>Paket</option><option>Kutu</option></select></label>
                 <button type="button" disabled={Boolean(item.vehicleStockItemId)} onClick={() => setItems((current) => current.filter((entry) => entry.key !== item.key))} aria-label={`${item.productName || 'Ürün'} kaydını kaldır`}><Trash2 size={17} /></button>
               </div>
