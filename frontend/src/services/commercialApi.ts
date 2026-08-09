@@ -15,6 +15,12 @@ export const convertProposal = (token: string, id: string, input: ConvertProposa
 export const getContracts = (token: string) => request<Contract[]>('/api/company/commercial/contracts', token);
 export const getReceivables = (token: string) => request<Receivable[]>('/api/company/commercial/receivables', token);
 export const recordPayment = (token: string, id: string, amount: number, note?: string) => request<Receivable>(`/api/company/commercial/receivables/${id}/payment`, token, { method: 'POST', body: JSON.stringify({ amount, note }) });
-export const getProfitability = (token: string, start?: string, end?: string) => request<ProfitabilitySummary>(`/api/company/commercial/profitability?start=${start ?? ''}&end=${end ?? ''}`, token);
+export const getProfitability = (token: string, start?: string, end?: string) => {
+  const query = new URLSearchParams();
+  if (start) query.set('start', start);
+  if (end) query.set('end', end);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return request<ProfitabilitySummary>(`/api/company/commercial/profitability${suffix}`, token);
+};
 export const saveWorkOrderEconomics = (token: string, workOrderId: string, input: { revenue: number; personnelHourlyCost: number; distanceKm: number; fuelCost: number; repeatVisitCost: number; emergencyCallCost: number; otherCost: number }) => request<void>(`/api/company/commercial/work-orders/${workOrderId}/economics`, token, { method: 'PUT', body: JSON.stringify(input) });
 export async function downloadCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string) { const response = await fetch(`/api/company/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); if (response.status === 401) throw new CommercialSessionExpiredError(); if (!response.ok) throw new Error('PDF oluşturulamadı.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `${number}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
