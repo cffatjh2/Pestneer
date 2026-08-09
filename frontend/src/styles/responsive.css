@@ -335,6 +335,7 @@
   .customer-data-grid { grid-template-columns: 1fr; }
   .customer-data-grid .form-field-wide { grid-column: auto; }
   .customer-mode-switch { grid-template-columns: 1fr; }
+  .branch-import-switch { grid-template-columns: 1fr; }
   .calendar-heading-actions { width: 100%; align-items: stretch; flex-direction: column; }
   .system-clock { width: 100%; }
   .calendar-toolbar { align-items: flex-start; gap: var(--space-3); flex-direction: column; }

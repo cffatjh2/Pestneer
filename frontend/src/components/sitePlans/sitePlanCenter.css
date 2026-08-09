@@ -6,3 +6,49 @@
 .site-plan-editor-layer{overflow:auto}.site-plan-editor-shell{max-height:calc(100dvh - 24px)}.site-plan-workspace,.site-plan-stage{min-height:0;overflow:hidden}.site-plan-tools,.site-plan-inspector,.site-plan-canvas-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.site-plan-canvas-scroll{height:100%;max-height:100%}
 @media(max-width:760px){.site-plan-editor-shell{max-height:none}.site-plan-workspace,.site-plan-stage{overflow:visible}.site-plan-canvas-scroll{height:auto;max-height:520px}}
 @media(max-height:780px) and (min-width:761px){.site-plan-editor-layer{padding:8px}.site-plan-editor-shell{height:calc(100dvh - 16px)}.site-plan-editor-shell>header{padding:12px 18px}.site-plan-editor-icon{width:40px;height:40px}.site-plan-editor-shell header h2{font-size:18px}.site-plan-editor-shell header p:not(.eyebrow){display:none}.site-plan-meta{padding:8px 14px}.site-plan-editor-footer{padding:9px 14px}}
+
+.site-plan-editor-layer{overscroll-behavior:none}.site-plan-mobile-meta-toggle,.site-plan-mobile-tabs,.site-plan-touch-hint{display:none}.site-plan-paper svg{touch-action:pan-x pan-y}.canvas-element{touch-action:none}.canvas-hit-area{fill:transparent;stroke:none;pointer-events:all}
+
+@media(max-width:760px){
+  .site-plan-editor-shell{display:flex;flex-direction:column;overflow:hidden}
+  .site-plan-editor-shell>header{position:relative;z-index:5;flex:none;padding:13px 14px}
+  .site-plan-editor-shell>header>div{min-width:0}
+  .site-plan-editor-icon{width:42px;height:42px;flex:none}
+  .site-plan-editor-shell header h2{font-size:18px;line-height:1.2}
+  .site-plan-editor-shell header p:not(.eyebrow){display:none}
+  .site-plan-mobile-meta-toggle{display:flex;align-items:center;gap:8px;flex:none;width:100%;padding:10px 14px;border:0;border-bottom:1px solid #dbe5ef;background:#fff;color:#27415e;font-size:12px;font-weight:800;text-align:left}
+  .site-plan-mobile-meta-toggle span{margin-left:auto;color:#2563eb}
+  .site-plan-meta{display:none;grid-template-columns:1fr;flex:none;max-height:48dvh;overflow:auto;padding:10px}
+  .site-plan-meta.mobile-open{display:grid}
+  .site-plan-mobile-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex:none;padding:7px 10px;background:#f8fafc;border-bottom:1px solid #dbe5ef}
+  .site-plan-mobile-tabs button{position:relative;display:flex;align-items:center;justify-content:center;gap:5px;min-height:39px;border:1px solid transparent;border-radius:9px;background:transparent;color:#63758b;font-size:11px;font-weight:800}
+  .site-plan-mobile-tabs button.active{border-color:#bfdbfe;background:#fff;color:#2563eb;box-shadow:0 3px 10px #102a4312}
+  .site-plan-mobile-tabs svg{width:16px}
+  .site-plan-mobile-tabs i{position:absolute;right:7px;top:6px;width:7px;height:7px;border-radius:50%;background:#10a37f}
+  .site-plan-workspace{display:block;flex:1;min-height:0;overflow:hidden}
+  .site-plan-tools,.site-plan-stage,.site-plan-inspector{display:none;height:100%;min-height:0;overflow:auto}
+  .site-plan-tools.mobile-panel-active,.site-plan-stage.mobile-panel-active,.site-plan-inspector.mobile-panel-active{display:grid}
+  .site-plan-tools.mobile-panel-active,.site-plan-inspector.mobile-panel-active{display:block}
+  .site-plan-tools{border:0;padding:14px}
+  .site-plan-stage{grid-template-rows:auto minmax(0,1fr) auto;background:#dfe8f1}
+  .site-plan-inspector{position:static;width:auto;box-shadow:none;border:0;padding:14px}
+  .site-plan-canvas-scroll{height:100%;max-height:none;padding:14px;overflow:auto;overscroll-behavior:auto;touch-action:pan-x pan-y}
+  .site-plan-paper{margin:0 auto}
+  .site-plan-touch-hint{display:block;margin:0;padding:7px 12px 9px;background:#fff;color:#718298;font-size:10px;text-align:center}
+  .site-plan-editor-footer{position:relative;z-index:5;flex:none;display:grid;grid-template-columns:1fr 1.25fr;gap:7px;padding:9px 10px}
+  .site-plan-editor-footer>div{grid-column:1/-1;display:block;width:100%}
+  .site-plan-editor-footer>div label{display:none}
+  .site-plan-editor-footer button{width:100%;height:40px}
+  .site-plan-tool-grid{grid-template-columns:repeat(3,1fr)}
+  .site-plan-tool-grid button{min-height:68px;touch-action:manipulation}
+  .equipment-palette{grid-template-columns:1fr}
+  .equipment-palette button{min-height:54px;touch-action:manipulation}
+  .site-plan-toolbar{gap:6px;padding:7px}
+  .site-plan-toolbar>div{min-width:0}
+  .site-plan-toolbar button,.site-plan-toolbar select{height:38px;padding:0 8px}
+  .site-plan-toolbar button svg{flex:none}
+  .site-plan-toolbar>div:last-child button{font-size:0}
+  .site-plan-toolbar>div:last-child button svg{width:18px}
+  .canvas-element{cursor:grab}
+  .canvas-element:active{cursor:grabbing}
+}

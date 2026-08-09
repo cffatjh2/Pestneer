@@ -19,10 +19,22 @@ type CustomerBranchModalProps = {
   onSubmit: (customerId: string | null, customer: CreateCustomerInput | null, branches: CreateBranchInput[]) => Promise<void>;
 };
 
+type ManualBranchDraft = {
+  name: string; code: string; address: string; city: string; district: string; contactName: string;
+  phoneNumber: string; email: string; latitude: string; longitude: string; mapUrl: string;
+  portalContactName: string; portalEmail: string; portalPassword: string;
+};
+
+const emptyManualBranch: ManualBranchDraft = {
+  name: '', code: '', address: '', city: '', district: '', contactName: '', phoneNumber: '', email: '',
+  latitude: '', longitude: '', mapUrl: '', portalContactName: '', portalEmail: '', portalPassword: '',
+};
+
 export default function CustomerBranchModal({ customers, onClose, onSubmit }: CustomerBranchModalProps) {
   const [mode, setMode] = useState<'existing' | 'new'>(customers.length > 0 ? 'existing' : 'new');
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? '');
-  const [importMode, setImportMode] = useState<'excel' | 'text'>('excel');
+  const [importMode, setImportMode] = useState<'manual' | 'excel' | 'text'>('manual');
+  const [manualBranch, setManualBranch] = useState<ManualBranchDraft>(emptyManualBranch);
   const [branchText, setBranchText] = useState('');
   const [excelBranches, setExcelBranches] = useState<CreateBranchInput[]>([]);
   const [excelFileName, setExcelFileName] = useState('');
@@ -33,7 +45,8 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textBranches = useMemo(() => parseBranches(branchText), [branchText]);
-  const parsedBranches = importMode === 'excel' ? excelBranches : textBranches;
+  const manualBranches = useMemo(() => toManualBranches(manualBranch), [manualBranch]);
+  const parsedBranches = importMode === 'manual' ? manualBranches : importMode === 'excel' ? excelBranches : textBranches;
 
   const loadExcelFile = async (file?: File) => {
     if (!file) return;
@@ -73,8 +86,13 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const hasIncompleteManualBranch = importMode === 'manual' && Object.values(manualBranch).some((value) => value.trim()) && manualBranches.length === 0;
+    if (hasIncompleteManualBranch) {
+      setError('Şube adı ve açık adres alanlarını tamamlayın.');
+      return;
+    }
     if (mode === 'existing' && parsedBranches.length === 0) {
-      setError(importMode === 'excel' ? 'Geçerli bir Excel dosyası yükleyin.' : 'En az bir şube satırı girin.');
+      setError(importMode === 'manual' ? 'Şube adı ve açık adres alanlarını tamamlayın.' : importMode === 'excel' ? 'Geçerli bir Excel dosyası yükleyin.' : 'En az bir şube satırı girin.');
       return;
     }
     const customer: CreateCustomerInput | null = mode === 'new' ? {
@@ -136,11 +154,26 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
           <section className="bulk-branch-section">
             <div className="modal-subheading"><FileSpreadsheet size={18} /><div><strong>Şubeleri içe aktar</strong><span>{mode === 'new' ? 'İsterseniz müşteriyi şubesiz kaydedebilir veya ' : ''}Excel dosyasıyla ya da metin listesiyle 250 lokasyona kadar ekleyin.</span></div><em>{parsedBranches.length} şube</em></div>
             <div className="branch-import-switch" role="tablist" aria-label="Şube ekleme yöntemi">
+              <button type="button" className={importMode === 'manual' ? 'active' : ''} onClick={() => { setImportMode('manual'); setError(null); }}><Plus size={15} /> Tek şube</button>
               <button type="button" className={importMode === 'excel' ? 'active' : ''} onClick={() => { setImportMode('excel'); setError(null); }}><FileSpreadsheet size={15} /> Excel dosyası</button>
               <button type="button" className={importMode === 'text' ? 'active' : ''} onClick={() => { setImportMode('text'); setError(null); }}><Table2 size={15} /> Metinle ekle</button>
             </div>
 
-            {importMode === 'excel' ? <>
+            {importMode === 'manual' ? <div className="manual-branch-form">
+              <div className="form-grid customer-data-grid">
+                <label>Şube adı<input value={manualBranch.name} onChange={(event) => setManualBranch({ ...manualBranch, name: event.target.value })} placeholder="ATG Şube" /></label>
+                <label>Şube kodu<input value={manualBranch.code} onChange={(event) => setManualBranch({ ...manualBranch, code: event.target.value })} placeholder="Otomatik oluşturulur" /></label>
+                <label>Şube yetkilisi<input value={manualBranch.contactName} onChange={(event) => setManualBranch({ ...manualBranch, contactName: event.target.value })} placeholder="Ad Soyad" /></label>
+                <label>Telefon<input type="tel" value={manualBranch.phoneNumber} onChange={(event) => setManualBranch({ ...manualBranch, phoneNumber: event.target.value })} placeholder="0 (5xx) xxx xx xx" /></label>
+                <label>E-posta<input type="email" value={manualBranch.email} onChange={(event) => setManualBranch({ ...manualBranch, email: event.target.value })} placeholder="sube@firma.com" /></label>
+                <label>İl / İlçe<span className="inline-field-pair"><input value={manualBranch.city} onChange={(event) => setManualBranch({ ...manualBranch, city: event.target.value })} placeholder="İl" /><input value={manualBranch.district} onChange={(event) => setManualBranch({ ...manualBranch, district: event.target.value })} placeholder="İlçe" /></span></label>
+                <label className="form-field-wide">Açık adres<input value={manualBranch.address} onChange={(event) => setManualBranch({ ...manualBranch, address: event.target.value })} placeholder="Mahalle, cadde, bina ve kat bilgisi" /></label>
+                <label className="form-field-wide">Google Haritalar bağlantısı<input type="url" value={manualBranch.mapUrl} onChange={(event) => setManualBranch({ ...manualBranch, mapUrl: event.target.value })} placeholder="https://maps.app.goo.gl/..." /></label>
+                <label>Enlem<input type="number" step="0.000001" value={manualBranch.latitude} onChange={(event) => setManualBranch({ ...manualBranch, latitude: event.target.value })} placeholder="39.933365" /></label>
+                <label>Boylam<input type="number" step="0.000001" value={manualBranch.longitude} onChange={(event) => setManualBranch({ ...manualBranch, longitude: event.target.value })} placeholder="32.859742" /></label>
+              </div>
+              <div className="branch-portal-fields"><strong>Şube müşteri portalı <small>Opsiyonel</small></strong><div className="form-grid customer-data-grid"><label>Portal yetkilisi<input value={manualBranch.portalContactName} onChange={(event) => setManualBranch({ ...manualBranch, portalContactName: event.target.value })} placeholder="Ad Soyad" /></label><label>Giriş e-postası<input type="email" value={manualBranch.portalEmail} onChange={(event) => setManualBranch({ ...manualBranch, portalEmail: event.target.value })} placeholder="portal@sube.com" /></label><label>Geçici şifre<input type="password" minLength={6} value={manualBranch.portalPassword} onChange={(event) => setManualBranch({ ...manualBranch, portalPassword: event.target.value })} placeholder="En az 6 karakter" /></label><div className="portal-account-note">E-posta ve şifre birlikte girildiğinde yalnızca bu şubeyi gören müşteri hesabı açılır.</div></div></div>
+            </div> : importMode === 'excel' ? <>
               <div
                 className={`excel-upload-zone ${isDragging ? 'dragging' : ''} ${excelBranches.length > 0 ? 'ready' : ''}`}
                 onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
@@ -169,7 +202,7 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
           </section>
 
           {error && <div className="modal-form-error" role="alert">{error}</div>}
-          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button" disabled={isSubmitting || isReadingExcel || (mode === 'existing' && parsedBranches.length === 0)}>{isSubmitting ? 'Kaydediliyor…' : parsedBranches.length > 0 ? `${parsedBranches.length} Şubeyi Kaydet` : 'Çatı Müşteriyi Kaydet'} <Plus size={17} /></button></div>
+          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button" disabled={isSubmitting || isReadingExcel || (mode === 'existing' && parsedBranches.length === 0)}>{isSubmitting ? 'Kaydediliyor…' : parsedBranches.length > 0 ? `${parsedBranches.length} Şubeyi Kaydet` : mode === 'existing' ? 'Şube Bilgilerini Tamamlayın' : 'Çatı Müşteriyi Kaydet'} <Plus size={17} /></button></div>
         </form>
       </div>
     </div>
@@ -181,6 +214,33 @@ function parseBranches(value: string): CreateBranchInput[] {
     const [name = '', city = '', district = '', address = '', contactName = '', phoneNumber = '', email = '', latitude = '', longitude = '', mapUrl = '', portalContactName = '', portalEmail = '', portalPassword = ''] = line.split('|').map((part) => part.trim());
     return { name, city: city || undefined, district: district || undefined, address, contactName: contactName || undefined, phoneNumber: phoneNumber || undefined, email: email || undefined, latitude: optionalNumber(latitude), longitude: optionalNumber(longitude), mapUrl: mapUrl || undefined, portalContactName: portalContactName || undefined, portalEmail: portalEmail || undefined, portalPassword: portalPassword || undefined };
   }).filter((branch) => branch.name.length > 0 && branch.address.length > 0).slice(0, 250);
+}
+
+function toManualBranches(branch: ManualBranchDraft): CreateBranchInput[] {
+  const name = branch.name.trim();
+  const address = branch.address.trim();
+  if (!name || !address) return [];
+  return [{
+    name,
+    address,
+    code: optionalText(branch.code),
+    city: optionalText(branch.city),
+    district: optionalText(branch.district),
+    contactName: optionalText(branch.contactName),
+    phoneNumber: optionalText(branch.phoneNumber),
+    email: optionalText(branch.email),
+    latitude: optionalNumber(branch.latitude),
+    longitude: optionalNumber(branch.longitude),
+    mapUrl: optionalText(branch.mapUrl),
+    portalContactName: optionalText(branch.portalContactName),
+    portalEmail: optionalText(branch.portalEmail),
+    portalPassword: optionalText(branch.portalPassword),
+  }];
+}
+
+function optionalText(value: string) {
+  const text = value.trim();
+  return text || undefined;
 }
 
 function optionalNumber(value: FormDataEntryValue | string | null) {
