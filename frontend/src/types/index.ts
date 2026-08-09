@@ -11,7 +11,8 @@ export type ViewId =
   | 'stock'
   | 'reports'
   | 'documents'
-  | 'team';
+  | 'team'
+  | 'settings';
 
 /* ---- İş Emri ----------------------------------------------------- */
 export type WorkStatus = 'Planlandı' | 'Sahada' | 'Tamamlandı' | 'İptal';

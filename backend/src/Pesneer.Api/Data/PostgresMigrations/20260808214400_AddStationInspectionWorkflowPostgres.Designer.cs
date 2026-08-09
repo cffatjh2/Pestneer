@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pesneer.Api.Data;
@@ -11,9 +12,11 @@ using Pesneer.Api.Data;
 namespace Pesneer.Api.Data.PostgresMigrations
 {
     [DbContext(typeof(PostgresPesneerDbContext))]
-    partial class PostgresPesneerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260808214400_AddStationInspectionWorkflowPostgres")]
+    partial class AddStationInspectionWorkflowPostgres
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -145,20 +148,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .IsRequired()
                         .HasMaxLength(240)
                         .HasColumnType("character varying(240)");
-
-                    b.Property<string>("LogoContentType")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<byte[]>("LogoData")
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("LogoFileName")
-                        .HasMaxLength(240)
-                        .HasColumnType("character varying(240)");
-
-                    b.Property<DateTimeOffset?>("LogoUpdatedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 

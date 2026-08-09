@@ -9,8 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@zxing/browser": "latest",
     "@vitejs/plugin-react": "latest",
+    "jspdf": "latest",
     "lucide-react": "latest",
+    "puppeteer-core": "^25.5.0",
+    "qrcode": "latest",
     "react": "latest",
     "react-dom": "latest",
     "react-to-print": "^3.3.0",
@@ -18,6 +22,7 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "@types/qrcode": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "typescript": "latest"

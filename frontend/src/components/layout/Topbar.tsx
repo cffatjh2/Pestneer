@@ -12,7 +12,7 @@ interface TopbarProps {
 }
 
 export default function Topbar({ activeView, onMenuOpen, accessToken, onStockOpen }: TopbarProps) {
-  const currentLabel = navigation.find((n) => n.id === activeView)?.label;
+  const currentLabel = navigation.find((n) => n.id === activeView)?.label ?? (activeView === 'settings' ? 'Ayarlar' : 'Pestneer');
   const [now, setNow] = useState(new Date());
   const [alerts, setAlerts] = useState<InventoryAlert[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);

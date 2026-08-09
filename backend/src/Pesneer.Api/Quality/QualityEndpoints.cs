@@ -99,7 +99,8 @@ public static class QualityEndpoints
         if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
         if (document.FileData is not null) return Results.File(document.FileData, document.ContentType, document.FileName);
         if (document.QualityAnalysis is null) return Results.NotFound(new { message = "Belge içeriği bulunamadı." });
-        return Results.File(QualityDocumentRenderer.Render(document.QualityAnalysis), "application/pdf", Path.ChangeExtension(document.FileName, ".pdf"));
+        var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == context.CompanyId, cancellationToken);
+        return Results.File(QualityDocumentRenderer.Render(document.QualityAnalysis, company.LegalName, company.LogoData), "application/pdf", Path.ChangeExtension(document.FileName, ".pdf"));
     }
 
     private static async Task<IResult> CreateTrendAnalysisAsync(CreateTrendAnalysisRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -146,6 +147,7 @@ public static class QualityEndpoints
     {
         if (request.Answers.Count == 0) return Validation("answers", "Risk kontrol maddelerini değerlendirin.");
         if (request.Answers.Any(item => item.Score is < 0 or > 4)) return Validation("answers", "Her risk maddesi 0 ile 4 arasında puanlanmalıdır.");
+        if (request.RiskMatrix.Count > 100 || request.RiskMatrix.Any(item => item.Severity is < 1 or > 3 || item.Likelihood is < 1 or > 3 || string.IsNullOrWhiteSpace(item.Location) || string.IsNullOrWhiteSpace(item.PestCategory))) return Validation("riskMatrix", "Lokasyon risk matrisindeki şiddet ve olasılık değerleri 1-3 arasında olmalıdır.");
         if (!await CanUseLocationAsync(request.CustomerId, request.BranchId, dbContext, context, cancellationToken)) return Results.Forbid();
 
         var customer = await dbContext.Customers.AsNoTracking().SingleAsync(item => item.Id == request.CustomerId, cancellationToken);
@@ -155,15 +157,19 @@ public static class QualityEndpoints
         var weatherLocation = weatherOverview.Locations.FirstOrDefault();
         var structuralScore = (int)Math.Round((decimal)request.Answers.Average(item => item.Score) / 4m * 100m);
         var weatherScore = weatherLocation?.Risk?.Score ?? 0;
-        var overallScore = weatherLocation?.Risk is null ? structuralScore : (int)Math.Round(structuralScore * .7m + weatherScore * .3m);
+        var matrixScore = request.RiskMatrix.Count == 0 ? 0 : (int)Math.Round(request.RiskMatrix.Max(item => item.Severity * item.Likelihood) / 9m * 100m);
+        var overallScore = weatherLocation?.Risk is null
+            ? (int)Math.Round(structuralScore * .75m + matrixScore * .25m)
+            : (int)Math.Round(structuralScore * .55m + matrixScore * .25m + weatherScore * .20m);
         var level = RiskLevel(overallScore);
         var generatedRecommendations = request.Answers.Where(item => item.Score >= 3 && !string.IsNullOrWhiteSpace(item.Recommendation)).Select(item => item.Recommendation!.Trim())
             .Concat(weatherLocation?.Pests.Where(item => item.Score >= 35).Take(3).SelectMany(item => item.Recommendations.Take(1)) ?? [])
             .Distinct(StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true)).ToArray();
         var recommendationText = JoinText(request.Recommendations, generatedRecommendations);
-        var summary = $"Yapısal ve operasyonel risk {structuralScore}/100, konuma bağlı hava riski {(weatherLocation?.Risk is null ? "hesaplanamadı" : $"{weatherScore}/100")}. Birleşik risk puanı {overallScore}/100 ({RiskLabel(level)}).";
-        var payload = new RiskAnalysisPayload(structuralScore, weatherScore, overallScore, level, request.Answers, weatherLocation, generatedRecommendations, "Bu analiz karar destek amaçlıdır; saha keşfi, mesul müdür değerlendirmesi ve mevzuata uygun uygulama sorumluluğunun yerini almaz.");
-        var analysis = NewAnalysis(context, request.CustomerId, request.BranchId, "Risk", "PEST-RISK-TR-v1", request.Title, $"{customer.LegalName} - {branch?.Name ?? "Genel"} Risk Analizi", request.AssessmentDate, request.AssessmentDate, overallScore, level, summary, JoinText(request.Findings, [request.CorrectiveActions ?? string.Empty]), recommendationText, payload);
+        var frequency = RecommendedFrequency(overallScore, request.SectorType);
+        var summary = $"Yapısal ve operasyonel risk {structuralScore}/100, lokasyon matrisi {matrixScore}/100, konuma bağlı hava riski {(weatherLocation?.Risk is null ? "hesaplanamadı" : $"{weatherScore}/100")}. Birleşik risk puanı {overallScore}/100 ({RiskLabel(level)}). Önerilen kontrol sıklığı: {frequency}.";
+        var payload = new RiskAnalysisPayload(structuralScore, matrixScore, weatherScore, overallScore, level, Clean(request.SectorType, 40), Clean(request.CurrentFrequency, 120), frequency, request.Answers, request.RiskMatrix, weatherLocation, generatedRecommendations, "Bu analiz açıklanabilir karar destek amaçlıdır; saha keşfi, mesul müdür değerlendirmesi ve mevzuata uygun uygulama sorumluluğunun yerini almaz.");
+        var analysis = NewAnalysis(context, request.CustomerId, request.BranchId, "Risk", "PEST-RISK-TR-v2", request.Title, $"{customer.LegalName} - {branch?.Name ?? "Genel"} Detaylı Risk Analizi", request.AssessmentDate, request.AssessmentDate, overallScore, level, summary, JoinText(request.Findings, [request.CorrectiveActions ?? string.Empty]), recommendationText, payload);
         dbContext.QualityAnalyses.Add(analysis);
         var document = NewGeneratedDocument(analysis, "RiskAnalyses");
         dbContext.QualityDocuments.Add(document);
@@ -281,6 +287,15 @@ public static class QualityEndpoints
         return change >= 5 ? "Artış" : change <= -5 ? "Azalış" : "Stabil";
     }
     private static string RiskLevel(int score) => score >= 65 ? "High" : score >= 35 ? "Medium" : "Low";
+    private static string RecommendedFrequency(int score, string? sectorType)
+    {
+        var foodAdjustment = string.Equals(sectorType, "Food", StringComparison.OrdinalIgnoreCase) ? 5 : 0;
+        var adjusted = Math.Min(100, score + foodAdjustment);
+        return adjusted >= 75 ? "Haftalık izleme ve ayda en az 4 kapsamlı kontrol"
+            : adjusted >= 55 ? "İki haftada bir izleme ve ayda en az 2 kapsamlı kontrol"
+            : adjusted >= 30 ? "Ayda en az 1 kapsamlı kontrol"
+            : "Risk esaslı aylık kontrol; bulgu halinde sıklık artırımı";
+    }
     private static string RiskLabel(string level) => level == "High" ? "Yüksek" : level == "Medium" ? "Orta" : "Düşük";
     private static string? Clean(string? value, int maxLength) { value = value?.Trim(); return string.IsNullOrWhiteSpace(value) ? null : value[..Math.Min(value.Length, maxLength)]; }
     private static string? JoinText(string? primary, IEnumerable<string> values)
@@ -293,5 +308,5 @@ public static class QualityEndpoints
     private sealed record TrendPeriodPayload(string Period, int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate);
     private sealed record PestTotalPayload(string Pest, int TotalCaught);
     private sealed record TrendAnalysisPayload(int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate, string TrendDirection, IReadOnlyList<TrendPeriodPayload> Periods, IReadOnlyList<PestTotalPayload> PestTotals);
-    private sealed record RiskAnalysisPayload(int StructuralRiskScore, int WeatherRiskScore, int OverallRiskScore, string RiskLevel, IReadOnlyList<RiskAnswerInput> Answers, LocationWeatherRiskResponse? Weather, IReadOnlyList<string> GeneratedRecommendations, string Disclaimer);
+    private sealed record RiskAnalysisPayload(int StructuralRiskScore, int MatrixRiskScore, int WeatherRiskScore, int OverallRiskScore, string RiskLevel, string? SectorType, string? CurrentFrequency, string RecommendedFrequency, IReadOnlyList<RiskAnswerInput> Answers, IReadOnlyList<RiskMatrixInput> RiskMatrix, LocationWeatherRiskResponse? Weather, IReadOnlyList<string> GeneratedRecommendations, string Disclaimer);
 }

@@ -141,6 +141,20 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(240)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LogoContentType")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("LogoData")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("LogoFileName")
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LogoUpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -945,6 +959,25 @@ namespace Pesneer.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ActivityType")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("AppliedAmount")
+                        .HasPrecision(12, 3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AppliedProductName")
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AppliedUnit")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AppliedVehicleStockItemId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Area")
                         .IsRequired()
                         .HasMaxLength(240)
@@ -974,6 +1007,10 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<bool>("HasActivity")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("InaccessibilityReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
@@ -981,7 +1018,29 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<bool>("PlateChanged")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ReplacementProductName")
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ReplacementQuantity")
+                        .HasPrecision(12, 3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReplacementUnit")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReplacementVehicleStockItemId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ServiceReportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SitePlanElementId")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SitePlanId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TargetPest")
@@ -993,6 +1052,8 @@ namespace Pesneer.Api.Data.Migrations
                     b.HasIndex("ServiceReportId");
 
                     b.HasIndex("CompanyId", "ServiceReportId", "DeviceNumber");
+
+                    b.HasIndex("CompanyId", "SitePlanId", "SitePlanElementId");
 
                     b.ToTable("ServiceReportStations");
                 });

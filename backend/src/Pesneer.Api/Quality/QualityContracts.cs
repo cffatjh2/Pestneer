@@ -26,6 +26,13 @@ public sealed record RiskAnswerInput(
     string? Note,
     string? Recommendation);
 
+public sealed record RiskMatrixInput(
+    string Location,
+    string PestCategory,
+    int Severity,
+    int Likelihood,
+    string? Note);
+
 public sealed record CreateRiskAnalysisRequest(
     Guid CustomerId,
     Guid? BranchId,
@@ -34,6 +41,9 @@ public sealed record CreateRiskAnalysisRequest(
     string? Findings,
     string? CorrectiveActions,
     string? Recommendations,
+    string? SectorType,
+    string? CurrentFrequency,
+    IReadOnlyList<RiskMatrixInput> RiskMatrix,
     IReadOnlyList<RiskAnswerInput> Answers);
 
 public sealed record QualityAnalysisResponse(

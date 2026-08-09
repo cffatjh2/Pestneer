@@ -2,6 +2,7 @@ export type QualityLocation = { customerId: string; customerName: string; branch
 export type TrendPeriodPayload = { period: string; reportCount: number; totalStations: number; activeStations: number; plateChanges: number; totalCaught: number; activityRate: number };
 export type PestTotalPayload = { pest: string; totalCaught: number };
 export type RiskAnswer = { code: string; category: string; question: string; score: number; note?: string; recommendation?: string };
+export type RiskMatrixRow = { location: string; pestCategory: string; severity: number; likelihood: number; note?: string };
 export type QualityAnalysis = {
   id: string; number: string; analysisType: 'Trend' | 'Risk'; templateCode: string; title: string; status: string;
   customerId: string; customerName: string; branchId?: string; branchName: string; periodStart: string; periodEnd: string;
@@ -11,7 +12,7 @@ export type QualityAnalysis = {
     reportCount?: number; totalStations?: number; activeStations?: number; plateChanges?: number; totalCaught?: number;
     activityRate?: number; trendDirection?: string; periods?: TrendPeriodPayload[]; pestTotals?: PestTotalPayload[];
     structuralRiskScore?: number; weatherRiskScore?: number; overallRiskScore?: number; riskLevel?: string;
-    answers?: RiskAnswer[]; generatedRecommendations?: string[]; disclaimer?: string;
+    answers?: RiskAnswer[]; riskMatrix?: RiskMatrixRow[]; matrixRiskScore?: number; recommendedFrequency?: string; sectorType?: string; currentFrequency?: string; generatedRecommendations?: string[]; disclaimer?: string;
     weather?: { weather?: { condition: string; temperatureC: number; relativeHumidity: number }; risk?: { score: number; level: string; label: string }; pests?: { name: string; score: number; level: string; reasons: string[]; recommendations: string[] }[] };
   };
 };
@@ -23,7 +24,7 @@ export type QualityDocument = {
 };
 
 export type CreateTrendAnalysisInput = { customerId: string; branchId?: string; periodStart: string; periodEnd: string; title?: string; findings?: string; recommendations?: string };
-export type CreateRiskAnalysisInput = { customerId: string; branchId?: string; assessmentDate: string; title?: string; findings?: string; correctiveActions?: string; recommendations?: string; answers: RiskAnswer[] };
+export type CreateRiskAnalysisInput = { customerId: string; branchId?: string; assessmentDate: string; title?: string; findings?: string; correctiveActions?: string; recommendations?: string; sectorType?: string; currentFrequency?: string; riskMatrix: RiskMatrixRow[]; answers: RiskAnswer[] };
 export type UploadQualityDocumentInput = { file: File; category: string; title?: string; description?: string; customerId?: string; branchId?: string };
 
 export class QualitySessionExpiredError extends Error {

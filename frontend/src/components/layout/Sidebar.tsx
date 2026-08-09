@@ -75,7 +75,7 @@ export default function Sidebar({
       </nav>
 
       <div className="sidebar-bottom">
-        <button className="nav-item"><Settings size={19} /><span>Ayarlar</span></button>
+        <button className={`nav-item ${activeView === 'settings' ? 'active' : ''}`} onClick={() => { setActiveView('settings'); setIsMenuOpen(false); }}><Settings size={19} /><span>Ayarlar</span></button>
         <div className="support-card"><div className="support-icon"><Activity size={18} /></div><strong>Yardıma mı ihtiyacınız var?</strong><span>Destek ekibimiz yanınızda.</span><button onClick={() => onNotify('Destek talebi ekranı yakında hazır olacak.')}>Destek Merkezi <ArrowUpRight size={14} /></button></div>
         <button className="profile profile-button" onClick={onLogout}>
           <div className="avatar avatar-blue">{initials}</div>

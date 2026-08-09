@@ -51,6 +51,8 @@ Yerel API, kurulum gerektirmeyen SQLite veritabanını `appsettings.Development.
 
 Kök dizindeki `Dockerfile`, React arayüzünü derler ve ASP.NET Core API ile aynı servisten sunar. `railway.json`, `/api/health` sağlık kontrolünü etkinleştirir.
 
+Vercel dağıtımı `vercel.json` üzerinden React arayüzünü yayınlar; `/api` istekleri kalıcı PostgreSQL veritabanı kullanan Render API servisine güvenli biçimde yönlendirilir.
+
 1. Railway projesine bir PostgreSQL servisi ekleyin.
 2. Uygulama servisinde `DATABASE_URL=${{Postgres.DATABASE_URL}}` referans değişkenini tanımlayın.
 3. En az 32 karakterli `Jwt__SigningKey` değeri oluşturun.

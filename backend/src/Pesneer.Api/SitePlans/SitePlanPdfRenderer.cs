@@ -16,7 +16,7 @@ internal static class SitePlanPdfRenderer
     private const string Border = "#CBD5E1";
     private static readonly CultureInfo TurkishCulture = CultureInfo.GetCultureInfo("tr-TR");
 
-    public static byte[] Render(SitePlan plan, SitePlanCanvasInput canvas, string companyName)
+    public static byte[] Render(SitePlan plan, SitePlanCanvasInput canvas, string companyName, byte[]? companyLogo)
     {
         var equipmentCounts = canvas.Elements
             .Where(item => item.Type == "station" && !string.IsNullOrWhiteSpace(item.EquipmentTypeId))
@@ -31,7 +31,7 @@ internal static class SitePlanPdfRenderer
                 page.Margin(22);
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(style => style.FontFamily("Lato").FontSize(7.5f).FontColor(Navy));
-                page.Header().Element(container => Header(container, plan, companyName));
+                page.Header().Element(container => Header(container, plan, companyName, companyLogo));
                 page.Content().PaddingVertical(8).Column(column =>
                 {
                     column.Spacing(7);
@@ -44,7 +44,7 @@ internal static class SitePlanPdfRenderer
         }).GeneratePdf();
     }
 
-    private static void Header(IContainer container, SitePlan plan, string companyName)
+    private static void Header(IContainer container, SitePlan plan, string companyName, byte[]? companyLogo)
     {
         container.Border(1).BorderColor(Navy).Table(table =>
         {
@@ -54,7 +54,7 @@ internal static class SitePlanPdfRenderer
                 columns.RelativeColumn(2.6f);
                 columns.RelativeColumn(1.2f);
             });
-            table.Cell().Padding(10).AlignMiddle().Text(companyName).Bold().FontSize(9);
+            table.Cell().Padding(8).AlignMiddle().Element(cell => CompanyBrand(cell, companyName, companyLogo));
             table.Cell().BorderLeft(1).BorderRight(1).BorderColor(Navy).Padding(8).AlignCenter().Column(column =>
             {
                 column.Item().AlignCenter().Text("ZARARLI MÜCADELESİ EKİPMAN YERLEŞİM PLANI").ExtraBold().FontSize(11);
@@ -66,6 +66,22 @@ internal static class SitePlanPdfRenderer
                 column.Item().AlignCenter().Text(plan.Customer.LegalName).Bold().FontSize(9);
                 column.Item().AlignCenter().Text(plan.CustomerBranch?.Name ?? "Genel / Merkez").FontSize(7).FontColor("#64748B");
             });
+        });
+    }
+
+    private static void CompanyBrand(IContainer container, string companyName, byte[]? companyLogo)
+    {
+        container.Column(column =>
+        {
+            if (companyLogo is { Length: > 0 })
+            {
+                column.Item().Height(34).AlignLeft().Image(companyLogo).FitArea();
+                column.Item().PaddingTop(3).Text(companyName).Bold().FontSize(7);
+            }
+            else
+            {
+                column.Item().Text(companyName).Bold().FontSize(9);
+            }
         });
     }
 

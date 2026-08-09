@@ -1,6 +1,10 @@
 export type ReportStationInput = {
+  sitePlanId?: string; sitePlanElementId?: string;
   deviceNumber: string; area: string; deviceType: string; targetPest?: string; caughtCount: number;
-  hasActivity: boolean; plateChanged: boolean; deviceStatus: string; notes?: string;
+  hasActivity: boolean; plateChanged: boolean; deviceStatus: string; activityType?: string; inaccessibilityReason?: string;
+  appliedVehicleStockItemId?: string; appliedProductName?: string; appliedAmount?: number; appliedUnit?: string;
+  replacementVehicleStockItemId?: string; replacementProductName?: string; replacementQuantity?: number; replacementUnit?: string;
+  notes?: string;
 };
 
 export type ReportProductInput = {
@@ -15,6 +19,7 @@ export type UpsertServiceReportInput = {
   areaSquareMeters?: number; workType?: string; consumables?: string; safetyMeasures?: string;
   applicationSummary?: string; findings?: string; correctiveActions?: string; recommendations?: string;
   customerRepresentativeName?: string; managerSignatureData?: string; customerSignatureData?: string;
+  baseUpdatedAt?: string; forceOverwrite?: boolean;
   finalize: boolean; stations: ReportStationInput[]; products: ReportProductInput[];
 };
 
@@ -43,21 +48,36 @@ export class ReportSessionExpiredError extends Error {
   constructor(message = 'Oturumunuz güncel değil. Lütfen yeniden giriş yapın.') { super(message); this.name = 'ReportSessionExpiredError'; }
 }
 
+export class ReportNetworkError extends Error {
+  constructor() { super('İnternet bağlantısı bulunamadı. Rapor cihazda güvenle saklandı.'); this.name = 'ReportNetworkError'; }
+}
+
+export class ReportConflictError extends Error {
+  constructor(message: string, public readonly current: ServiceReportRecord) { super(message); this.name = 'ReportConflictError'; }
+}
+
 export const getCompanyServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/company/service-reports', token);
 export const getEmployeeServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/employee/service-reports', token);
 export const getCustomerServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/customer/service-reports', token);
 export const getServiceReportByWorkOrder = (token: string, workOrderId: string) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token);
 export const saveServiceReport = (token: string, workOrderId: string, input: UpsertServiceReportInput) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token, { method: 'PUT', body: JSON.stringify(input) });
+export async function uploadServiceReportPhotos(token: string, workOrderId: string, photos: File[]) {
+  if (photos.length === 0) return [];
+  const body = new FormData();
+  photos.forEach((photo) => body.append('photos', photo));
+  return request<ReportPhoto[]>(`/api/service-reports/work-orders/${workOrderId}/photos`, token, { method: 'POST', body }, false);
+}
 export const getServiceReportAnalytics = (token: string, query = '') => request<ServiceReportAnalytics>(`/api/company/service-reports/analytics${query ? `?${query}` : ''}`, token);
 
-async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   let response: Response;
-  try { response = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } }); }
-  catch { throw new Error('Rapor servisine ulaşılamıyor. Lütfen tekrar deneyin.'); }
+  try { response = await fetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
+  catch { throw new ReportNetworkError(); }
   if (!response.ok) {
-    const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;
+    const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]>; current?: ServiceReportRecord } | null;
     const validationMessage = problem?.errors ? Object.values(problem.errors).flat()[0] : undefined;
     if (response.status === 401 || response.status === 403) throw new ReportSessionExpiredError(problem?.message);
+    if (response.status === 409 && problem?.current) throw new ReportConflictError(problem.message ?? 'Rapor sürümü çakıştı.', problem.current);
     throw new Error(problem?.message ?? problem?.detail ?? validationMessage ?? 'Rapor işlemi tamamlanamadı.');
   }
   return response.json() as Promise<T>;

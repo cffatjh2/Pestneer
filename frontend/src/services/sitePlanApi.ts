@@ -1,4 +1,5 @@
 export type SitePlanElementType = 'rect' | 'line' | 'door' | 'text' | 'station';
+import { cacheSitePlans, getCachedSitePlans, offlineScopeFromToken } from './offlineFieldStore';
 export type SitePlanEquipmentShape = 'square' | 'circle' | 'diamond' | 'star' | 'hexagon';
 
 export type SitePlanEquipmentType = {
@@ -69,7 +70,18 @@ export class SitePlanSessionExpiredError extends Error {
   }
 }
 
-export const getSitePlans = (token: string) => request<SitePlanRecord[]>('/api/site-plans/', token);
+export async function getSitePlans(token: string) {
+  const scope = offlineScopeFromToken(token);
+  try {
+    const plans = await request<SitePlanRecord[]>('/api/site-plans/', token);
+    await cacheSitePlans(scope, plans);
+    return plans;
+  } catch (error) {
+    const cached = await getCachedSitePlans(scope);
+    if (cached.length > 0) return cached;
+    throw error;
+  }
+}
 export const createSitePlan = (token: string, input: SaveSitePlanInput) => request<SitePlanRecord>('/api/site-plans/', token, { method: 'POST', body: JSON.stringify(input) });
 export const updateSitePlan = (token: string, id: string, input: SaveSitePlanInput) => request<SitePlanRecord>(`/api/site-plans/${id}`, token, { method: 'PUT', body: JSON.stringify(input) });
 

@@ -43,6 +43,8 @@ public class PesneerDbContext(
             entity.HasIndex(company => company.Code).IsUnique();
             entity.Property(company => company.Code).HasMaxLength(64);
             entity.Property(company => company.LegalName).HasMaxLength(240);
+            entity.Property(company => company.LogoContentType).HasMaxLength(80);
+            entity.Property(company => company.LogoFileName).HasMaxLength(240);
         });
 
         modelBuilder.Entity<Account>(entity =>
@@ -209,11 +211,21 @@ public class PesneerDbContext(
         modelBuilder.Entity<ServiceReportStation>(entity =>
         {
             entity.HasIndex(item => new { item.CompanyId, item.ServiceReportId, item.DeviceNumber });
+            entity.HasIndex(item => new { item.CompanyId, item.SitePlanId, item.SitePlanElementId });
             entity.Property(item => item.DeviceNumber).HasMaxLength(80);
             entity.Property(item => item.Area).HasMaxLength(240);
             entity.Property(item => item.DeviceType).HasMaxLength(40);
             entity.Property(item => item.TargetPest).HasMaxLength(160);
             entity.Property(item => item.DeviceStatus).HasMaxLength(32);
+            entity.Property(item => item.SitePlanElementId).HasMaxLength(80);
+            entity.Property(item => item.ActivityType).HasMaxLength(80);
+            entity.Property(item => item.InaccessibilityReason).HasMaxLength(1000);
+            entity.Property(item => item.AppliedProductName).HasMaxLength(240);
+            entity.Property(item => item.AppliedAmount).HasPrecision(12, 3);
+            entity.Property(item => item.AppliedUnit).HasMaxLength(32);
+            entity.Property(item => item.ReplacementProductName).HasMaxLength(240);
+            entity.Property(item => item.ReplacementQuantity).HasPrecision(12, 3);
+            entity.Property(item => item.ReplacementUnit).HasMaxLength(32);
             entity.Property(item => item.Notes).HasMaxLength(1000);
             entity.HasOne(item => item.ServiceReport).WithMany(report => report.Stations).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);

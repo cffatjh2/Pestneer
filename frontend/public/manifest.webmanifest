@@ -1,0 +1,18 @@
+{
+  "name": "Pestneer Saha Operasyonları",
+  "short_name": "Pestneer",
+  "description": "İş emirleri, istasyon kontrolleri ve saha raporları için çevrimdışı çalışma destekli operasyon uygulaması.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f7fb",
+  "theme_color": "#123b73",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "/pesneer-mark.jpeg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

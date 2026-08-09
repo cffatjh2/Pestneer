@@ -1,6 +1,8 @@
 namespace Pesneer.Api.Reports;
 
 public sealed record ServiceReportStationInput(
+    Guid? SitePlanId,
+    string? SitePlanElementId,
     string DeviceNumber,
     string Area,
     string DeviceType,
@@ -9,6 +11,16 @@ public sealed record ServiceReportStationInput(
     bool HasActivity,
     bool PlateChanged,
     string DeviceStatus,
+    string? ActivityType,
+    string? InaccessibilityReason,
+    Guid? AppliedVehicleStockItemId,
+    string? AppliedProductName,
+    decimal? AppliedAmount,
+    string? AppliedUnit,
+    Guid? ReplacementVehicleStockItemId,
+    string? ReplacementProductName,
+    decimal? ReplacementQuantity,
+    string? ReplacementUnit,
     string? Notes);
 
 public sealed record ServiceReportProductInput(
@@ -44,12 +56,16 @@ public sealed record UpsertServiceReportRequest(
     string? CustomerRepresentativeName,
     string? ManagerSignatureData,
     string? CustomerSignatureData,
+    DateTimeOffset? BaseUpdatedAt,
+    bool ForceOverwrite,
     bool Finalize,
     IReadOnlyList<ServiceReportStationInput> Stations,
     IReadOnlyList<ServiceReportProductInput> Products);
 
 public sealed record ServiceReportStationResponse(
     Guid Id,
+    Guid? SitePlanId,
+    string? SitePlanElementId,
     string DeviceNumber,
     string Area,
     string DeviceType,
@@ -58,6 +74,16 @@ public sealed record ServiceReportStationResponse(
     bool HasActivity,
     bool PlateChanged,
     string DeviceStatus,
+    string? ActivityType,
+    string? InaccessibilityReason,
+    Guid? AppliedVehicleStockItemId,
+    string? AppliedProductName,
+    decimal? AppliedAmount,
+    string? AppliedUnit,
+    Guid? ReplacementVehicleStockItemId,
+    string? ReplacementProductName,
+    decimal? ReplacementQuantity,
+    string? ReplacementUnit,
     string? Notes);
 
 public sealed record ServiceReportProductResponse(

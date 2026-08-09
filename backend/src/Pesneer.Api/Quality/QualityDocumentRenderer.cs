@@ -17,7 +17,7 @@ internal static class QualityDocumentRenderer
     private const string Border = "#D9E2EC";
     private const string Surface = "#F3F7FA";
 
-    public static byte[] Render(QualityAnalysis analysis)
+    public static byte[] Render(QualityAnalysis analysis, string companyName, byte[]? companyLogo)
     {
         using var payload = JsonDocument.Parse(analysis.PayloadJson);
         var root = payload.RootElement;
@@ -30,7 +30,7 @@ internal static class QualityDocumentRenderer
                 page.Margin(34);
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(style => style.FontFamily("Lato").FontSize(9).FontColor(Text));
-                page.Header().Element(container => ComposeHeader(container, analysis));
+                page.Header().Element(container => ComposeHeader(container, analysis, companyName, companyLogo));
                 page.Content().PaddingVertical(16).Column(column =>
                 {
                     column.Spacing(12);
@@ -60,18 +60,22 @@ internal static class QualityDocumentRenderer
         }).GeneratePdf();
     }
 
-    private static void ComposeHeader(IContainer container, QualityAnalysis analysis)
+    private static void ComposeHeader(IContainer container, QualityAnalysis analysis, string companyName, byte[]? companyLogo)
     {
         container.PaddingBottom(12).BorderBottom(2).BorderColor(Green).Row(row =>
         {
             row.RelativeItem().Column(column =>
             {
-                column.Item().Text(text =>
+                if (companyLogo is { Length: > 0 })
                 {
-                    text.Span("Pest").FontSize(23).ExtraBold().FontColor(Green);
-                    text.Span("neer").FontSize(23).ExtraBold().FontColor(Navy);
-                });
-                column.Item().Text("AKILLI İŞLETME YÖNETİM PLATFORMU").FontSize(7).SemiBold().FontColor(Muted).LetterSpacing(0.12f);
+                    column.Item().Height(42).AlignLeft().Image(companyLogo).FitArea();
+                    column.Item().PaddingTop(3).Text(companyName).FontSize(8).SemiBold().FontColor(Navy);
+                }
+                else
+                {
+                    column.Item().Text(companyName).FontSize(18).ExtraBold().FontColor(Navy);
+                    column.Item().Text("ZARARLI MÜCADELESİ VE SAHA KALİTE BELGESİ").FontSize(7).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                }
             });
 
             row.ConstantItem(175).AlignRight().Column(column =>
@@ -204,13 +208,27 @@ internal static class QualityDocumentRenderer
         column.Item().Row(row =>
         {
             Metric(row, "Yapısal / Operasyonel", $"{Read(root, "structuralRiskScore")}/100");
+            Metric(row, "Lokasyon Matrisi", $"{Read(root, "matrixRiskScore")}/100");
             Metric(row, "Konuma Bağlı Hava", $"{Read(root, "weatherRiskScore")}/100");
             Metric(row, "Birleşik Risk", $"{Read(root, "overallRiskScore")}/100");
         });
 
+        column.Item().Background("#EAF4FC").Padding(11).Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+            });
+            MetadataCell(table, "Sektör", Read(root, "sectorType") == "Food" ? "Gıda üretimi / hizmeti" : "Gıda dışı işletme");
+            MetadataCell(table, "Mevcut Kontrol", Read(root, "currentFrequency"));
+            MetadataCell(table, "Önerilen Kontrol", Read(root, "recommendedFrequency"));
+        });
+
         column.Item().Column(section =>
         {
-            SectionTitle(section, "Risk Kontrol Formu");
+            SectionTitle(section, "Yapısal ve Operasyonel Kontrol Formu");
             section.Item().Table(table =>
             {
                 table.ColumnsDefinition(columns =>
@@ -232,6 +250,33 @@ internal static class QualityDocumentRenderer
             });
         });
 
+        if (root.TryGetProperty("riskMatrix", out var matrix) && matrix.ValueKind == JsonValueKind.Array && matrix.GetArrayLength() > 0)
+        {
+            column.Item().Column(section =>
+            {
+                SectionTitle(section, "Lokasyon Bazlı Zararlı Risk Matrisi");
+                section.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(1.6f);
+                        columns.RelativeColumn(1.4f);
+                        columns.ConstantColumn(38);
+                        columns.ConstantColumn(38);
+                        columns.ConstantColumn(42);
+                        columns.RelativeColumn(2.2f);
+                    });
+                    TableHeader(table, "Lokasyon", "Zararlı Grubu", "Şiddet", "Olasılık", "Risk", "Bulgu / Açıklama");
+
+                    foreach (var item in matrix.EnumerateArray())
+                    {
+                        var score = ReadInt(item, "severity") * ReadInt(item, "likelihood");
+                        TableRow(table, Read(item, "location"), Read(item, "pestCategory"), Read(item, "severity"), Read(item, "likelihood"), score.ToString(CultureInfo.InvariantCulture), Read(item, "note"));
+                    }
+                });
+            });
+        }
+
         if (root.TryGetProperty("weather", out var weather)
             && weather.ValueKind == JsonValueKind.Object
             && weather.TryGetProperty("weather", out var observation)
@@ -241,6 +286,21 @@ internal static class QualityDocumentRenderer
             {
                 row.RelativeItem().Text("Konumun güncel hava özeti").SemiBold().FontColor(Navy);
                 row.RelativeItem().AlignRight().Text($"{Read(observation, "condition")}  |  {Read(observation, "temperatureC")} °C  |  %{Read(observation, "relativeHumidity")} nem").FontColor(Muted);
+            });
+        }
+
+        if (root.TryGetProperty("generatedRecommendations", out var generatedRecommendations)
+            && generatedRecommendations.ValueKind == JsonValueKind.Array
+            && generatedRecommendations.GetArrayLength() > 0)
+        {
+            column.Item().Border(1).BorderColor(Border).Padding(11).Column(panel =>
+            {
+                panel.Spacing(5);
+                panel.Item().Text("OTOMATİK DÜZELTİCİ FAALİYET ÖNERİLERİ").FontSize(7).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                foreach (var recommendation in generatedRecommendations.EnumerateArray())
+                {
+                    panel.Item().Text($"• {recommendation.GetString()}").FontSize(8.5f).LineHeight(1.35f).FontColor(Text);
+                }
             });
         }
     }
@@ -327,5 +387,11 @@ internal static class QualityDocumentRenderer
             JsonValueKind.Undefined => "-",
             _ => value.ToString()
         };
+    }
+
+    private static int ReadInt(JsonElement item, string property)
+    {
+        if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty(property, out var value)) return 0;
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : 0;
     }
 }

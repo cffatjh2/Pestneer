@@ -7,14 +7,15 @@ namespace Pesneer.Api.Reports;
 
 public static class ServiceReportEndpoints
 {
-    private static readonly HashSet<string> DeviceTypes = ["EFT", "LiveCapture", "Rodent", "InsectMonitor", "Other"];
-    private static readonly HashSet<string> DeviceStatuses = ["Active", "Damaged", "Missing", "Replaced", "Passive"];
+    private static readonly HashSet<string> DeviceStatuses = ["Unchecked", "NoActivity", "Activity", "Damaged", "Inaccessible", "Missing", "Replaced", "Passive", "Active"];
+    private static readonly HashSet<string> ActivityTypes = ["Sighting", "Capture", "Droppings", "Gnawing", "Track", "Nest", "Other"];
 
     public static IEndpointRouteBuilder MapServiceReportEndpoints(this IEndpointRouteBuilder app)
     {
         var shared = app.MapGroup("/api/service-reports").RequireAuthorization("CompanyStaff");
         shared.MapGet("/work-orders/{workOrderId:guid}", GetByWorkOrderAsync);
         shared.MapPut("/work-orders/{workOrderId:guid}", UpsertAsync);
+        shared.MapPost("/work-orders/{workOrderId:guid}/photos", UploadPhotosAsync).DisableAntiforgery();
 
         var company = app.MapGroup("/api/company/service-reports").RequireAuthorization("OwnerPortal");
         company.MapGet("/", GetCompanyReportsAsync);
@@ -81,6 +82,15 @@ public static class ServiceReportEndpoints
         {
             return Results.Conflict(new { message = "Tamamlanmış rapor yalnızca firma sahibi tarafından yeniden düzenlenebilir." });
         }
+        if (report is not null && !request.ForceOverwrite && request.BaseUpdatedAt.HasValue &&
+            Math.Abs((report.UpdatedAt - request.BaseUpdatedAt.Value).TotalMilliseconds) > 1)
+        {
+            return Results.Conflict(new
+            {
+                message = "Bu saha raporu başka bir cihazda güncellendi. Hangi sürümün korunacağını seçin.",
+                current = ToResponse(report)
+            });
+        }
 
         var now = DateTimeOffset.UtcNow;
         if (report is null)
@@ -125,10 +135,16 @@ public static class ServiceReportEndpoints
         var stations = request.Stations.Select(item => new ServiceReportStation
         {
             Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, ServiceReportId = report.Id,
+            SitePlanId = item.SitePlanId, SitePlanElementId = NullIfEmpty(item.SitePlanElementId),
             DeviceNumber = item.DeviceNumber.Trim(), Area = item.Area.Trim(), DeviceType = item.DeviceType,
             TargetPest = NullIfEmpty(item.TargetPest), CaughtCount = item.CaughtCount,
-            HasActivity = item.HasActivity || item.CaughtCount > 0, PlateChanged = item.PlateChanged,
-            DeviceStatus = item.DeviceStatus, Notes = NullIfEmpty(item.Notes)
+            HasActivity = item.DeviceStatus == "Activity" || item.HasActivity || item.CaughtCount > 0, PlateChanged = item.PlateChanged,
+            DeviceStatus = item.DeviceStatus, ActivityType = NullIfEmpty(item.ActivityType),
+            InaccessibilityReason = NullIfEmpty(item.InaccessibilityReason),
+            AppliedVehicleStockItemId = item.AppliedVehicleStockItemId, AppliedProductName = NullIfEmpty(item.AppliedProductName),
+            AppliedAmount = item.AppliedAmount, AppliedUnit = NullIfEmpty(item.AppliedUnit),
+            ReplacementVehicleStockItemId = item.ReplacementVehicleStockItemId, ReplacementProductName = NullIfEmpty(item.ReplacementProductName),
+            ReplacementQuantity = item.ReplacementQuantity, ReplacementUnit = NullIfEmpty(item.ReplacementUnit), Notes = NullIfEmpty(item.Notes)
         }).ToList();
         var products = request.Products.Select(item => new ServiceReportProduct
         {
@@ -153,6 +169,42 @@ public static class ServiceReportEndpoints
         {
             return Results.Problem(environment.IsDevelopment() ? exception.ToString() : "Saha raporu kaydedilirken beklenmeyen bir hata oluştu.");
         }
+    }
+
+    private static async Task<IResult> UploadPhotosAsync(
+        Guid workOrderId,
+        HttpRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        CancellationToken cancellationToken)
+    {
+        if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
+        var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
+        if (workOrder is null || !CanAccess(workOrder, companyContext)) return Results.NotFound(new { message = "İş emri bulunamadı." });
+        if (!request.HasFormContentType) return Results.ValidationProblem(new Dictionary<string, string[]> { ["photos"] = ["Fotoğraf dosyalarını seçin."] });
+
+        var form = await request.ReadFormAsync(cancellationToken);
+        var files = form.Files.Take(8).ToArray();
+        if (files.Length == 0) return Results.Ok(Array.Empty<ServiceReportPhotoResponse>());
+        var responses = new List<ServiceReportPhotoResponse>();
+        foreach (var file in files)
+        {
+            if (file.Length is <= 0 or > 8 * 1024 * 1024 || !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["photos"] = ["Her fotoğraf JPG, PNG veya WebP biçiminde ve en fazla 8 MB olmalıdır."] });
+            await using var stream = file.OpenReadStream();
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory, cancellationToken);
+            var photo = new WorkOrderPhoto
+            {
+                Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, WorkOrderId = workOrderId,
+                FileName = Path.GetFileName(file.FileName),
+                ContentType = file.ContentType, Data = memory.ToArray(), UploadedAt = DateTimeOffset.UtcNow
+            };
+            dbContext.WorkOrderPhotos.Add(photo);
+            responses.Add(new ServiceReportPhotoResponse(photo.Id, photo.FileName, photo.ContentType, photo.UploadedAt, $"/api/work-orders/photos/{photo.Id}"));
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(responses);
     }
 
     private static async Task<IResult> GetAnalyticsAsync(
@@ -210,7 +262,17 @@ public static class ServiceReportEndpoints
         {
             var item = request.Stations[index];
             if (item.DeviceNumber.Trim().Length is < 1 or > 80 || item.Area.Trim().Length is < 2 or > 240) errors[$"stations[{index}]"] = [$"{index + 1}. istasyonun numara ve alan bilgisini kontrol edin."];
-            if (!DeviceTypes.Contains(item.DeviceType) || !DeviceStatuses.Contains(item.DeviceStatus) || item.CaughtCount is < 0 or > 100000) errors[$"stations[{index}].status"] = [$"{index + 1}. istasyonun tür, durum veya yakalanan adet bilgisini kontrol edin."];
+            if (item.DeviceType.Trim().Length is < 1 or > 40 || !DeviceStatuses.Contains(item.DeviceStatus) || item.CaughtCount is < 0 or > 100000) errors[$"stations[{index}].status"] = [$"{index + 1}. istasyonun tür, durum veya gözlem adedi bilgisini kontrol edin."];
+            if (!string.IsNullOrWhiteSpace(item.ActivityType) && !ActivityTypes.Contains(item.ActivityType)) errors[$"stations[{index}].activityType"] = [$"{index + 1}. istasyonun aktivite türü geçersiz."];
+            if (item.AppliedAmount < 0 || item.ReplacementQuantity < 0) errors[$"stations[{index}].quantity"] = [$"{index + 1}. istasyonun kullanım miktarları negatif olamaz."];
+            if (item.DeviceStatus == "Inaccessible" && string.IsNullOrWhiteSpace(item.InaccessibilityReason)) errors[$"stations[{index}].inaccessibilityReason"] = [$"{index + 1}. istasyona ulaşılamama nedenini yazın."];
+            if (request.Finalize && item.DeviceStatus == "Unchecked") errors[$"stations[{index}].deviceStatus"] = [$"{index + 1}. istasyonun kontrol sonucunu seçin."];
+            if (request.Finalize && item.DeviceStatus == "Activity")
+            {
+                if (string.IsNullOrWhiteSpace(item.TargetPest) || item.CaughtCount < 1) errors[$"stations[{index}].activity"] = [$"{index + 1}. istasyonda zararlı türünü ve gözlenen adedi girin."];
+                if (!item.AppliedVehicleStockItemId.HasValue || item.AppliedAmount is null or <= 0 || string.IsNullOrWhiteSpace(item.AppliedUnit)) errors[$"stations[{index}].application"] = [$"{index + 1}. istasyonda kullanılan araç ürününü ve miktarını girin."];
+            }
+            if (request.Finalize && item.ReplacementQuantity > 0 && (!item.ReplacementVehicleStockItemId.HasValue || string.IsNullOrWhiteSpace(item.ReplacementUnit))) errors[$"stations[{index}].replacement"] = [$"{index + 1}. istasyon için kullanılan yeni ekipmanı seçin."];
         }
         for (var index = 0; index < request.Products.Count; index++)
         {
@@ -237,7 +299,13 @@ public static class ServiceReportEndpoints
         CancellationToken cancellationToken)
     {
         if (!request.Finalize) return null;
-        var usedProducts = request.Products.Where(item => item.AmountUsed > 0).ToArray();
+        var usedProducts = request.Products.Where(item => item.AmountUsed > 0)
+            .Select(item => new StockUsage(item.VehicleStockItemId, item.ProductName, item.AmountUsed, item.Unit))
+            .Concat(request.Stations.Where(item => item.AppliedAmount > 0)
+                .Select(item => new StockUsage(item.AppliedVehicleStockItemId, item.AppliedProductName ?? item.DeviceNumber, item.AppliedAmount!.Value, item.AppliedUnit ?? string.Empty)))
+            .Concat(request.Stations.Where(item => item.ReplacementQuantity > 0)
+                .Select(item => new StockUsage(item.ReplacementVehicleStockItemId, item.ReplacementProductName ?? item.DeviceNumber, item.ReplacementQuantity!.Value, item.ReplacementUnit ?? string.Empty)))
+            .ToArray();
         if (usedProducts.Length == 0) return null;
         if (usedProducts.Any(item => !item.VehicleStockItemId.HasValue))
             return new Dictionary<string, string[]> { ["products"] = ["Kullanılan her ürün için personele atanmış araç stoğundan bir ürün seçin."] };
@@ -256,7 +324,7 @@ public static class ServiceReportEndpoints
         foreach (var product in usedProducts)
         {
             var stockItem = stockItems[product.VehicleStockItemId!.Value];
-            if (!InventoryUnitConverter.TryConvert(product.AmountUsed, product.Unit, stockItem.Unit, out var quantity))
+            if (!InventoryUnitConverter.TryConvert(product.Amount, product.Unit, stockItem.Unit, out var quantity))
                 return new Dictionary<string, string[]> { ["products"] = [$"{product.ProductName} için {product.Unit} ile araç stok birimi {stockItem.Unit} uyumlu değil."] };
             deductions[stockItem.Id] = deductions.GetValueOrDefault(stockItem.Id) + quantity;
         }
@@ -319,10 +387,11 @@ public static class ServiceReportEndpoints
             report.Recommendations, report.CustomerRepresentativeName, report.ManagerSignatureData, report.CustomerSignatureData,
             report.VerificationCode, report.UpdatedAt, report.FinalizedAt, report.Stations.Count, report.Stations.Count(item => item.HasActivity),
             report.Stations.Count(item => item.PlateChanged), report.Stations.Sum(item => item.CaughtCount), risk.ActivityRate, risk.Score, risk.Level, risk.Infestation,
-            report.Stations.OrderBy(item => item.DeviceNumber).Select(item => new ServiceReportStationResponse(item.Id, item.DeviceNumber, item.Area, item.DeviceType, item.TargetPest, item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.Notes)).ToArray(),
+            report.Stations.OrderBy(item => item.DeviceNumber).Select(item => new ServiceReportStationResponse(item.Id, item.SitePlanId, item.SitePlanElementId, item.DeviceNumber, item.Area, item.DeviceType, item.TargetPest, item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.ActivityType, item.InaccessibilityReason, item.AppliedVehicleStockItemId, item.AppliedProductName, item.AppliedAmount, item.AppliedUnit, item.ReplacementVehicleStockItemId, item.ReplacementProductName, item.ReplacementQuantity, item.ReplacementUnit, item.Notes)).ToArray(),
             report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
             report.WorkOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new ServiceReportPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}")).ToArray());
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private sealed record StockUsage(Guid? VehicleStockItemId, string ProductName, decimal Amount, string Unit);
 }

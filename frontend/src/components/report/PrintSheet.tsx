@@ -37,10 +37,9 @@ export default function PrintSheet({
         </div>
 
         <div className="firm-logo-area">
-          <img src="/logo.png" alt="Pesneer" />
           <div className="firm-name">
-            <strong>PESNEER</strong>
-            <span>pest kontrol</span>
+            <strong>{report.firmName}</strong>
+            <span>zararlı mücadelesi</span>
           </div>
         </div>
       </header>

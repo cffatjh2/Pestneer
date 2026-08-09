@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Pesneer.Api.Auth;
+using Pesneer.Api.Branding;
 using Pesneer.Api.Calendar;
 using Pesneer.Api.Customers;
 using Pesneer.Api.Data;
@@ -174,6 +175,7 @@ app.MapCustomerPortalEndpoints();
 app.MapWeatherRiskEndpoints();
 app.MapQualityEndpoints();
 app.MapSitePlanEndpoints();
+app.MapCompanyBrandingEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();

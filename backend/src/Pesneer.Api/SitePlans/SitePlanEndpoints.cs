@@ -67,7 +67,7 @@ public static partial class SitePlanEndpoints
             Customer = customer, CustomerBranch = branch, CreatedByAccount = account
         };
         var document = NewDocument(plan);
-        document.FileData = SitePlanPdfRenderer.Render(plan, request.Canvas, company.LegalName);
+        document.FileData = SitePlanPdfRenderer.Render(plan, request.Canvas, company.LegalName, company.LogoData);
         document.SizeBytes = document.FileData.LongLength;
         plan.Documents.Add(document);
         dbContext.SitePlans.Add(plan);
@@ -120,7 +120,7 @@ public static partial class SitePlanEndpoints
         document.Description = Description(plan);
         document.FileName = FileName(plan);
         document.CreatedAt = plan.UpdatedAt;
-        document.FileData = SitePlanPdfRenderer.Render(plan, request.Canvas, company.LegalName);
+        document.FileData = SitePlanPdfRenderer.Render(plan, request.Canvas, company.LegalName, company.LogoData);
         document.SizeBytes = document.FileData.LongLength;
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToResponse(plan));

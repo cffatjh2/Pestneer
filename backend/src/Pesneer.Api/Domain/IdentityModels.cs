@@ -30,6 +30,10 @@ public sealed class Company
     public required string LegalName { get; set; }
     public required string Code { get; set; }
     public bool IsActive { get; set; } = true;
+    public byte[]? LogoData { get; set; }
+    public string? LogoContentType { get; set; }
+    public string? LogoFileName { get; set; }
+    public DateTimeOffset? LogoUpdatedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -251,6 +255,8 @@ public sealed class ServiceReportStation : ICompanyScoped
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
     public Guid ServiceReportId { get; set; }
+    public Guid? SitePlanId { get; set; }
+    public string? SitePlanElementId { get; set; }
     public required string DeviceNumber { get; set; }
     public required string Area { get; set; }
     public required string DeviceType { get; set; }
@@ -259,6 +265,16 @@ public sealed class ServiceReportStation : ICompanyScoped
     public bool HasActivity { get; set; }
     public bool PlateChanged { get; set; }
     public required string DeviceStatus { get; set; } = "Active";
+    public string? ActivityType { get; set; }
+    public string? InaccessibilityReason { get; set; }
+    public Guid? AppliedVehicleStockItemId { get; set; }
+    public string? AppliedProductName { get; set; }
+    public decimal? AppliedAmount { get; set; }
+    public string? AppliedUnit { get; set; }
+    public Guid? ReplacementVehicleStockItemId { get; set; }
+    public string? ReplacementProductName { get; set; }
+    public decimal? ReplacementQuantity { get; set; }
+    public string? ReplacementUnit { get; set; }
     public string? Notes { get; set; }
     public ServiceReport ServiceReport { get; set; } = null!;
 }
