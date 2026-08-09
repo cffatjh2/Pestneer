@@ -31,7 +31,7 @@ export default function Stock({ accessToken, employees, onSessionExpired }: Prop
   const transfer = async (input: TransferInventoryInput) => { await transferInventoryToVehicle(accessToken, input); setTransferOpen(false); setTransferVehicleId(undefined); await load(); notifyInventoryChanged(); };
 
   const exportInventory = () => {
-    const rows = filteredItems.map((item) => ({ 'Ürün Adı': item.name, Kategori: item.category, 'Depo Miktarı': item.quantity, 'Araçlardaki Miktar': item.vehicleQuantity, 'Toplam Miktar': item.totalQuantity, Birim: item.unit, 'Minimum Eşik': item.minimumQuantity, 'Lot / Parti No': item.lotNumber ?? '', Durum: item.status, 'Son Hareket': formatDateTime(item.lastMovementAt) }));
+    const rows = filteredItems.map((item) => ({ 'Ürün Adı': item.name, Kategori: item.category, 'Depo Miktarı': item.quantity, 'Araçlardaki Miktar': item.vehicleQuantity, 'Toplam Miktar': item.totalQuantity, Birim: item.unit, 'Birim Maliyet': item.unitCost, 'Minimum Eşik': item.minimumQuantity, 'Lot / Parti No': item.lotNumber ?? '', Durum: item.status, 'Son Hareket': formatDateTime(item.lastMovementAt) }));
     const vehicleRows = vehicles.flatMap((vehicle) => vehicle.stockItems.map((item) => ({ Plaka: vehicle.plate, Araç: `${vehicle.brand} ${vehicle.model}`, Personel: vehicle.assignedEmployeeName, Ürün: item.productName, Miktar: item.quantity, Birim: item.unit, 'Son Hareket': formatDateTime(item.lastMovementAt) })));
     const workbook = utils.book_new(); utils.book_append_sheet(workbook, utils.json_to_sheet(rows), 'Genel Stok'); utils.book_append_sheet(workbook, utils.json_to_sheet(vehicleRows), 'Araç Stokları'); writeFile(workbook, `Pestneer_Stok_Durumu_${new Date().toISOString().slice(0, 10)}.xlsx`, { compression: true });
   };

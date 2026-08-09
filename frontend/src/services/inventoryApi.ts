@@ -7,6 +7,7 @@ export type InventoryItem = {
   quantity: number;
   unit: string;
   minimumQuantity: number;
+  unitCost: number;
   lotNumber?: string;
   lastMovementAt: string;
   vehicleQuantity: number;
@@ -20,6 +21,7 @@ export type CreateInventoryEntry = {
   quantity: number;
   unit: string;
   minimumQuantity: number;
+  unitCost: number;
   lotNumber?: string;
 };
 

@@ -102,6 +102,7 @@ public static class InventoryEndpoints
                 Quantity = request.Quantity,
                 Unit = request.Unit.Trim(),
                 MinimumQuantity = request.MinimumQuantity,
+                UnitCost = request.UnitCost,
                 LotNumber = lotNumber,
                 LastMovementAt = DateTimeOffset.UtcNow
             };
@@ -111,6 +112,7 @@ public static class InventoryEndpoints
         {
             item.Quantity += request.Quantity;
             item.MinimumQuantity = request.MinimumQuantity;
+            item.UnitCost = request.UnitCost;
             item.Category = request.Category.Trim();
             item.LastMovementAt = DateTimeOffset.UtcNow;
         }
@@ -284,6 +286,7 @@ public static class InventoryEndpoints
         if (string.IsNullOrWhiteSpace(request.Category) || request.Category.Trim().Length > 80) errors["category"] = ["Geçerli bir kategori seçin."];
         if (request.Quantity <= 0) errors["quantity"] = ["Giriş miktarı sıfırdan büyük olmalıdır."];
         if (request.MinimumQuantity < 0) errors["minimumQuantity"] = ["Minimum miktar negatif olamaz."];
+        if (request.UnitCost < 0) errors["unitCost"] = ["Birim maliyet negatif olamaz."];
         if (string.IsNullOrWhiteSpace(request.Unit) || request.Unit.Trim().Length > 24) errors["unit"] = ["Geçerli bir birim seçin."];
         if (request.LotNumber?.Trim().Length > 80) errors["lotNumber"] = ["Lot numarası en fazla 80 karakter olabilir."];
         return errors;
@@ -298,6 +301,7 @@ public static class InventoryEndpoints
         item.Quantity,
         item.Unit,
         item.MinimumQuantity,
+        item.UnitCost,
         item.LotNumber,
         item.LastMovementAt,
         item.Quantity <= item.MinimumQuantity ? "Kritik" : item.Quantity <= item.MinimumQuantity * 1.5m ? "Düşük" : "Yeterli",

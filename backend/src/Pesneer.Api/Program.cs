@@ -8,6 +8,7 @@ using Npgsql;
 using Pesneer.Api.Auth;
 using Pesneer.Api.Branding;
 using Pesneer.Api.Calendar;
+using Pesneer.Api.Commercial;
 using Pesneer.Api.Customers;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
@@ -176,6 +177,7 @@ app.MapWeatherRiskEndpoints();
 app.MapQualityEndpoints();
 app.MapSitePlanEndpoints();
 app.MapCompanyBrandingEndpoints();
+app.MapCommercialEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();

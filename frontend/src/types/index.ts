@@ -11,6 +11,8 @@ export type ViewId =
   | 'stock'
   | 'reports'
   | 'documents'
+  | 'requests'
+  | 'commercial'
   | 'team'
   | 'settings';
 

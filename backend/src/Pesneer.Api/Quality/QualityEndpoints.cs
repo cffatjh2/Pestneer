@@ -17,7 +17,7 @@ public static class QualityEndpoints
     };
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     {
-        "General", "Contracts", "ServiceReports", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Photos", "Other"
+        "General", "CommercialProposals", "Contracts", "ServiceReports", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Photos", "Other"
     };
 
     public static IEndpointRouteBuilder MapQualityEndpoints(this IEndpointRouteBuilder app)

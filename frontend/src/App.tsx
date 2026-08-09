@@ -13,6 +13,8 @@ import ReportView from './pages/ReportView';
 import ReportsAnalytics from './pages/ReportsAnalytics';
 import QualityCenter from './components/quality/QualityCenter';
 import SettingsPage from './pages/Settings';
+import RequestCenter from './pages/RequestCenter';
+import CommercialManagement from './pages/CommercialManagement';
 import WorkOrderModal from './components/modals/WorkOrderModal';
 import WorkOrderDetailModal from './components/modals/WorkOrderDetailModal';
 import CustomerBranchModal from './components/modals/CustomerBranchModal';
@@ -163,6 +165,8 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'team': return <Team accessToken={session.accessToken} companyCode={session.company.code} onNotify={showToast} onSessionExpired={onLogout} />;
       case 'reports': return <ReportsAnalytics accessToken={session.accessToken} companyName={session.company.name} userName={session.user.name} workOrders={workOrders} onSessionExpired={onLogout} />;
       case 'documents': return <QualityCenter accessToken={session.accessToken} mode="staff" onSessionExpired={onLogout} standalone />;
+      case 'requests': return <RequestCenter accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;
+      case 'commercial': return <CommercialManagement accessToken={session.accessToken} customers={customers} workOrders={workOrders} onSessionExpired={onLogout} />;
       case 'settings': return <SettingsPage accessToken={session.accessToken} companyName={session.company.name} onSessionExpired={onLogout} onNotify={showToast} />;
       default: return <section className="page"><h1>Yapım aşamasında</h1></section>;
     }

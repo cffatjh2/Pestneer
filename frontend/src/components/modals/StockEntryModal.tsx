@@ -25,6 +25,7 @@ export default function StockEntryModal({ onClose, onSubmit }: {
         quantity: Number(formData.get('quantity')),
         unit: String(formData.get('unit') ?? ''),
         minimumQuantity: Number(formData.get('minimumQuantity')),
+        unitCost: Number(formData.get('unitCost')),
         lotNumber: String(formData.get('lotNumber') ?? '').trim() || undefined,
       });
     } catch (submitError) {
@@ -47,6 +48,7 @@ export default function StockEntryModal({ onClose, onSubmit }: {
             <label>Birim<select name="unit" defaultValue="Litre" required><option>Litre</option><option>Mililitre</option><option>Kilogram</option><option>Gram</option><option>Adet</option><option>Tüp</option><option>Kutu</option><option>Paket</option></select></label>
             <label>Giriş miktarı<input name="quantity" type="number" min="0.01" step="0.01" placeholder="0" required /></label>
             <label>Minimum stok<input name="minimumQuantity" type="number" min="0" step="0.01" defaultValue="1" required /></label>
+            <label>Birim maliyet (₺)<input name="unitCost" type="number" min="0" step="0.01" defaultValue="0" required /></label>
             <label className="form-field-wide">Lot / Parti No<input name="lotNumber" maxLength={80} placeholder="İsteğe bağlı" /></label>
           </div>
           {error && <div className="modal-form-error" role="alert">{error}</div>}

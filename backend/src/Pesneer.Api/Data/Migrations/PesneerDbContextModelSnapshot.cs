@@ -119,6 +119,144 @@ namespace Pesneer.Api.Data.Migrations
                     b.ToTable("CalendarEntries");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.CommercialProposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(3000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Terms")
+                        .HasMaxLength(5000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ValidUntil")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("VatRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("CustomerBranchId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "CustomerId", "Status", "CreatedAt");
+
+                    b.ToTable("CommercialProposals");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.CommercialProposalLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CommercialProposalId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommercialProposalId");
+
+                    b.ToTable("CommercialProposalLines");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -334,6 +472,100 @@ namespace Pesneer.Api.Data.Migrations
                     b.ToTable("CustomerBranches");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.CustomerContract", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("BillingDay")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BillingFrequency")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CommercialProposalId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PaymentTermDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("PeriodAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(5000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Terms")
+                        .HasMaxLength(5000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommercialProposalId");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("CustomerBranchId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "CustomerId", "Status", "EndDate");
+
+                    b.ToTable("CustomerContracts");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.CustomerMembership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -386,6 +618,18 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<Guid?>("AssignedEmployeeAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ClosureApprovalNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClosureApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ClosureApprovedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("TEXT");
 
@@ -410,6 +654,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("DueAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Number")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -418,6 +665,14 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RequestedAppointmentAt")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("RequestedAt")
@@ -431,6 +686,11 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(240)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -534,6 +794,10 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<string>("Unit")
                         .IsRequired()
                         .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(14, 4)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -751,6 +1015,84 @@ namespace Pesneer.Api.Data.Migrations
                     b.HasIndex("CompanyId", "Category", "CreatedAt");
 
                     b.ToTable("QualityDocuments");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ReceivableEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerBranchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerContractId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PaymentNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerBranchId");
+
+                    b.HasIndex("CustomerContractId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Status", "DueDate");
+
+                    b.ToTable("ReceivableEntries");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
@@ -1449,6 +1791,60 @@ namespace Pesneer.Api.Data.Migrations
                     b.ToTable("WorkOrders");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderEconomics", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DistanceKm")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EmergencyCallCost")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("FuelCost")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("OtherCost")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PersonnelHourlyCost")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("RepeatVisitCost")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Revenue")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkOrderId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "WorkOrderId")
+                        .IsUnique();
+
+                    b.ToTable("WorkOrderEconomics");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderPhoto", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1602,6 +1998,43 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("AssignedEmployeeAccount");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.CommercialProposal", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByAccount");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.CommercialProposalLine", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.CommercialProposal", "CommercialProposal")
+                        .WithMany("Lines")
+                        .HasForeignKey("CommercialProposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CommercialProposal");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.CompanyMembership", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.Account", "Account")
@@ -1641,6 +2074,39 @@ namespace Pesneer.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.CustomerContract", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.CommercialProposal", "CommercialProposal")
+                        .WithMany()
+                        .HasForeignKey("CommercialProposalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CommercialProposal");
+
+                    b.Navigation("CreatedByAccount");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.CustomerMembership", b =>
@@ -1803,6 +2269,31 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("QualityAnalysis");
 
                     b.Navigation("SitePlan");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ReceivableEntry", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.CustomerBranch", "CustomerBranch")
+                        .WithMany()
+                        .HasForeignKey("CustomerBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.CustomerContract", "CustomerContract")
+                        .WithMany("Receivables")
+                        .HasForeignKey("CustomerContractId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Pesneer.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("CustomerBranch");
+
+                    b.Navigation("CustomerContract");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
@@ -2000,6 +2491,17 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("CustomerBranch");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderEconomics", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
+                        .WithOne()
+                        .HasForeignKey("Pesneer.Api.Domain.WorkOrderEconomics", "WorkOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WorkOrder");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderPhoto", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
@@ -2052,9 +2554,19 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("WorkShift");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.CommercialProposal", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.Customer", b =>
                 {
                     b.Navigation("Branches");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.CustomerContract", b =>
+                {
+                    b.Navigation("Receivables");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequest", b =>

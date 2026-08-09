@@ -113,7 +113,7 @@ async function refreshDocuments(token: string, setter: (items: QualityDocument[]
 const documentCategories = [
   { value: 'TrendAnalyses', label: 'Trend Analizleri' }, { value: 'RiskAnalyses', label: 'Risk Analizleri' },
   { value: 'SitePlans', label: 'Ekipman Yerleşim Planları' },
-  { value: 'ServiceReports', label: 'Saha Hizmet Raporları' }, { value: 'Contracts', label: 'Sözleşmeler' },
+  { value: 'ServiceReports', label: 'Saha Hizmet Raporları' }, { value: 'CommercialProposals', label: 'Teklifler' }, { value: 'Contracts', label: 'Sözleşmeler' },
   { value: 'Certificates', label: 'İzin & Sertifikalar' }, { value: 'Photos', label: 'Fotoğraflar' },
   { value: 'General', label: 'Genel Belgeler' }, { value: 'Other', label: 'Diğer' },
 ];

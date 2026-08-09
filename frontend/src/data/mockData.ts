@@ -14,6 +14,8 @@ export const navigation: NavItem[] = [
   { id: 'stock',       label: 'Stok Yönetimi',      iconName: 'Package' },
   { id: 'reports',     label: 'Rapor & Analizler',  iconName: 'FileText' },
   { id: 'documents',   label: 'Belgeler',           iconName: 'FolderArchive' },
+  { id: 'requests',    label: 'Talep Merkezi',      iconName: 'MessagesSquare' },
+  { id: 'commercial',  label: 'Ticari Yönetim',     iconName: 'BriefcaseBusiness' },
   { id: 'team',        label: 'Ekip',               iconName: 'Users' },
 ];
 

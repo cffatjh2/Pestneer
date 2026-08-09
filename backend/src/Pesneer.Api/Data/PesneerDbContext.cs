@@ -16,6 +16,11 @@ public class PesneerDbContext(
     public DbSet<CustomerMembership> CustomerMemberships => Set<CustomerMembership>();
     public DbSet<EmergencyRequest> EmergencyRequests => Set<EmergencyRequest>();
     public DbSet<EmergencyRequestHistory> EmergencyRequestHistories => Set<EmergencyRequestHistory>();
+    public DbSet<CommercialProposal> CommercialProposals => Set<CommercialProposal>();
+    public DbSet<CommercialProposalLine> CommercialProposalLines => Set<CommercialProposalLine>();
+    public DbSet<CustomerContract> CustomerContracts => Set<CustomerContract>();
+    public DbSet<ReceivableEntry> ReceivableEntries => Set<ReceivableEntry>();
+    public DbSet<WorkOrderEconomics> WorkOrderEconomics => Set<WorkOrderEconomics>();
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
     public DbSet<WorkOrderStatusHistory> WorkOrderStatusHistories => Set<WorkOrderStatusHistory>();
     public DbSet<WorkOrderPhoto> WorkOrderPhotos => Set<WorkOrderPhoto>();
@@ -117,15 +122,101 @@ public class PesneerDbContext(
             entity.HasIndex(item => new { item.CompanyId, item.Number }).IsUnique();
             entity.HasIndex(item => new { item.CompanyId, item.Status, item.RequestedAt });
             entity.Property(item => item.Number).HasMaxLength(40);
+            entity.Property(item => item.RequestType).HasMaxLength(40);
+            entity.Property(item => item.Subject).HasMaxLength(240);
             entity.Property(item => item.ServiceType).HasMaxLength(32);
             entity.Property(item => item.Priority).HasMaxLength(16);
             entity.Property(item => item.Status).HasMaxLength(20);
             entity.Property(item => item.Description).HasMaxLength(2000);
             entity.Property(item => item.ContactPhone).HasMaxLength(24);
+            entity.Property(item => item.ClosureApprovalStatus).HasMaxLength(24);
+            entity.Property(item => item.ClosureApprovalNote).HasMaxLength(1000);
             entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.AssignedEmployeeAccount).WithMany().HasForeignKey(item => item.AssignedEmployeeAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<CommercialProposal>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.Number }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.CustomerId, item.Status, item.CreatedAt });
+            entity.Property(item => item.Number).HasMaxLength(48);
+            entity.Property(item => item.Title).HasMaxLength(240);
+            entity.Property(item => item.Status).HasMaxLength(24);
+            entity.Property(item => item.Currency).HasMaxLength(8);
+            entity.Property(item => item.DiscountAmount).HasPrecision(14, 2);
+            entity.Property(item => item.VatRate).HasPrecision(5, 2);
+            entity.Property(item => item.Subtotal).HasPrecision(14, 2);
+            entity.Property(item => item.VatAmount).HasPrecision(14, 2);
+            entity.Property(item => item.TotalAmount).HasPrecision(14, 2);
+            entity.Property(item => item.Notes).HasMaxLength(3000);
+            entity.Property(item => item.Terms).HasMaxLength(5000);
+            entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<CommercialProposalLine>(entity =>
+        {
+            entity.Property(item => item.Description).HasMaxLength(500);
+            entity.Property(item => item.Unit).HasMaxLength(32);
+            entity.Property(item => item.Quantity).HasPrecision(14, 3);
+            entity.Property(item => item.UnitPrice).HasPrecision(14, 2);
+            entity.Property(item => item.LineTotal).HasPrecision(14, 2);
+            entity.HasOne(item => item.CommercialProposal).WithMany(item => item.Lines).HasForeignKey(item => item.CommercialProposalId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<CustomerContract>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.Number }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.CustomerId, item.Status, item.EndDate });
+            entity.Property(item => item.Number).HasMaxLength(48);
+            entity.Property(item => item.Title).HasMaxLength(240);
+            entity.Property(item => item.Status).HasMaxLength(24);
+            entity.Property(item => item.BillingFrequency).HasMaxLength(24);
+            entity.Property(item => item.PeriodAmount).HasPrecision(14, 2);
+            entity.Property(item => item.Currency).HasMaxLength(8);
+            entity.Property(item => item.Scope).HasMaxLength(5000);
+            entity.Property(item => item.Terms).HasMaxLength(5000);
+            entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CommercialProposal).WithMany().HasForeignKey(item => item.CommercialProposalId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<ReceivableEntry>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.Number }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.Status, item.DueDate });
+            entity.Property(item => item.Number).HasMaxLength(48);
+            entity.Property(item => item.Description).HasMaxLength(500);
+            entity.Property(item => item.Amount).HasPrecision(14, 2);
+            entity.Property(item => item.PaidAmount).HasPrecision(14, 2);
+            entity.Property(item => item.Currency).HasMaxLength(8);
+            entity.Property(item => item.Status).HasMaxLength(24);
+            entity.Property(item => item.PaymentNote).HasMaxLength(1000);
+            entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.CustomerContract).WithMany(item => item.Receivables).HasForeignKey(item => item.CustomerContractId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<WorkOrderEconomics>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId }).IsUnique();
+            entity.Property(item => item.Revenue).HasPrecision(14, 2);
+            entity.Property(item => item.PersonnelHourlyCost).HasPrecision(14, 2);
+            entity.Property(item => item.DistanceKm).HasPrecision(12, 2);
+            entity.Property(item => item.FuelCost).HasPrecision(14, 2);
+            entity.Property(item => item.RepeatVisitCost).HasPrecision(14, 2);
+            entity.Property(item => item.EmergencyCallCost).HasPrecision(14, 2);
+            entity.Property(item => item.OtherCost).HasPrecision(14, 2);
+            entity.HasOne(item => item.WorkOrder).WithOne().HasForeignKey<WorkOrderEconomics>(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -380,6 +471,7 @@ public class PesneerDbContext(
             entity.Property(item => item.LotNumber).HasMaxLength(80);
             entity.Property(item => item.Quantity).HasPrecision(12, 2);
             entity.Property(item => item.MinimumQuantity).HasPrecision(12, 2);
+            entity.Property(item => item.UnitCost).HasPrecision(14, 4);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 

@@ -6,6 +6,7 @@ public sealed record CreateInventoryEntryRequest(
     decimal Quantity,
     string Unit,
     decimal MinimumQuantity,
+    decimal UnitCost,
     string? LotNumber);
 
 public sealed record CreateInventoryExitRequest(
@@ -35,6 +36,7 @@ public sealed record InventoryItemResponse(
     decimal Quantity,
     string Unit,
     decimal MinimumQuantity,
+    decimal UnitCost,
     string? LotNumber,
     DateTimeOffset LastMovementAt,
     string Status,

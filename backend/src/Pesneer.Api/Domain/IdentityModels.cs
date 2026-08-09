@@ -131,11 +131,18 @@ public sealed class EmergencyRequest : ICompanyScoped
     public Guid CreatedByAccountId { get; set; }
     public Guid? AssignedEmployeeAccountId { get; set; }
     public required string Number { get; set; }
+    public required string RequestType { get; set; } = "EmergencyCall";
+    public required string Subject { get; set; } = "Acil çağrı";
     public required string ServiceType { get; set; }
     public required string Priority { get; set; }
     public required string Status { get; set; }
     public required string Description { get; set; }
     public string? ContactPhone { get; set; }
+    public DateTimeOffset? DueAt { get; set; }
+    public DateTimeOffset? RequestedAppointmentAt { get; set; }
+    public required string ClosureApprovalStatus { get; set; } = "NotRequired";
+    public DateTimeOffset? ClosureApprovedAt { get; set; }
+    public string? ClosureApprovalNote { get; set; }
     public DateTimeOffset RequestedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? AcknowledgedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
@@ -144,6 +151,116 @@ public sealed class EmergencyRequest : ICompanyScoped
     public Account CreatedByAccount { get; set; } = null!;
     public Account? AssignedEmployeeAccount { get; set; }
     public ICollection<EmergencyRequestHistory> History { get; set; } = [];
+}
+
+public sealed class CommercialProposal : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string Title { get; set; }
+    public required string Status { get; set; } = "Draft";
+    public DateOnly IssueDate { get; set; }
+    public DateOnly ValidUntil { get; set; }
+    public required string Currency { get; set; } = "TRY";
+    public decimal DiscountAmount { get; set; }
+    public decimal VatRate { get; set; } = 20;
+    public decimal Subtotal { get; set; }
+    public decimal VatAmount { get; set; }
+    public decimal TotalAmount { get; set; }
+    public string? Notes { get; set; }
+    public string? Terms { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public ICollection<CommercialProposalLine> Lines { get; set; } = [];
+}
+
+public sealed class CommercialProposalLine : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CommercialProposalId { get; set; }
+    public required string Description { get; set; }
+    public decimal Quantity { get; set; }
+    public required string Unit { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal LineTotal { get; set; }
+    public int SortOrder { get; set; }
+    public CommercialProposal CommercialProposal { get; set; } = null!;
+}
+
+public sealed class CustomerContract : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid? CommercialProposalId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string Title { get; set; }
+    public required string Status { get; set; } = "Draft";
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public required string BillingFrequency { get; set; } = "Monthly";
+    public int BillingDay { get; set; } = 1;
+    public int PaymentTermDays { get; set; } = 15;
+    public decimal PeriodAmount { get; set; }
+    public required string Currency { get; set; } = "TRY";
+    public string? Scope { get; set; }
+    public string? Terms { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public CommercialProposal? CommercialProposal { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public ICollection<ReceivableEntry> Receivables { get; set; } = [];
+}
+
+public sealed class ReceivableEntry : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid? CustomerContractId { get; set; }
+    public required string Number { get; set; }
+    public required string Description { get; set; }
+    public DateOnly IssueDate { get; set; }
+    public DateOnly DueDate { get; set; }
+    public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public required string Currency { get; set; } = "TRY";
+    public required string Status { get; set; } = "Planned";
+    public DateTimeOffset? PaidAt { get; set; }
+    public string? PaymentNote { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public CustomerContract? CustomerContract { get; set; }
+}
+
+public sealed class WorkOrderEconomics : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WorkOrderId { get; set; }
+    public decimal Revenue { get; set; }
+    public decimal PersonnelHourlyCost { get; set; }
+    public decimal DistanceKm { get; set; }
+    public decimal FuelCost { get; set; }
+    public decimal RepeatVisitCost { get; set; }
+    public decimal EmergencyCallCost { get; set; }
+    public decimal OtherCost { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public WorkOrder WorkOrder { get; set; } = null!;
 }
 
 public sealed class EmergencyRequestHistory : ICompanyScoped
@@ -483,6 +600,7 @@ public sealed class InventoryItem : ICompanyScoped
     public decimal Quantity { get; set; }
     public required string Unit { get; set; }
     public decimal MinimumQuantity { get; set; }
+    public decimal UnitCost { get; set; }
     public string? LotNumber { get; set; }
     public DateTimeOffset LastMovementAt { get; set; }
     public bool IsActive { get; set; } = true;

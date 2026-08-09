@@ -1,5 +1,6 @@
 import {
   Activity,
+  BriefcaseBusiness,
   ArrowUpRight,
   CalendarDays,
   ChevronDown,
@@ -7,6 +8,7 @@ import {
   FileText,
   FolderArchive,
   LayoutDashboard,
+  MessagesSquare,
   LogOut,
   Package,
   Settings,
@@ -24,6 +26,8 @@ const iconMap: Record<string, React.ElementType> = {
   Package,
   FileText,
   FolderArchive,
+  BriefcaseBusiness,
+  MessagesSquare,
   Users,
 };
 
