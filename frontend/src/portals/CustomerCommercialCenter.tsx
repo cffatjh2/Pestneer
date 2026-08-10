@@ -35,6 +35,8 @@ export default function CustomerCommercialCenter({ data, token, onChanged }: { d
       <header><span>{item.number}</span><em className="commercial-customer-status active">{item.status === 'Active' ? 'Aktif' : item.status}</em></header><h3>{item.title}</h3><p>{item.branchName}</p>
       <div className="customer-commercial-total"><span>Dönem bedeli</span><strong>{money(item.periodAmount)} / {frequency(item.billingFrequency)}</strong></div>
       <small>{date(item.startDate)} – {date(item.endDate)} · {item.installmentCount} ödeme dönemi</small>
+      <div className="customer-contract-package"><span>{item.servicePlans.length} hizmet planı</span><span>{item.generatedWorkOrderCount} planlı iş</span><span>{item.freeEmergencyCallsPerYear} ücretsiz acil çağrı</span><span>{item.responseTimeHours} saat SLA</span></div>
+      <div className="customer-contract-plans">{item.servicePlans.map((plan) => <div key={plan.id}><strong>{plan.branchName}</strong><small>{plan.serviceType} · {plan.recurrenceType === 'Weekly' ? `Haftada ${plan.visitsPerPeriod}` : plan.recurrenceType === 'Monthly' ? `Ayda ${plan.visitsPerPeriod}` : 'Manuel'} · {plan.preferredTime}</small></div>)}</div>
       {item.scope && <p className="customer-contract-scope">{item.scope}</p>}
       <footer><button onClick={() => void downloadCustomerCommercialPdf(token, 'contracts', item.id, item.number).catch((cause) => setError(cause instanceof Error ? cause.message : 'PDF indirilemedi.'))}><Download size={15} /> Sözleşme PDF</button><span>Açık: {money(item.remainingBalance)}</span></footer>
     </article>)}{data.contracts.length === 0 && <CommercialEmpty text="Aktif veya geçmiş sözleşme bulunmuyor." />}</div>}

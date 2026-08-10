@@ -1,5 +1,6 @@
 export type ReportStationInput = {
   sitePlanId?: string; sitePlanElementId?: string;
+  qrCode?: string;
   deviceNumber: string; area: string; deviceType: string; targetPest?: string; caughtCount: number;
   hasActivity: boolean; plateChanged: boolean; deviceStatus: string; activityType?: string; inaccessibilityReason?: string;
   appliedVehicleStockItemId?: string; appliedProductName?: string; appliedAmount?: number; appliedUnit?: string;

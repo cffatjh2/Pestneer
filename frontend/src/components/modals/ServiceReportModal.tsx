@@ -5,7 +5,7 @@ import { ReportConflictError, type ReportProductInput, type ReportStationInput, 
 import { getSitePlans, type SitePlanElement, type SitePlanRecord } from '../../services/sitePlanApi';
 import type { VehicleStockCheck } from '../../services/fieldOperationsApi';
 import { getLocalReportDraft, removeLocalReportDraft, saveLocalReportDraft, toOfflinePhotos } from '../../services/offlineFieldStore';
-import { downloadStationLabelPdf, parseStationQrValue } from '../../utils/stationQr';
+import { downloadStationLabelPdf, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
 import SignaturePad from './SignaturePad';
 import QrScannerModal from './QrScannerModal';
 
@@ -45,22 +45,22 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   const [undoState, setUndoState] = useState<{ stations: ReportStationInput[]; message: string } | null>(null);
 
   useEffect(() => {
-    if (existing?.stations.length) return;
-    if (!draftReady || restoredDraft) return;
+    if (!draftReady) return;
     let active = true;
     getSitePlans(accessToken).then((plans) => {
       if (!active) return;
       const matched = plans.find((plan) => plan.customerId === order.customerId && (order.branchId ? plan.branchId === order.branchId : !plan.branchId));
       if (matched) {
         setSitePlan(matched);
-        setStations(stationsFromPlan(matched));
+        if (existing?.stations.length || restoredDraft) setStations((current) => attachStationQrCodes(current, matched));
+        else setStations(stationsFromPlan(matched));
       } else {
-        setStations([blankStation()]);
+        if (!existing?.stations.length) setStations([blankStation()]);
         setPlanWarning('Bu müşteri / şube için yayımlanmış kroki bulunamadı. İstasyonları manuel ekleyebilirsiniz.');
       }
     }).catch(() => {
       if (!active) return;
-      setStations([blankStation()]);
+      if (!existing?.stations.length) setStations([blankStation()]);
       setPlanWarning('Kroki bilgisi alınamadı. İstasyonları manuel ekleyebilirsiniz.');
     }).finally(() => { if (active) setPlanLoading(false); });
     return () => { active = false; };
@@ -155,8 +155,16 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   };
 
   const handleQrScan = (value: string) => {
+    const normalized = normalizeStationQrValue(value);
+    const pairedIndex = stations.findIndex((station) => station.qrCode && normalizeStationQrValue(station.qrCode) === normalized);
+    if (pairedIndex >= 0) {
+      setScannerOpen(false);
+      setStationIndex(pairedIndex);
+      setError(stations[pairedIndex].deviceStatus !== 'Unchecked' ? `${stations[pairedIndex].deviceNumber} daha önce kontrol edildi. Kaydı gözden geçiriyorsunuz.` : null);
+      return;
+    }
     const payload = parseStationQrValue(value);
-    if (!payload) return setError('Okutulan kod geçerli bir Pestneer istasyon etiketi değil.');
+    if (!payload) return setError('QR kodu bu müşteri/şubenin güncel krokisindeki bir istasyonla eşleştirilmemiş.');
     if (payload.customerId !== order.customerId || (payload.branchId ?? '') !== (order.branchId ?? '')) return setError('Bu QR kod farklı bir müşteri veya şubeye ait.');
     const index = stations.findIndex((station) => station.sitePlanId === payload.sitePlanId && station.sitePlanElementId === payload.elementId);
     if (index < 0) return setError('QR kodundaki istasyon güncel kroki listesinde bulunamadı. Kroki revizyonunu kontrol edin.');
@@ -247,9 +255,10 @@ function stationsFromPlan(plan: SitePlanRecord): ReportStationInput[] {
   const rectangles = plan.canvas.elements.filter((item) => item.type === 'rect');
   return plan.canvas.elements.filter((item) => item.type === 'station').map((item, index) => {
     const equipment = plan.canvas.equipmentTypes.find((type) => type.id === item.equipmentTypeId);
-    return { ...blankStation(), sitePlanId: plan.id, sitePlanElementId: item.id, deviceNumber: item.stationNumber?.trim() || `${equipment?.code ?? 'N'} ${String(index + 1).padStart(2, '0')}`, area: containingArea(item, rectangles) ?? plan.areaName, deviceType: equipment?.code ?? 'Other' };
+    return { ...blankStation(), sitePlanId: plan.id, sitePlanElementId: item.id, qrCode: item.qrCode, deviceNumber: item.stationNumber?.trim() || `${equipment?.code ?? 'N'} ${String(index + 1).padStart(2, '0')}`, area: containingArea(item, rectangles) ?? plan.areaName, deviceType: equipment?.code ?? 'Other' };
   });
 }
+function attachStationQrCodes(stations: ReportStationInput[], plan: SitePlanRecord) { const qrCodes = new Map(plan.canvas.elements.filter((item) => item.type === 'station').map((item) => [item.id, item.qrCode])); return stations.map((station) => ({ ...station, qrCode: station.qrCode ?? (station.sitePlanElementId ? qrCodes.get(station.sitePlanElementId) : undefined) })); }
 function containingArea(station: SitePlanElement, rectangles: SitePlanElement[]) { const x = station.x + station.width / 2; const y = station.y + station.height / 2; return rectangles.filter((item) => x >= Math.min(item.x, item.x + item.width) && x <= Math.max(item.x, item.x + item.width) && y >= Math.min(item.y, item.y + item.height) && y <= Math.max(item.y, item.y + item.height) && item.text?.trim()).sort((a, b) => Math.abs(a.width * a.height) - Math.abs(b.width * b.height))[0]?.text?.trim(); }
 function validateStation(station?: ReportStationInput) { if (!station) return 'Kontrol edilecek istasyon bulunamadı.'; if (!station.deviceNumber.trim() || !station.area.trim()) return 'İstasyon numarası ve konumunu girin.'; if (station.deviceStatus === 'Unchecked') return `${station.deviceNumber} için kontrol sonucunu seçin.`; if (station.deviceStatus === 'Inaccessible' && !station.inaccessibilityReason?.trim()) return `${station.deviceNumber} için ulaşılamama nedenini yazın.`; if (station.deviceStatus === 'Activity' && (!station.activityType || !station.targetPest?.trim() || station.caughtCount < 1)) return `${station.deviceNumber} için aktivite türünü, zararlıyı ve adedi girin.`; if (station.deviceStatus === 'Activity' && (!station.appliedVehicleStockItemId || !station.appliedAmount || !station.appliedUnit)) return `${station.deviceNumber} için kullanılan araç ürününü ve miktarı girin.`; if ((station.replacementQuantity ?? 0) > 0 && !station.replacementVehicleStockItemId) return `${station.deviceNumber} için yerleştirilen yeni ekipmanı seçin.`; return null; }
 function createInitialForm(order: WorkOrder, report: ServiceReportRecord | undefined, companyName: string): FormState { return { firmName: report?.firmName ?? companyName, firmAddress: report?.firmAddress ?? '', firmPhone: report?.firmPhone ?? '', firmWeb: report?.firmWeb ?? '', responsibleManager: report?.responsibleManager ?? '', permissionNumber: report?.permissionNumber ?? '', teamManager: report?.teamManager ?? '', targetPests: report?.targetPests ?? '', residenceType: report?.residenceType ?? 'İşyeri', areaSquareMeters: report?.areaSquareMeters?.toString() ?? '', workType: report?.workType ?? order.service, consumables: report?.consumables ?? '', safetyMeasures: report?.safetyMeasures ?? 'Uygulama alanı bilgilendirildi, gerekli kişisel koruyucu donanım kullanıldı.', applicationSummary: report?.applicationSummary ?? order.completionNote ?? '', findings: report?.findings ?? '', correctiveActions: report?.correctiveActions ?? '', recommendations: report?.recommendations ?? order.recommendation ?? '', customerRepresentativeName: report?.customerRepresentativeName ?? '', managerSignatureData: report?.managerSignatureData ?? '', customerSignatureData: report?.customerSignatureData ?? '' }; }

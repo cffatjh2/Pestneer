@@ -172,6 +172,7 @@ public static partial class SitePlanEndpoints
         }
 
         var elementIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var qrCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var element in request.Canvas.Elements)
         {
             if (string.IsNullOrWhiteSpace(element.Id) || !elementIds.Add(element.Id)) return Validation("elements", "Şekil kimlikleri benzersiz olmalıdır.");
@@ -179,6 +180,13 @@ public static partial class SitePlanEndpoints
             if (element.X is < -200 or > 1400 || element.Y is < -200 or > 920 || element.Width is < -1200 or > 1200 || element.Height is < -720 or > 720) return Validation("elements", "Kroki şekli çalışma alanı sınırlarının dışında.");
             if (element.StrokeWidth is < 0.5m or > 12) return Validation("elements", "Çizgi kalınlığı 0,5-12 arasında olmalıdır.");
             if (element.Type == "station" && (string.IsNullOrWhiteSpace(element.EquipmentTypeId) || !typeIds.Contains(element.EquipmentTypeId))) return Validation("elements", "İstasyon için geçerli bir ekipman türü seçin.");
+            if (!string.IsNullOrWhiteSpace(element.QrCode))
+            {
+                var qrCode = element.QrCode.Trim();
+                if (element.Type != "station") return Validation("elements", "QR kimliği yalnızca istasyonlara atanabilir.");
+                if (qrCode.Length is < 3 or > 160 || qrCode.Any(char.IsControl)) return Validation("elements", "QR kimliği 3-160 karakter arasında olmalı ve kontrol karakteri içermemelidir.");
+                if (!qrCodes.Add(qrCode)) return Validation("elements", "Aynı QR kimliği birden fazla istasyona atanamaz.");
+            }
         }
         return null;
     }

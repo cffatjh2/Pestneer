@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BarChart3, BrainCircuit, Download, Eye, FileArchive, FileSpreadsheet, FileText, FolderArchive, Map as MapIcon, MapPin, Plus, RefreshCw, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
+import { BarChart3, BrainCircuit, Download, Eye, FileArchive, FileSpreadsheet, FileText, FolderArchive, Map as MapIcon, MapPin, PackageCheck, Plus, RefreshCw, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
 import SitePlanCenter from '../sitePlans/SitePlanCenter';
+import AuditPackageCenter from './AuditPackageCenter';
 import {
   createRiskAnalysis, createTrendAnalysis, downloadQualityDocument, getQualityAnalyses, getQualityDocuments, getQualityLocations,
   QualitySessionExpiredError, uploadQualityDocument, type CreateRiskAnalysisInput, type CreateTrendAnalysisInput,
   type QualityAnalysis, type QualityDocument, type QualityLocation, type RiskAnswer, type RiskMatrixRow,
 } from '../../services/qualityApi';
 
-type CenterTab = 'trend' | 'risk' | 'plans' | 'documents';
+type CenterTab = 'trend' | 'risk' | 'plans' | 'audit' | 'documents';
 type Props = { accessToken: string; mode: 'staff' | 'customer'; onSessionExpired: () => void; standalone?: boolean; initialTab?: CenterTab };
 
 export default function QualityCenter({ accessToken, mode, onSessionExpired, standalone = false, initialTab = 'trend' }: Props) {
@@ -17,6 +18,7 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
   const [trendOpen, setTrendOpen] = useState(false); const [riskOpen, setRiskOpen] = useState(false); const [uploadOpen, setUploadOpen] = useState(false);
   const [category, setCategory] = useState('');
   const [sitePlanCount, setSitePlanCount] = useState(0);
+  const [auditPackageCount, setAuditPackageCount] = useState(0);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -42,12 +44,13 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
 
   return <section className={`quality-center ${standalone ? 'page quality-center-page' : 'quality-center-embedded'}`}>
     {standalone && <div className="page-heading"><div><p className="eyebrow">KALİTE, UYUM & İZLENEBİLİRLİK</p><h1>Belgeler & Analizler</h1><p>Trendleri, konuma bağlı riskleri ve kurumsal belgeleri düzenli bir arşivde yönetin.</p></div><button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} /> Yenile</button></div>}
-    <nav className="quality-tabs"><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}><BarChart3 size={18} /><span>Trend Analizleri</span><b>{trends.length}</b></button><button className={tab === 'risk' ? 'active' : ''} onClick={() => setTab('risk')}><BrainCircuit size={18} /><span>Risk Analizleri</span><b>{risks.length}</b></button><button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}><MapIcon size={18} /><span>Kroki & Yerleşim</span><b>{sitePlanCount}</b></button><button className={tab === 'documents' ? 'active' : ''} onClick={() => setTab('documents')}><FolderArchive size={18} /><span>Belge Arşivi</span><b>{documents.length}</b></button></nav>
+    <nav className="quality-tabs"><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}><BarChart3 size={18} /><span>Trend Analizleri</span><b>{trends.length}</b></button><button className={tab === 'risk' ? 'active' : ''} onClick={() => setTab('risk')}><BrainCircuit size={18} /><span>Risk Analizleri</span><b>{risks.length}</b></button><button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}><MapIcon size={18} /><span>Kroki & Yerleşim</span><b>{sitePlanCount}</b></button><button className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}><PackageCheck size={18} /><span>Denetim Dosyaları</span><b>{auditPackageCount}</b></button><button className={tab === 'documents' ? 'active' : ''} onClick={() => setTab('documents')}><FolderArchive size={18} /><span>Belge Arşivi</span><b>{documents.length}</b></button></nav>
     {error && <div className="quality-error"><ShieldAlert size={17} />{error}<button onClick={() => setError(null)}>Kapat</button></div>}
     {loading ? <div className="surface quality-loading"><RefreshCw className="spin-icon" /><strong>Kalite kayıtları hazırlanıyor…</strong></div> : <>
       {tab === 'trend' && <AnalysisList type="Trend" items={trends} staff={mode === 'staff'} onCreate={() => setTrendOpen(true)} documents={documentByAnalysis} onDownload={download} />}
       {tab === 'risk' && <AnalysisList type="Risk" items={risks} staff={mode === 'staff'} onCreate={() => setRiskOpen(true)} documents={documentByAnalysis} onDownload={download} />}
       {tab === 'plans' && <SitePlanCenter accessToken={accessToken} mode={mode} locations={locations} onSessionExpired={onSessionExpired} onCount={setSitePlanCount} onSaved={() => refreshDocuments(accessToken, setDocuments)} />}
+      {tab === 'audit' && <AuditPackageCenter accessToken={accessToken} mode={mode} locations={locations} onSessionExpired={onSessionExpired} onCount={setAuditPackageCount} />}
       {tab === 'documents' && <DocumentLibrary items={filteredDocuments} category={category} onCategory={setCategory} staff={mode === 'staff'} onUpload={() => setUploadOpen(true)} onDownload={download} />}
     </>}
     {trendOpen && <TrendAnalysisModal locations={locations} onClose={() => setTrendOpen(false)} onSubmit={handleTrend} />}
@@ -113,6 +116,7 @@ async function refreshDocuments(token: string, setter: (items: QualityDocument[]
 const documentCategories = [
   { value: 'TrendAnalyses', label: 'Trend Analizleri' }, { value: 'RiskAnalyses', label: 'Risk Analizleri' },
   { value: 'SitePlans', label: 'Ekipman Yerleşim Planları' },
+  { value: 'AuditPackages', label: 'Denetim Dosyaları' },
   { value: 'ServiceReports', label: 'Saha Hizmet Raporları' }, { value: 'CommercialProposals', label: 'Teklifler' }, { value: 'Contracts', label: 'Sözleşmeler' },
   { value: 'Certificates', label: 'İzin & Sertifikalar' }, { value: 'Photos', label: 'Fotoğraflar' },
   { value: 'General', label: 'Genel Belgeler' }, { value: 'Other', label: 'Diğer' },

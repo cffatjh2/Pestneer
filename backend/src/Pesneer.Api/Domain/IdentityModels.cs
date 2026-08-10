@@ -130,6 +130,7 @@ public sealed class EmergencyRequest : ICompanyScoped
     public Guid? CustomerBranchId { get; set; }
     public Guid CreatedByAccountId { get; set; }
     public Guid? AssignedEmployeeAccountId { get; set; }
+    public Guid? CustomerContractId { get; set; }
     public required string Number { get; set; }
     public required string RequestType { get; set; } = "EmergencyCall";
     public required string Subject { get; set; } = "Acil çağrı";
@@ -137,6 +138,9 @@ public sealed class EmergencyRequest : ICompanyScoped
     public required string Priority { get; set; }
     public required string Status { get; set; }
     public required string Description { get; set; }
+    public required string ContractCoverage { get; set; } = "Unclassified";
+    public decimal ChargeAmount { get; set; }
+    public DateTimeOffset? SlaDueAt { get; set; }
     public string? ContactPhone { get; set; }
     public DateTimeOffset? DueAt { get; set; }
     public DateTimeOffset? RequestedAppointmentAt { get; set; }
@@ -150,6 +154,7 @@ public sealed class EmergencyRequest : ICompanyScoped
     public CustomerBranch? CustomerBranch { get; set; }
     public Account CreatedByAccount { get; set; } = null!;
     public Account? AssignedEmployeeAccount { get; set; }
+    public CustomerContract? CustomerContract { get; set; }
     public ICollection<EmergencyRequestHistory> History { get; set; } = [];
 }
 
@@ -218,6 +223,13 @@ public sealed class CustomerContract : ICompanyScoped
     public required string Currency { get; set; } = "TRY";
     public string? Scope { get; set; }
     public string? Terms { get; set; }
+    public bool AutoRenew { get; set; }
+    public int RenewalNoticeDays { get; set; } = 60;
+    public decimal AnnualPriceIncreaseRate { get; set; }
+    public int FreeEmergencyCallsPerYear { get; set; }
+    public decimal ExtraEmergencyCallPrice { get; set; }
+    public int ResponseTimeHours { get; set; } = 24;
+    public DateTimeOffset? LastRenewedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public Customer Customer { get; set; } = null!;
@@ -225,6 +237,34 @@ public sealed class CustomerContract : ICompanyScoped
     public CommercialProposal? CommercialProposal { get; set; }
     public Account CreatedByAccount { get; set; } = null!;
     public ICollection<ReceivableEntry> Receivables { get; set; } = [];
+    public ICollection<ContractServicePlan> ServicePlans { get; set; } = [];
+    public ICollection<WorkOrder> WorkOrders { get; set; } = [];
+    public ICollection<EmergencyRequest> EmergencyRequests { get; set; } = [];
+}
+
+public sealed class ContractServicePlan : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerContractId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid? AssignedEmployeeAccountId { get; set; }
+    public required string ServiceType { get; set; }
+    public required string RecurrenceType { get; set; } = "Monthly";
+    public int VisitsPerPeriod { get; set; } = 1;
+    public int PreferredDay { get; set; } = 1;
+    public required string PreferredTime { get; set; } = "09:00";
+    public int DurationMinutes { get; set; } = 60;
+    public decimal BranchPrice { get; set; }
+    public DateOnly? GeneratedThrough { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public CustomerContract CustomerContract { get; set; } = null!;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account? AssignedEmployeeAccount { get; set; }
+    public ICollection<WorkOrder> WorkOrders { get; set; } = [];
 }
 
 public sealed class ReceivableEntry : ICompanyScoped
@@ -286,6 +326,8 @@ public sealed class WorkOrder : ICompanyScoped
     public Guid CustomerId { get; set; }
     public Guid? CustomerBranchId { get; set; }
     public Guid? AssignedEmployeeAccountId { get; set; }
+    public Guid? CustomerContractId { get; set; }
+    public Guid? ContractServicePlanId { get; set; }
     public required string Number { get; set; }
     public required string ServiceType { get; set; }
     public required string VisitType { get; set; } = "Routine";
@@ -295,6 +337,8 @@ public sealed class WorkOrder : ICompanyScoped
     public int DurationMinutes { get; set; } = 60;
     public string? Notes { get; set; }
     public required string Status { get; set; }
+    public required string ContractCoverage { get; set; } = "Unclassified";
+    public decimal ChargeAmount { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public string? CompletionNote { get; set; }
@@ -302,6 +346,8 @@ public sealed class WorkOrder : ICompanyScoped
     public Customer Customer { get; set; } = null!;
     public CustomerBranch? CustomerBranch { get; set; }
     public Account? AssignedEmployeeAccount { get; set; }
+    public CustomerContract? CustomerContract { get; set; }
+    public ContractServicePlan? ContractServicePlan { get; set; }
     public ICollection<WorkOrderStatusHistory> History { get; set; } = [];
     public ICollection<WorkOrderPhoto> Photos { get; set; } = [];
 }
@@ -468,6 +514,201 @@ public sealed class QualityDocument : ICompanyScoped
     public Account CreatedByAccount { get; set; } = null!;
     public QualityAnalysis? QualityAnalysis { get; set; }
     public SitePlan? SitePlan { get; set; }
+}
+
+public sealed class AuditPackage : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public Guid? QualityDocumentId { get; set; }
+    public required string Number { get; set; }
+    public required string Title { get; set; }
+    public required string AuditProfile { get; set; }
+    public required string Status { get; set; } = "Generated";
+    public DateOnly PeriodStart { get; set; }
+    public DateOnly PeriodEnd { get; set; }
+    public bool IncludeOptionalWaste { get; set; }
+    public int ReadinessScore { get; set; }
+    public required string PreflightJson { get; set; }
+    public required string ManifestJson { get; set; }
+    public required byte[] PdfData { get; set; }
+    public required byte[] ZipData { get; set; }
+    public required string PdfSha256 { get; set; }
+    public required string ZipSha256 { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public QualityDocument? QualityDocument { get; set; }
+    public ICollection<AuditPackageItem> Items { get; set; } = [];
+}
+
+public sealed class AuditPackageItem : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid AuditPackageId { get; set; }
+    public required string Section { get; set; }
+    public required string SourceType { get; set; }
+    public Guid? SourceId { get; set; }
+    public required string DocumentNumber { get; set; }
+    public required string Title { get; set; }
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public string? Revision { get; set; }
+    public string? Scope { get; set; }
+    public DateTimeOffset SourceDate { get; set; }
+    public required string Sha256 { get; set; }
+    public required byte[] FileData { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public AuditPackage AuditPackage { get; set; } = null!;
+}
+
+public sealed class QualityInspection : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid ServiceReportId { get; set; }
+    public Guid InspectorAccountId { get; set; }
+    public Guid EmployeeAccountId { get; set; }
+    public Guid? CorrectiveActionId { get; set; }
+    public required string Number { get; set; }
+    public required string InspectionType { get; set; }
+    public required string SelectionReason { get; set; }
+    public required string Status { get; set; } = "Planned";
+    public DateTimeOffset? ScheduledAt { get; set; }
+    public DateTimeOffset? InspectedAt { get; set; }
+    public int PhotoQualityScore { get; set; }
+    public int StationCompletionScore { get; set; }
+    public int ProductDoseScore { get; set; }
+    public int SignatureScore { get; set; }
+    public int TimelinessScore { get; set; }
+    public int ReportCompletenessScore { get; set; }
+    public int TotalScore { get; set; }
+    public required string Grade { get; set; } = "Pending";
+    public bool RequiresCorrectiveAction { get; set; }
+    public string? Findings { get; set; }
+    public string? Notes { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public ServiceReport ServiceReport { get; set; } = null!;
+    public Account InspectorAccount { get; set; } = null!;
+    public Account EmployeeAccount { get; set; } = null!;
+    public CorrectiveAction? CorrectiveAction { get; set; }
+}
+
+public sealed class CorrectiveAction : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public Guid? AssignedAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string SourceType { get; set; }
+    public Guid? SourceId { get; set; }
+    public required string Category { get; set; }
+    public required string Title { get; set; }
+    public required string Problem { get; set; }
+    public string? RootCause { get; set; }
+    public required string ProposedAction { get; set; }
+    public required string ResponsibleParty { get; set; }
+    public required string Priority { get; set; }
+    public required string Status { get; set; } = "Open";
+    public DateOnly DueDate { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTimeOffset? VerifiedAt { get; set; }
+    public required string CustomerApprovalStatus { get; set; } = "Pending";
+    public DateTimeOffset? CustomerApprovalAt { get; set; }
+    public string? CustomerApprovalNote { get; set; }
+    public string? RecurrenceKey { get; set; }
+    public int RecurrenceCount { get; set; } = 1;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public Account? AssignedAccount { get; set; }
+    public ICollection<CorrectiveActionEvidence> Evidence { get; set; } = [];
+    public ICollection<CorrectiveActionHistory> History { get; set; } = [];
+}
+
+public sealed class CorrectiveActionEvidence : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CorrectiveActionId { get; set; }
+    public Guid UploadedByAccountId { get; set; }
+    public required string Stage { get; set; }
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public required byte[] Data { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public CorrectiveAction CorrectiveAction { get; set; } = null!;
+    public Account UploadedByAccount { get; set; } = null!;
+}
+
+public sealed class CorrectiveActionHistory : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CorrectiveActionId { get; set; }
+    public Guid ChangedByAccountId { get; set; }
+    public string? FromStatus { get; set; }
+    public required string ToStatus { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
+    public CorrectiveAction CorrectiveAction { get; set; } = null!;
+    public Account ChangedByAccount { get; set; } = null!;
+}
+
+public sealed class WasteDisposalRecord : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid? CustomerBranchId { get; set; }
+    public Guid? WorkOrderId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string WasteType { get; set; }
+    public decimal Quantity { get; set; }
+    public required string Unit { get; set; }
+    public required string Status { get; set; } = "Generated";
+    public DateTimeOffset GeneratedAt { get; set; }
+    public string? TemporaryStorage { get; set; }
+    public string? RecipientName { get; set; }
+    public string? CarrierOrFacility { get; set; }
+    public string? DisposalMethod { get; set; }
+    public string? DocumentNumber { get; set; }
+    public string? Notes { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Customer Customer { get; set; } = null!;
+    public CustomerBranch? CustomerBranch { get; set; }
+    public WorkOrder? WorkOrder { get; set; }
+    public Account CreatedByAccount { get; set; } = null!;
+    public ICollection<WasteDisposalEvidence> Evidence { get; set; } = [];
+}
+
+public sealed class WasteDisposalEvidence : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WasteDisposalRecordId { get; set; }
+    public Guid UploadedByAccountId { get; set; }
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public required byte[] Data { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public WasteDisposalRecord WasteDisposalRecord { get; set; } = null!;
+    public Account UploadedByAccount { get; set; } = null!;
 }
 
 public sealed class SitePlan : ICompanyScoped

@@ -21,6 +21,7 @@ import CustomerBranchModal from './components/modals/CustomerBranchModal';
 import LoginPage from './auth/LoginPage';
 import type { AuthenticatedSession } from './auth/types';
 import CustomerPortal from './portals/CustomerPortal';
+import QualityComplianceHub from './components/compliance/QualityComplianceHub';
 import EmployeePortal from './portals/EmployeePortal';
 import LandingPage from './marketing/LandingPage';
 import { getEmployees, SessionExpiredError, type EmployeeRecord } from './services/employeeApi';
@@ -166,7 +167,8 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'reports': return <ReportsAnalytics accessToken={session.accessToken} companyName={session.company.name} userName={session.user.name} workOrders={workOrders} onSessionExpired={onLogout} />;
       case 'documents': return <QualityCenter accessToken={session.accessToken} mode="staff" onSessionExpired={onLogout} standalone />;
       case 'requests': return <RequestCenter accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;
-      case 'commercial': return <CommercialManagement accessToken={session.accessToken} customers={customers} workOrders={workOrders} onSessionExpired={onLogout} />;
+      case 'commercial': return <CommercialManagement accessToken={session.accessToken} customers={customers} employees={employees} workOrders={workOrders} onSessionExpired={onLogout} />;
+      case 'compliance': return <QualityComplianceHub accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;
       case 'settings': return <SettingsPage accessToken={session.accessToken} companyName={session.company.name} onSessionExpired={onLogout} onNotify={showToast} />;
       default: return <section className="page"><h1>Yapım aşamasında</h1></section>;
     }

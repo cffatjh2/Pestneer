@@ -28,6 +28,7 @@ const iconMap: Record<string, React.ElementType> = {
   FolderArchive,
   BriefcaseBusiness,
   MessagesSquare,
+  ShieldCheck,
   Users,
 };
 

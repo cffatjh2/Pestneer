@@ -320,7 +320,8 @@ public static class WorkOrderEndpoints
                     ScheduledAt = ToIstanbulDateTime(date, scheduledTime),
                     DurationMinutes = request.DurationMinutes,
                     Notes = NullIfEmpty(request.Notes),
-                    Status = "Planned"
+                    Status = "Planned",
+                    ContractCoverage = "OutOfContract"
                 };
                 workOrder.History.Add(NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, null, "Planned", "İş emri oluşturuldu."));
                 workOrders.Add(workOrder);

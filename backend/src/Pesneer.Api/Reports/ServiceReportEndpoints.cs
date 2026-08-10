@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.Inventory;
+using Pesneer.Api.Compliance;
 
 namespace Pesneer.Api.Reports;
 
@@ -157,6 +158,18 @@ public static class ServiceReportEndpoints
         }).ToList();
         dbContext.ServiceReportStations.AddRange(stations);
         dbContext.ServiceReportProducts.AddRange(products);
+
+        if (request.Finalize)
+        {
+            await CorrectiveActionAutomation.SyncAsync(
+                dbContext, companyContext.CompanyId.Value, companyContext.AccountId.Value,
+                workOrder.CustomerId, workOrder.CustomerBranchId, "ServiceReport", report.Id,
+                "Saha Bulgusu", $"{workOrder.Number} saha bulgusu",
+                string.Join("\n", new[] { request.Findings, request.ApplicationSummary }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                string.Join("\n", new[] { request.CorrectiveActions, request.Recommendations }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                "Joint", stations.Any(item => item.DeviceStatus is "Damaged" or "Missing") ? "High" : "Normal",
+                DateOnly.FromDateTime(DateTime.UtcNow).AddDays(7), cancellationToken);
+        }
 
         try
         {

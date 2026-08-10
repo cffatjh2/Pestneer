@@ -20,7 +20,8 @@ public sealed record SitePlanElementInput(
     string? Fill,
     decimal StrokeWidth,
     string? EquipmentTypeId,
-    string? StationNumber);
+    string? StationNumber,
+    string? QrCode);
 
 public sealed record SitePlanCanvasInput(
     int Width,

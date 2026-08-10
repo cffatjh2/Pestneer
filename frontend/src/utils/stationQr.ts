@@ -15,7 +15,12 @@ export type StationQrPayload = {
 };
 
 export function createStationQrValue(plan: SitePlanRecord, station: ReportStationInput) {
+  if (station.qrCode?.trim()) return station.qrCode.trim();
   return [PREFIX, '1', plan.id, station.sitePlanElementId ?? '', plan.customerId, plan.branchId ?? '', station.deviceNumber].map(encodeURIComponent).join('|');
+}
+
+export function normalizeStationQrValue(value?: string) {
+  return value?.trim().toLocaleUpperCase('tr-TR') ?? '';
 }
 
 export function parseStationQrValue(value: string): StationQrPayload | null {

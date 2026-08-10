@@ -63,6 +63,29 @@ public static class CommercialPdfRenderer
                 column.Item().Text(contract.Title).FontSize(18).SemiBold().FontColor("#0B315A");
                 column.Item().Row(row => { row.RelativeItem().Element(card => Info(card, "Müşteri", contract.Customer.LegalName, contract.CustomerBranch?.Name ?? "Merkez / Genel")); row.ConstantItem(18); row.RelativeItem().Element(card => Info(card, "Dönem", contract.StartDate.ToString("dd.MM.yyyy"), contract.EndDate.ToString("dd.MM.yyyy"))); });
                 column.Item().Element(card => Info(card, "Faturalama planı", Frequency(contract.BillingFrequency), $"Dönem bedeli: {contract.PeriodAmount:N2} {contract.Currency} • Vade: {contract.PaymentTermDays} gün"));
+                column.Item().Row(row =>
+                {
+                    row.RelativeItem().Element(card => Info(card, "Acil çağrı ve SLA", $"{contract.FreeEmergencyCallsPerYear} ücretsiz çağrı / yıl", $"Ek çağrı: {contract.ExtraEmergencyCallPrice:N2} {contract.Currency} • Müdahale: {contract.ResponseTimeHours} saat"));
+                    row.ConstantItem(18);
+                    row.RelativeItem().Element(card => Info(card, "Yenileme", contract.AutoRenew ? "Otomatik yenileme açık" : "Manuel yenileme", $"Bildirim: {contract.RenewalNoticeDays} gün • Yıllık artış: %{contract.AnnualPriceIncreaseRate:N2}"));
+                });
+                if (contract.ServicePlans.Count > 0)
+                {
+                    column.Item().Text("ŞUBE VE HİZMET PLANI").FontSize(8).Bold().FontColor("#1269C7");
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns => { columns.RelativeColumn(1.5f); columns.RelativeColumn(2); columns.RelativeColumn(); columns.RelativeColumn(); columns.RelativeColumn(); });
+                        table.Header(header => { Cell(header.Cell(), "Şube", true); Cell(header.Cell(), "Hizmet", true); Cell(header.Cell(), "Periyot", true); Cell(header.Cell(), "Plan", true); Cell(header.Cell(), "Bedel", true); });
+                        foreach (var plan in contract.ServicePlans.Where(item => item.IsActive).OrderBy(item => item.CustomerBranch?.Name).ThenBy(item => item.ServiceType))
+                        {
+                            Cell(table.Cell(), plan.CustomerBranch?.Name ?? "Merkez / Genel");
+                            Cell(table.Cell(), plan.ServiceType);
+                            Cell(table.Cell(), plan.RecurrenceType == "Weekly" ? $"Haftada {plan.VisitsPerPeriod}" : plan.RecurrenceType == "Monthly" ? $"Ayda {plan.VisitsPerPeriod}" : "Manuel");
+                            Cell(table.Cell(), $"{plan.PreferredTime} • {plan.DurationMinutes} dk.");
+                            Cell(table.Cell(), $"{plan.BranchPrice:N2} {contract.Currency}");
+                        }
+                    });
+                }
                 column.Item().Element(card => Note(card, "Hizmet Kapsamı", contract.Scope ?? "Taraflarca onaylanan teklif ve hizmet planındaki periyodik zararlı mücadelesi hizmetleri."));
                 column.Item().Element(card => Note(card, "Sözleşme Koşulları", contract.Terms ?? "Hizmetler planlanan periyotlarda gerçekleştirilir. Taraflar, saha erişimi ve yasal gereklilikler konusunda gerekli iş birliğini sağlar."));
                 column.Item().PaddingTop(20).Row(row => { row.RelativeItem().Text($"{company.LegalName}\nFirma Yetkilisi\n\nİmza / Kaşe").SemiBold(); row.RelativeItem().AlignRight().Text($"{contract.Customer.LegalName}\nMüşteri Yetkilisi\n\nİmza / Kaşe").SemiBold(); });

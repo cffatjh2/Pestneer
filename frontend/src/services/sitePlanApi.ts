@@ -24,6 +24,7 @@ export type SitePlanElement = {
   text?: string;
   equipmentTypeId?: string;
   stationNumber?: string;
+  qrCode?: string;
 };
 
 export type SitePlanCanvas = {

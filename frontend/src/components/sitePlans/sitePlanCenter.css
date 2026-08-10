@@ -8,6 +8,7 @@
 @media(max-height:780px) and (min-width:761px){.site-plan-editor-layer{padding:8px}.site-plan-editor-shell{height:calc(100dvh - 16px)}.site-plan-editor-shell>header{padding:12px 18px}.site-plan-editor-icon{width:40px;height:40px}.site-plan-editor-shell header h2{font-size:18px}.site-plan-editor-shell header p:not(.eyebrow){display:none}.site-plan-meta{padding:8px 14px}.site-plan-editor-footer{padding:9px 14px}}
 
 .site-plan-editor-layer{overscroll-behavior:none}.site-plan-mobile-meta-toggle,.site-plan-mobile-tabs,.site-plan-touch-hint{display:none}.site-plan-paper svg{touch-action:pan-x pan-y}.canvas-element{touch-action:none}.canvas-hit-area{fill:transparent;stroke:none;pointer-events:all}
+.station-qr-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.station-qr-actions button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:7px;border:1px solid #bfdbfe;border-radius:9px;background:#eff6ff;color:#1d68c4;font-size:10px;font-weight:800;cursor:pointer}.station-qr-actions button:last-child{border-color:#a7f3d0;background:#ecfdf5;color:#08775f}.station-qr-actions svg{width:15px;height:15px}.station-qr-help{margin-top:-4px;color:#718298;font-size:9px;line-height:1.45}
 
 @media(max-width:760px){
   .site-plan-editor-shell{display:flex;flex-direction:column;overflow:hidden}
@@ -43,6 +44,7 @@
   .site-plan-tool-grid button{min-height:68px;touch-action:manipulation}
   .equipment-palette{grid-template-columns:1fr}
   .equipment-palette button{min-height:54px;touch-action:manipulation}
+  .station-qr-actions button{min-height:44px}
   .site-plan-toolbar{gap:6px;padding:7px}
   .site-plan-toolbar>div{min-width:0}
   .site-plan-toolbar button,.site-plan-toolbar select{height:38px;padding:0 8px}

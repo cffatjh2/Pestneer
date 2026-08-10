@@ -13,6 +13,7 @@ export type ViewId =
   | 'documents'
   | 'requests'
   | 'commercial'
+  | 'compliance'
   | 'team'
   | 'settings';
 

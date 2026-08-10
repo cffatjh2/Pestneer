@@ -16,6 +16,7 @@ export const navigation: NavItem[] = [
   { id: 'documents',   label: 'Belgeler',           iconName: 'FolderArchive' },
   { id: 'requests',    label: 'Talep Merkezi',      iconName: 'MessagesSquare' },
   { id: 'commercial',  label: 'Ticari Yönetim',     iconName: 'BriefcaseBusiness' },
+  { id: 'compliance',  label: 'Kalite & Uyum',      iconName: 'ShieldCheck' },
   { id: 'team',        label: 'Ekip',               iconName: 'Users' },
 ];
 

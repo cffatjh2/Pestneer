@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.WeatherRisk;
+using Pesneer.Api.Compliance;
 
 namespace Pesneer.Api.Quality;
 
@@ -17,7 +18,7 @@ public static class QualityEndpoints
     };
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     {
-        "General", "CommercialProposals", "Contracts", "ServiceReports", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Photos", "Other"
+        "General", "CommercialProposals", "Contracts", "ServiceReports", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "AuditPackages", "Photos", "Other"
     };
 
     public static IEndpointRouteBuilder MapQualityEndpoints(this IEndpointRouteBuilder app)
@@ -173,6 +174,14 @@ public static class QualityEndpoints
         dbContext.QualityAnalyses.Add(analysis);
         var document = NewGeneratedDocument(analysis, "RiskAnalyses");
         dbContext.QualityDocuments.Add(document);
+        if (overallScore >= 40 || !string.IsNullOrWhiteSpace(request.CorrectiveActions))
+        {
+            await CorrectiveActionAutomation.SyncAsync(
+                dbContext, context.CompanyId!.Value, context.AccountId!.Value, request.CustomerId, request.BranchId,
+                "RiskAnalysis", analysis.Id, "Risk Analizi", $"{analysis.Title} faaliyeti", analysis.Findings,
+                recommendationText, "Customer", overallScore >= 70 ? "Critical" : "High",
+                request.AssessmentDate.AddDays(overallScore >= 70 ? 7 : 14), cancellationToken);
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
         analysis.Customer = customer; analysis.CustomerBranch = branch; analysis.CreatedByAccount = await dbContext.Accounts.AsNoTracking().SingleAsync(item => item.Id == context.AccountId, cancellationToken);
         return Results.Created($"/api/quality/analyses/{analysis.Id}", ToAnalysisResponse(analysis, document.Id));

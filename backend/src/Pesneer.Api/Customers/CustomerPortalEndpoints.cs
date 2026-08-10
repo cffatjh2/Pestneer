@@ -83,6 +83,37 @@ public static class CustomerPortalEndpoints
         if (branchId.HasValue && !await dbContext.CustomerBranches.AnyAsync(item => item.Id == branchId && item.CustomerId == context.CustomerId.Value && item.IsActive, cancellationToken))
             return Validation("branchId", "Yetkili olduğunuz bir şube seçin.");
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var activeContracts = await dbContext.CustomerContracts
+            .Where(item => item.CustomerId == context.CustomerId.Value && item.Status == "Active")
+            .ToListAsync(cancellationToken);
+        var contract = activeContracts
+            .Where(item => item.StartDate <= today && item.EndDate >= today)
+            .Where(item => !item.CustomerBranchId.HasValue || item.CustomerBranchId == branchId)
+            .OrderByDescending(item => item.CustomerBranchId == branchId)
+            .ThenByDescending(item => item.StartDate)
+            .FirstOrDefault();
+        var contractCoverage = contract is null ? "OutOfContract" : "ContractIncluded";
+        var chargeAmount = 0m;
+        DateTimeOffset? slaDueAt = null;
+        if (requestType == "EmergencyCall")
+        {
+            if (contract is null)
+            {
+                serviceType = "EmergencyPaid";
+                contractCoverage = "OutOfContractPaid";
+            }
+            else
+            {
+                var usedCalls = await dbContext.EmergencyRequests.CountAsync(item => item.CustomerContractId == contract.Id && item.RequestType == "EmergencyCall" && item.Status != "Cancelled", cancellationToken);
+                var freeAllowanceAvailable = usedCalls < contract.FreeEmergencyCallsPerYear;
+                serviceType = freeAllowanceAvailable ? "EmergencyFree" : "EmergencyPaid";
+                contractCoverage = freeAllowanceAvailable ? "FreeAllowance" : "OutOfContractPaid";
+                chargeAmount = freeAllowanceAvailable ? 0 : contract.ExtraEmergencyCallPrice;
+                slaDueAt = DateTimeOffset.UtcNow.AddHours(contract.ResponseTimeHours);
+            }
+        }
+
         var recentAssignments = await dbContext.WorkOrders.AsNoTracking()
             .Where(item => item.CustomerId == context.CustomerId.Value && item.AssignedEmployeeAccountId.HasValue)
             .Where(item => !branchId.HasValue || item.CustomerBranchId == branchId)
@@ -93,9 +124,10 @@ public static class CustomerPortalEndpoints
         var item = new EmergencyRequest
         {
             Id = Guid.NewGuid(), CompanyId = context.CompanyId.Value, CustomerId = context.CustomerId.Value, CustomerBranchId = branchId,
-            CreatedByAccountId = context.AccountId.Value, AssignedEmployeeAccountId = assignedEmployeeId, Number = $"{prefix}{sequence:000}",
+            CreatedByAccountId = context.AccountId.Value, AssignedEmployeeAccountId = assignedEmployeeId, CustomerContractId = contract?.Id, Number = $"{prefix}{sequence:000}",
             RequestType = requestType, Subject = subject, ServiceType = serviceType, Priority = request.Priority, Status = "New", Description = description,
-            ContactPhone = NullIfEmpty(request.ContactPhone), DueAt = request.DueAt, RequestedAppointmentAt = request.RequestedAppointmentAt,
+            ContractCoverage = contractCoverage, ChargeAmount = chargeAmount, SlaDueAt = slaDueAt,
+            ContactPhone = NullIfEmpty(request.ContactPhone), DueAt = request.DueAt ?? slaDueAt, RequestedAppointmentAt = request.RequestedAppointmentAt,
             ClosureApprovalStatus = "NotRequired"
         };
         item.History.Add(NewHistory(item, context.AccountId.Value, "New", $"Müşteri {TypeLabel(requestType).ToLowerInvariant()} kaydı oluşturdu."));
@@ -253,7 +285,9 @@ public static class CustomerPortalEndpoints
         .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
 
     private static IQueryable<CustomerContract> CustomerContractQuery(PesneerDbContext dbContext, ICompanyContext context) => dbContext.CustomerContracts.AsNoTracking()
-        .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.Receivables).AsSplitQuery()
+        .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.Receivables)
+        .Include(item => item.ServicePlans).ThenInclude(item => item.CustomerBranch)
+        .Include(item => item.ServicePlans).ThenInclude(item => item.WorkOrders).AsSplitQuery()
         .Where(item => item.CustomerId == context.CustomerId!.Value)
         .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
 
@@ -263,11 +297,16 @@ public static class CustomerPortalEndpoints
         .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
 
     private static CustomerProposalResponse ToCustomerProposal(CommercialProposal item) => new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.Title, item.Status == "Draft" ? "PendingApproval" : item.Status, item.IssueDate, item.ValidUntil, item.Currency, item.Subtotal, item.DiscountAmount, item.VatRate, item.VatAmount, item.TotalAmount, item.Notes, item.Terms, item.CustomerDecisionAt, item.CustomerDecisionNote, item.Status is "PendingApproval" or "Draft", item.Lines.OrderBy(line => line.SortOrder).Select(line => new CustomerProposalLineResponse(line.Id, line.Description, line.Quantity, line.Unit, line.UnitPrice, line.LineTotal)).ToArray());
-    private static CustomerContractResponse ToCustomerContract(CustomerContract item) => new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.Title, item.Status, item.StartDate, item.EndDate, item.BillingFrequency, item.PaymentTermDays, item.PeriodAmount, item.Currency, item.Scope, item.Terms, item.Receivables.Count, item.Receivables.Sum(value => value.Amount - value.PaidAmount));
+    private static CustomerContractResponse ToCustomerContract(CustomerContract item)
+    {
+        var plans = item.ServicePlans.Where(plan => plan.IsActive).OrderBy(plan => plan.CustomerBranch?.Name).ThenBy(plan => plan.ServiceType)
+            .Select(plan => new CustomerContractServicePlanResponse(plan.Id, plan.CustomerBranchId, plan.CustomerBranch?.Name ?? "Merkez / Genel", plan.ServiceType, plan.RecurrenceType, plan.VisitsPerPeriod, plan.PreferredDay, plan.PreferredTime, plan.DurationMinutes, plan.GeneratedThrough)).ToArray();
+        return new CustomerContractResponse(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.Title, item.Status, item.StartDate, item.EndDate, item.BillingFrequency, item.PaymentTermDays, item.PeriodAmount, item.Currency, item.Scope, item.Terms, item.Receivables.Count, item.Receivables.Sum(value => value.Amount - value.PaidAmount), item.AutoRenew, item.RenewalNoticeDays, item.AnnualPriceIncreaseRate, item.FreeEmergencyCallsPerYear, item.ExtraEmergencyCallPrice, item.ResponseTimeHours, item.ServicePlans.Sum(plan => plan.WorkOrders.Count), plans);
+    }
     private static CustomerReceivableResponse ToCustomerReceivable(ReceivableEntry item, DateOnly today) { var status = item.Status == "Paid" ? "Paid" : item.DueDate < today ? "Overdue" : item.Status; return new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.CustomerContract?.Number ?? "—", item.Description, item.IssueDate, item.DueDate, item.Amount, item.PaidAmount, item.Amount - item.PaidAmount, item.Currency, status, item.PaidAt); }
 
     private static CustomerPortalWorkOrderResponse ToWorkOrderResponse(WorkOrder item) => new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.ServiceType, item.VisitType, item.ScheduledAt, item.DurationMinutes, item.Status, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.CompletionNote, item.Recommendation);
-    private static EmergencyRequestResponse ToResponse(EmergencyRequest item) => new(item.Id, item.Number, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.RequestType, item.Subject, item.ServiceType, item.Priority, item.Status, item.Description, item.ContactPhone, item.AssignedEmployeeAccountId, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.RequestedAt, item.DueAt, item.RequestedAppointmentAt, item.ClosureApprovalStatus, item.ClosureApprovedAt, item.ClosureApprovalNote, item.AcknowledgedAt, item.CompletedAt, item.History.OrderBy(history => history.OccurredAt).Select(history => new EmergencyHistoryResponse(history.Status, history.Note, history.OccurredAt, history.ChangedByAccount.DisplayName)).ToArray());
+    private static EmergencyRequestResponse ToResponse(EmergencyRequest item) => new(item.Id, item.Number, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.RequestType, item.Subject, item.ServiceType, item.CustomerContractId, item.ContractCoverage, item.ChargeAmount, item.SlaDueAt, item.Priority, item.Status, item.Description, item.ContactPhone, item.AssignedEmployeeAccountId, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.RequestedAt, item.DueAt, item.RequestedAppointmentAt, item.ClosureApprovalStatus, item.ClosureApprovedAt, item.ClosureApprovalNote, item.AcknowledgedAt, item.CompletedAt, item.History.OrderBy(history => history.OccurredAt).Select(history => new EmergencyHistoryResponse(history.Status, history.Note, history.OccurredAt, history.ChangedByAccount.DisplayName)).ToArray());
     private static EmergencyRequestHistory NewHistory(EmergencyRequest item, Guid accountId, string status, string? note) => new() { Id = Guid.NewGuid(), CompanyId = item.CompanyId, EmergencyRequestId = item.Id, ChangedByAccountId = accountId, Status = status, Note = note };
     private static string TypeLabel(string type) => type switch { "Complaint" => "Şikâyet", "NewBranch" => "Yeni şube talebi", "AppointmentChange" => "Randevu değişikliği", "DocumentRequest" => "Belge talebi", "StructuralCompletion" => "Yapısal faaliyet tamamlandı", _ => "Acil çağrı" };
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
