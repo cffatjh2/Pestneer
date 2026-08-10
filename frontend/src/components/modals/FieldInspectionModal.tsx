@@ -113,7 +113,7 @@ export default function FieldInspectionModal({
       const file = new File([pdfBlob], getFileName(), { type: 'application/pdf' });
       await uploadQualityDocument(accessToken, {
         file,
-        category: 'Saha İnceleme',
+        category: 'FieldInspections',
         title: `Saha İnceleme - ${customer?.legalName ?? 'Firma'}`,
         customerId,
         branchId: branchId || undefined
