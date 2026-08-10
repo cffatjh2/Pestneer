@@ -24,6 +24,7 @@ using Pesneer.Api.Reports;
 using Pesneer.Api.Quality;
 using Pesneer.Api.SitePlans;
 using Pesneer.Api.WeatherRisk;
+using Pesneer.Api.Vision;
 using Pesneer.Api.WorkOrders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -191,6 +192,7 @@ app.MapCorrectiveActionEndpoints();
 app.MapQualityInspectionEndpoints();
 app.MapHealthWasteEndpoints();
 app.MapAuditPackageEndpoints();
+app.MapVisionSettingsEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PestneerVision result",
+  "type": "object",
+  "required": ["model", "image", "detections", "counts", "review"],
+  "properties": {
+    "model": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "enum": ["yolox-nano", "yolox-tiny"] },
+        "version": { "type": "string" },
+        "runtime": { "enum": ["webgpu", "wasm"] }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["width", "height", "sha256"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string" }
+      }
+    },
+    "detections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "classKey", "confidence", "box"],
+        "properties": {
+          "id": { "type": "string" },
+          "classKey": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "box": {
+            "type": "array",
+            "prefixItems": [
+              { "type": "number" }, { "type": "number" },
+              { "type": "number" }, { "type": "number" }
+            ],
+            "minItems": 4,
+            "maxItems": 4
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["classKey", "detected", "approved"],
+        "properties": {
+          "classKey": { "type": "string" },
+          "detected": { "type": "integer", "minimum": 0 },
+          "approved": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["required", "status"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "status": { "enum": ["Pending", "AutoAccepted", "Reviewed", "Edited"] },
+        "reviewedAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  }
+}
+

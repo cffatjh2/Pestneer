@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "classes": [
+    { "id": 0, "key": "fly", "label": "Sinek", "sourceTaxa": ["Diptera"] },
+    { "id": 1, "key": "bee_wasp", "label": "Arı / yaban arısı", "sourceTaxa": ["Hymenoptera"] },
+    { "id": 2, "key": "moth_butterfly", "label": "Güve / kelebek", "sourceTaxa": ["Lepidoptera"] },
+    { "id": 3, "key": "beetle", "label": "Kınkanatlı / depo böceği", "sourceTaxa": ["Coleoptera"] },
+    { "id": 4, "key": "cockroach", "label": "Hamamböceği", "sourceTaxa": ["Blattodea"] },
+    { "id": 5, "key": "grasshopper_cricket", "label": "Çekirge / cırcır", "sourceTaxa": ["Orthoptera"] },
+    { "id": 6, "key": "termite", "label": "Termit", "sourceTaxa": ["Isoptera"] },
+    { "id": 7, "key": "other_insect", "label": "Diğer / yabancı böcek", "sourceTaxa": ["Psocoptera", "Hemiptera", "Neuroptera", "Thysanoptera", "Dermaptera", "Odonata"] }
+  ]
+}
+

@@ -35,6 +35,9 @@ public sealed class Company
     public string? LogoFileName { get; set; }
     public DateTimeOffset? LogoUpdatedAt { get; set; }
     public string? ReportNotificationEmail { get; set; }
+    public bool VisionEnabled { get; set; } = true;
+    public bool VisionReviewRequired { get; set; } = true;
+    public string VisionPreferredModel { get; set; } = "Auto";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -498,6 +501,29 @@ public sealed class ServiceReportStation : ICompanyScoped
     public string? ReplacementUnit { get; set; }
     public string? Notes { get; set; }
     public ServiceReport ServiceReport { get; set; } = null!;
+    public ICollection<ServiceReportPestObservation> PestObservations { get; set; } = [];
+}
+
+public sealed class ServiceReportPestObservation : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid ServiceReportStationId { get; set; }
+    public required string PestKey { get; set; }
+    public required string PestName { get; set; }
+    public int DetectedCount { get; set; }
+    public int ApprovedCount { get; set; }
+    public decimal MeanConfidence { get; set; }
+    public required string Source { get; set; } = "Manual";
+    public string? ModelName { get; set; }
+    public string? ModelVersion { get; set; }
+    public required string ReviewStatus { get; set; } = "Reviewed";
+    public string? VisionResultJson { get; set; }
+    public DateTimeOffset? AnalyzedAt { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
+    public Guid? ReviewedByAccountId { get; set; }
+    public ServiceReportStation ServiceReportStation { get; set; } = null!;
+    public Account? ReviewedByAccount { get; set; }
 }
 
 public sealed class ServiceReportProduct : ICompanyScoped

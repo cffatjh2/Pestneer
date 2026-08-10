@@ -1,5 +1,18 @@
 namespace Pesneer.Api.Reports;
 
+public sealed record ServiceReportPestObservationInput(
+    string PestKey,
+    string PestName,
+    int DetectedCount,
+    int ApprovedCount,
+    decimal MeanConfidence,
+    string Source,
+    string? ModelName,
+    string? ModelVersion,
+    string ReviewStatus,
+    string? VisionResultJson,
+    DateTimeOffset? AnalyzedAt);
+
 public sealed record ServiceReportStationInput(
     Guid? SitePlanId,
     string? SitePlanElementId,
@@ -21,7 +34,8 @@ public sealed record ServiceReportStationInput(
     string? ReplacementProductName,
     decimal? ReplacementQuantity,
     string? ReplacementUnit,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<ServiceReportPestObservationInput>? PestObservations);
 
 public sealed record ServiceReportProductInput(
     Guid? VehicleStockItemId,
@@ -85,7 +99,22 @@ public sealed record ServiceReportStationResponse(
     string? ReplacementProductName,
     decimal? ReplacementQuantity,
     string? ReplacementUnit,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<ServiceReportPestObservationResponse> PestObservations);
+
+public sealed record ServiceReportPestObservationResponse(
+    Guid Id,
+    string PestKey,
+    string PestName,
+    int DetectedCount,
+    int ApprovedCount,
+    decimal MeanConfidence,
+    string Source,
+    string? ModelName,
+    string? ModelVersion,
+    string ReviewStatus,
+    DateTimeOffset? AnalyzedAt,
+    DateTimeOffset? ReviewedAt);
 
 public sealed record ServiceReportProductResponse(
     Guid Id,

@@ -6,6 +6,14 @@
 *.db-shm
 *.db-wal
 .env
+PestneerVision/.venv/
+PestneerVision/data/raw/
+PestneerVision/data/processed/
+PestneerVision/runs/
+PestneerVision/models/
+PestneerVision/vendor/
+PestneerVision/**/__pycache__/
+PestneerVision/**/*.pyc
 .env.*
 !.env.example
 tmp/

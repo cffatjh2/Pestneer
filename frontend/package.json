@@ -9,10 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@zxing/browser": "latest",
     "@vitejs/plugin-react": "latest",
+    "@zxing/browser": "latest",
     "jspdf": "latest",
     "lucide-react": "latest",
+    "onnxruntime-web": "^1.27.0",
     "puppeteer-core": "^25.5.0",
     "qrcode": "latest",
     "react": "latest",

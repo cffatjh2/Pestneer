@@ -89,7 +89,7 @@ public static class ServiceReportEndpoints
         if (validation.Count > 0) return Results.ValidationProblem(validation);
 
         var report = await dbContext.ServiceReports
-            .Include(item => item.Stations)
+            .Include(item => item.Stations).ThenInclude(item => item.PestObservations)
             .Include(item => item.Products)
             .SingleOrDefaultAsync(item => item.WorkOrderId == workOrderId, cancellationToken);
         if (report is not null && report.Status == "Finalized" && companyContext.Portal == PortalType.Employee)
@@ -146,19 +146,37 @@ public static class ServiceReportEndpoints
         report.UpdatedAt = now;
         report.Status = request.Finalize ? "Finalized" : "Draft";
         report.FinalizedAt = request.Finalize ? now : null;
-        var stations = request.Stations.Select(item => new ServiceReportStation
+        var stations = request.Stations.Select(item =>
         {
-            Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, ServiceReportId = report.Id,
-            SitePlanId = item.SitePlanId, SitePlanElementId = NullIfEmpty(item.SitePlanElementId),
-            DeviceNumber = item.DeviceNumber.Trim(), Area = item.Area.Trim(), DeviceType = item.DeviceType,
-            TargetPest = NullIfEmpty(item.TargetPest), CaughtCount = item.CaughtCount,
-            HasActivity = item.DeviceStatus == "Activity" || item.HasActivity || item.CaughtCount > 0, PlateChanged = item.PlateChanged,
-            DeviceStatus = item.DeviceStatus, ActivityType = NullIfEmpty(item.ActivityType),
-            InaccessibilityReason = NullIfEmpty(item.InaccessibilityReason),
-            AppliedVehicleStockItemId = item.AppliedVehicleStockItemId, AppliedProductName = NullIfEmpty(item.AppliedProductName),
-            AppliedAmount = item.AppliedAmount, AppliedUnit = NullIfEmpty(item.AppliedUnit),
-            ReplacementVehicleStockItemId = item.ReplacementVehicleStockItemId, ReplacementProductName = NullIfEmpty(item.ReplacementProductName),
-            ReplacementQuantity = item.ReplacementQuantity, ReplacementUnit = NullIfEmpty(item.ReplacementUnit), Notes = NullIfEmpty(item.Notes)
+            var stationId = Guid.NewGuid();
+            var observations = (item.PestObservations ?? []).Where(observation => observation.ApprovedCount > 0 || observation.DetectedCount > 0)
+                .Select(observation => new ServiceReportPestObservation
+                {
+                    Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, ServiceReportStationId = stationId,
+                    PestKey = observation.PestKey.Trim(), PestName = observation.PestName.Trim(),
+                    DetectedCount = observation.DetectedCount, ApprovedCount = observation.ApprovedCount,
+                    MeanConfidence = observation.MeanConfidence, Source = observation.Source,
+                    ModelName = NullIfEmpty(observation.ModelName), ModelVersion = NullIfEmpty(observation.ModelVersion),
+                    ReviewStatus = observation.ReviewStatus, VisionResultJson = NullIfEmpty(observation.VisionResultJson),
+                    AnalyzedAt = observation.AnalyzedAt, ReviewedAt = now, ReviewedByAccountId = companyContext.AccountId
+                }).ToList();
+            var approvedTotal = observations.Sum(observation => observation.ApprovedCount);
+            var dominantPest = observations.OrderByDescending(observation => observation.ApprovedCount).FirstOrDefault()?.PestName;
+            return new ServiceReportStation
+            {
+                Id = stationId, CompanyId = companyContext.CompanyId.Value, ServiceReportId = report.Id,
+                SitePlanId = item.SitePlanId, SitePlanElementId = NullIfEmpty(item.SitePlanElementId),
+                DeviceNumber = item.DeviceNumber.Trim(), Area = item.Area.Trim(), DeviceType = item.DeviceType,
+                TargetPest = NullIfEmpty(dominantPest ?? item.TargetPest), CaughtCount = observations.Count > 0 ? approvedTotal : item.CaughtCount,
+                HasActivity = item.DeviceStatus == "Activity" || item.HasActivity || approvedTotal > 0 || item.CaughtCount > 0, PlateChanged = item.PlateChanged,
+                DeviceStatus = item.DeviceStatus, ActivityType = NullIfEmpty(item.ActivityType),
+                InaccessibilityReason = NullIfEmpty(item.InaccessibilityReason),
+                AppliedVehicleStockItemId = item.AppliedVehicleStockItemId, AppliedProductName = NullIfEmpty(item.AppliedProductName),
+                AppliedAmount = item.AppliedAmount, AppliedUnit = NullIfEmpty(item.AppliedUnit),
+                ReplacementVehicleStockItemId = item.ReplacementVehicleStockItemId, ReplacementProductName = NullIfEmpty(item.ReplacementProductName),
+                ReplacementQuantity = item.ReplacementQuantity, ReplacementUnit = NullIfEmpty(item.ReplacementUnit), Notes = NullIfEmpty(item.Notes),
+                PestObservations = observations
+            };
         }).ToList();
         var products = request.Products.Select(item => new ServiceReportProduct
         {
@@ -285,7 +303,15 @@ public static class ServiceReportEndpoints
             var risk = CalculateRisk(stations);
             return new TrendPeriodResponse(group.Key, group.Count(), stations.Length, stations.Count(item => item.HasActivity), stations.Count(item => item.PlateChanged), stations.Sum(item => item.CaughtCount), risk.ActivityRate, risk.Score, risk.Level);
         }).ToArray();
-        var pests = allStations.Where(item => !string.IsNullOrWhiteSpace(item.TargetPest)).GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true)).Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.CaughtCount))).OrderByDescending(item => item.TotalCaught).ToArray();
+        var observationPests = allStations.SelectMany(item => item.PestObservations)
+            .Where(item => item.ApprovedCount > 0)
+            .GroupBy(item => item.PestName.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.ApprovedCount)));
+        var legacyPests = allStations.Where(item => item.PestObservations.Count == 0 && !string.IsNullOrWhiteSpace(item.TargetPest))
+            .GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.CaughtCount)));
+        var pests = observationPests.Concat(legacyPests).GroupBy(item => item.Pest, StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.TotalCaught))).OrderByDescending(item => item.TotalCaught).ToArray();
         return Results.Ok(new ServiceReportAnalyticsResponse(fromDate, toDate, reports.Count, allStations.Length, allStations.Count(item => item.HasActivity), allStations.Sum(item => item.CaughtCount), overall.ActivityRate, overall.Score, overall.Level, periods, pests));
     }
 
@@ -296,7 +322,8 @@ public static class ServiceReportEndpoints
         .Include(item => item.WorkOrder).ThenInclude(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
         .Include(item => item.WorkOrder).ThenInclude(item => item.VisitSessions).ThenInclude(item => item.EmployeeAccount)
         .Include(item => item.WorkOrder).ThenInclude(item => item.Photos)
-        .Include(item => item.Stations).Include(item => item.Products).Include(item => item.EmailDeliveries).AsSplitQuery();
+        .Include(item => item.Stations).ThenInclude(item => item.PestObservations)
+        .Include(item => item.Products).Include(item => item.EmailDeliveries).AsSplitQuery();
 
     private static IQueryable<WorkOrder> WorkOrderQuery(PesneerDbContext dbContext) => dbContext.WorkOrders
         .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.AssignedEmployeeAccount)
@@ -320,6 +347,18 @@ public static class ServiceReportEndpoints
         for (var index = 0; index < request.Stations.Count; index++)
         {
             var item = request.Stations[index];
+            var observations = item.PestObservations ?? [];
+            if (observations.Count > 20) errors[$"stations[{index}].pestObservations"] = [$"{index + 1}. istasyonda en fazla 20 zararlı sınıfı kaydedilebilir."];
+            if (observations.Any(observation =>
+                    observation.PestKey.Trim().Length is < 1 or > 64
+                    || observation.PestName.Trim().Length is < 1 or > 120
+                    || observation.DetectedCount is < 0 or > 100000
+                    || observation.ApprovedCount is < 0 or > 100000
+                    || observation.MeanConfidence is < 0 or > 1
+                    || observation.VisionResultJson?.Length > 200000
+                    || observation.Source.Trim() is not ("PestneerVision" or "VisionEdited" or "Manual")
+                    || observation.ReviewStatus.Trim() is not ("Approved" or "PendingReview" or "Reviewed")))
+                errors[$"stations[{index}].pestObservations"] = [$"{index + 1}. istasyonun PestneerVision sonuçları geçerli değil."];
             if (item.DeviceNumber.Trim().Length is < 1 or > 80 || item.Area.Trim().Length is < 2 or > 240) errors[$"stations[{index}]"] = [$"{index + 1}. istasyonun numara ve alan bilgisini kontrol edin."];
             if (item.DeviceType.Trim().Length is < 1 or > 40 || !DeviceStatuses.Contains(item.DeviceStatus) || item.CaughtCount is < 0 or > 100000) errors[$"stations[{index}].status"] = [$"{index + 1}. istasyonun tür, durum veya gözlem adedi bilgisini kontrol edin."];
             if (!string.IsNullOrWhiteSpace(item.ActivityType) && !ActivityTypes.Contains(item.ActivityType)) errors[$"stations[{index}].activityType"] = [$"{index + 1}. istasyonun aktivite türü geçersiz."];
@@ -456,7 +495,17 @@ public static class ServiceReportEndpoints
             report.VerificationCode, report.UpdatedAt, report.FinalizedAt, report.Stations.Count, report.Stations.Count(item => item.HasActivity),
             report.Stations.Count(item => item.PlateChanged), report.Stations.Sum(item => item.CaughtCount), risk.ActivityRate, risk.Score, risk.Level, risk.Infestation,
             additionalRecipients, emailStatus, report.EmailDeliveries.Count(item => item.Status == "Sent"), report.EmailDeliveries.Count,
-            report.Stations.OrderBy(item => item.DeviceNumber).Select(item => new ServiceReportStationResponse(item.Id, item.SitePlanId, item.SitePlanElementId, item.DeviceNumber, item.Area, item.DeviceType, item.TargetPest, item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.ActivityType, item.InaccessibilityReason, item.AppliedVehicleStockItemId, item.AppliedProductName, item.AppliedAmount, item.AppliedUnit, item.ReplacementVehicleStockItemId, item.ReplacementProductName, item.ReplacementQuantity, item.ReplacementUnit, item.Notes)).ToArray(),
+            report.Stations.OrderBy(item => item.DeviceNumber).Select(item => new ServiceReportStationResponse(
+                item.Id, item.SitePlanId, item.SitePlanElementId, item.DeviceNumber, item.Area, item.DeviceType,
+                item.TargetPest, item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.ActivityType,
+                item.InaccessibilityReason, item.AppliedVehicleStockItemId, item.AppliedProductName, item.AppliedAmount,
+                item.AppliedUnit, item.ReplacementVehicleStockItemId, item.ReplacementProductName, item.ReplacementQuantity,
+                item.ReplacementUnit, item.Notes,
+                item.PestObservations.OrderByDescending(observation => observation.ApprovedCount).Select(observation =>
+                    new ServiceReportPestObservationResponse(observation.Id, observation.PestKey, observation.PestName,
+                        observation.DetectedCount, observation.ApprovedCount, observation.MeanConfidence, observation.Source,
+                        observation.ModelName, observation.ModelVersion, observation.ReviewStatus, observation.AnalyzedAt,
+                        observation.ReviewedAt)).ToArray())).ToArray(),
             report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
             report.WorkOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new ServiceReportPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}", item.Location, item.Status, item.Description)).ToArray());
     }

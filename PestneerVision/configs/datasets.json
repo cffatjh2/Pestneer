@@ -1,0 +1,43 @@
+{
+  "version": "2026-08-10",
+  "datasets": [
+    {
+      "key": "urban_uv_cards",
+      "title": "An annotated image dataset of urban insects for computer vision and deep learning",
+      "doi": "10.6084/m9.figshare.28280792",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "enabledForCommercialTraining": true,
+      "files": [
+        ["urban_iskandar.zip", "https://ndownloader.figshare.com/files/51931694", 51536404],
+        ["urban_luzi.zip", "https://ndownloader.figshare.com/files/51931703", 195350316],
+        ["urban_pontian_a.zip", "https://ndownloader.figshare.com/files/51931697", 55717893],
+        ["urban_pontian_b.zip", "https://ndownloader.figshare.com/files/51931700", 159817316],
+        ["urban_senai_tebrau.zip", "https://ndownloader.figshare.com/files/51931706", 192788375]
+      ]
+    },
+    {
+      "key": "coloured_sticky_traps",
+      "title": "Annotated images of pests on different coloured sticky traps with different imaging devices",
+      "doi": "10.6084/m9.figshare.23617383.v2",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "enabledForCommercialTraining": true,
+      "files": [
+        ["colored_dslr.zip", "https://ndownloader.figshare.com/files/41437935", 21837147],
+        ["colored_smartphone.zip", "https://ndownloader.figshare.com/files/41437938", 26753350],
+        ["colored_webcam.zip", "https://ndownloader.figshare.com/files/41437941", 23052626],
+        ["colored_other_objects.zip", "https://ndownloader.figshare.com/files/45563223", 4300203]
+      ]
+    },
+    {
+      "key": "ip102",
+      "title": "IP102",
+      "license": "Academic use only",
+      "licenseUrl": "https://github.com/xpwu95/IP102",
+      "enabledForCommercialTraining": false,
+      "reason": "Ticari Pestneer modeli için yazılı izin olmadan kullanılamaz."
+    }
+  ]
+}
+

@@ -29,6 +29,7 @@ public class PesneerDbContext(
     public DbSet<WorkOrderVisitSession> WorkOrderVisitSessions => Set<WorkOrderVisitSession>();
     public DbSet<ServiceReport> ServiceReports => Set<ServiceReport>();
     public DbSet<ServiceReportStation> ServiceReportStations => Set<ServiceReportStation>();
+    public DbSet<ServiceReportPestObservation> ServiceReportPestObservations => Set<ServiceReportPestObservation>();
     public DbSet<ServiceReportProduct> ServiceReportProducts => Set<ServiceReportProduct>();
     public DbSet<ReportEmailDelivery> ReportEmailDeliveries => Set<ReportEmailDelivery>();
     public DbSet<QualityAnalysis> QualityAnalyses => Set<QualityAnalysis>();
@@ -63,6 +64,9 @@ public class PesneerDbContext(
             entity.Property(company => company.LogoContentType).HasMaxLength(80);
             entity.Property(company => company.LogoFileName).HasMaxLength(240);
             entity.Property(company => company.ReportNotificationEmail).HasMaxLength(320);
+            entity.Property(company => company.VisionEnabled).HasDefaultValue(true);
+            entity.Property(company => company.VisionReviewRequired).HasDefaultValue(true);
+            entity.Property(company => company.VisionPreferredModel).HasMaxLength(16).HasDefaultValue("Auto");
         });
 
         modelBuilder.Entity<Account>(entity =>
@@ -410,6 +414,22 @@ public class PesneerDbContext(
             entity.Property(item => item.Unit).HasMaxLength(32);
             entity.HasOne(item => item.ServiceReport).WithMany(report => report.Products).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.VehicleStockItem).WithMany().HasForeignKey(item => item.VehicleStockItemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<ServiceReportPestObservation>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.ServiceReportStationId, item.PestKey });
+            entity.Property(item => item.PestKey).HasMaxLength(64);
+            entity.Property(item => item.PestName).HasMaxLength(120);
+            entity.Property(item => item.MeanConfidence).HasPrecision(5, 4);
+            entity.Property(item => item.Source).HasMaxLength(24);
+            entity.Property(item => item.ModelName).HasMaxLength(80);
+            entity.Property(item => item.ModelVersion).HasMaxLength(40);
+            entity.Property(item => item.ReviewStatus).HasMaxLength(24);
+            entity.Property(item => item.VisionResultJson).HasMaxLength(200000);
+            entity.HasOne(item => item.ServiceReportStation).WithMany(station => station.PestObservations).HasForeignKey(item => item.ServiceReportStationId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.ReviewedByAccount).WithMany().HasForeignKey(item => item.ReviewedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 

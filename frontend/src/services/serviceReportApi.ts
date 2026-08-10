@@ -1,3 +1,17 @@
+export type ReportPestObservationInput = {
+  pestKey: string;
+  pestName: string;
+  detectedCount: number;
+  approvedCount: number;
+  meanConfidence: number;
+  source: 'PestneerVision' | 'VisionEdited' | 'Manual';
+  modelName?: string;
+  modelVersion?: string;
+  reviewStatus: 'Approved' | 'PendingReview';
+  visionResultJson?: string;
+  analyzedAt?: string;
+};
+
 export type ReportStationInput = {
   sitePlanId?: string; sitePlanElementId?: string;
   qrCode?: string;
@@ -6,6 +20,7 @@ export type ReportStationInput = {
   appliedVehicleStockItemId?: string; appliedProductName?: string; appliedAmount?: number; appliedUnit?: string;
   replacementVehicleStockItemId?: string; replacementProductName?: string; replacementQuantity?: number; replacementUnit?: string;
   notes?: string;
+  pestObservations?: ReportPestObservationInput[];
 };
 
 export type ReportProductInput = {

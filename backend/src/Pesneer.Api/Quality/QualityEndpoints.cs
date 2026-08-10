@@ -112,7 +112,7 @@ public static class QualityEndpoints
 
         var start = new DateTimeOffset(request.PeriodStart.ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
         var end = new DateTimeOffset(request.PeriodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
-        var reportQuery = dbContext.ServiceReports.AsNoTracking().Include(item => item.WorkOrder).Include(item => item.Stations)
+        var reportQuery = dbContext.ServiceReports.AsNoTracking().Include(item => item.WorkOrder).Include(item => item.Stations).ThenInclude(item => item.PestObservations)
             .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == request.CustomerId);
         if (request.BranchId.HasValue) reportQuery = reportQuery.Where(item => item.WorkOrder.CustomerBranchId == request.BranchId.Value);
         var reports = (await reportQuery.ToListAsync(cancellationToken))
@@ -129,8 +129,14 @@ public static class QualityEndpoints
             var stations = group.SelectMany(item => item.Stations).ToArray();
             return new TrendPeriodPayload(group.Key, group.Count(), stations.Length, stations.Count(item => item.HasActivity), stations.Count(item => item.PlateChanged), stations.Sum(item => item.CaughtCount), Percentage(stations.Count(item => item.HasActivity), stations.Length));
         }).OrderBy(item => item.Period).ToArray();
-        var pests = allStations.Where(item => !string.IsNullOrWhiteSpace(item.TargetPest)).GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
-            .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.CaughtCount))).OrderByDescending(item => item.TotalCaught).ToArray();
+        var visionPests = allStations.SelectMany(item => item.PestObservations).Where(item => item.ApprovedCount > 0)
+            .GroupBy(item => item.PestName.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.ApprovedCount)));
+        var legacyPests = allStations.Where(item => item.PestObservations.Count == 0 && !string.IsNullOrWhiteSpace(item.TargetPest))
+            .GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.CaughtCount)));
+        var pests = visionPests.Concat(legacyPests).GroupBy(item => item.Pest, StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.TotalCaught))).OrderByDescending(item => item.TotalCaught).ToArray();
         var activityRate = Percentage(allStations.Count(item => item.HasActivity), allStations.Length);
         var trendDirection = TrendDirection(periods);
         var summary = $"{reports.Count} saha raporunda {allStations.Length} istasyon değerlendirildi. {allStations.Count(item => item.HasActivity)} istasyonda aktivite görüldü; aktivite oranı %{activityRate:0.#}. Dönemsel eğilim: {trendDirection}.";

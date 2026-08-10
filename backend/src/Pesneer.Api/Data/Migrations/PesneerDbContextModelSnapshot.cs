@@ -484,6 +484,23 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("VisionEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("VisionPreferredModel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Auto");
+
+                    b.Property<bool>("VisionReviewRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -1931,6 +1948,80 @@ namespace Pesneer.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("ServiceReports");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportPestObservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("AnalyzedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ApprovedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DetectedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("MeanConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModelName")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PestKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PestName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewStatus")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReviewedByAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ServiceReportStationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VisionResultJson")
+                        .HasMaxLength(200000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByAccountId");
+
+                    b.HasIndex("ServiceReportStationId");
+
+                    b.HasIndex("CompanyId", "ServiceReportStationId", "PestKey");
+
+                    b.ToTable("ServiceReportPestObservations");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportProduct", b =>
@@ -3474,6 +3565,24 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("WorkOrder");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportPestObservation", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "ReviewedByAccount")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Pesneer.Api.Domain.ServiceReportStation", "ServiceReportStation")
+                        .WithMany("PestObservations")
+                        .HasForeignKey("ServiceReportStationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedByAccount");
+
+                    b.Navigation("ServiceReportStation");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportProduct", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.ServiceReport", "ServiceReport")
@@ -3872,6 +3981,11 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("Products");
 
                     b.Navigation("Stations");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportStation", b =>
+                {
+                    b.Navigation("PestObservations");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.SitePlan", b =>
