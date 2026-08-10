@@ -10,10 +10,11 @@ export type CreateWorkOrdersInput = {
   customerId: string; branchIds: string[]; serviceType: string; date: string; time: string; durationMinutes: number;
   employeeAccountId?: string; notes?: string; visitType?: string; recurrenceType?: string; occurrenceCount?: number;
   manualDates?: string[]; branchAssignments?: BranchEmployeeAssignmentInput[];
+  employeeAccountIds?: string[];
 };
 
 export type UpdateWorkOrderInput = {
-  employeeAccountId?: string; serviceType: string; visitType: string; date: string; time: string;
+  employeeAccountId?: string; employeeAccountIds?: string[]; serviceType: string; visitType: string; date: string; time: string;
   durationMinutes: number; notes?: string; status: string;
 };
 
@@ -21,7 +22,8 @@ type WorkOrderResponse = {
   id: string; number: string; customerId: string; customerName: string; branchId?: string; branchName: string; branchAddress: string; branchMapUrl?: string;
   serviceType: string; visitType: string; recurrenceType: string; recurrenceGroupId?: string; scheduledAt: string; durationMinutes: number;
   employeeAccountId?: string; employeeName: string; status: string; notes?: string; startedAt?: string; completedAt?: string;
-  completionNote?: string; recommendation?: string; history: WorkOrder['history']; photos: WorkOrder['photos'];
+  customerDurationMinutes?: number; totalLaborMinutes: number; completionNote?: string; recommendation?: string;
+  assignments: WorkOrder['assignments']; visitSessions: WorkOrder['visitSessions']; history: WorkOrder['history']; photos: WorkOrder['photos'];
 };
 
 export type EmployeePlanningOptions = { canSelfSchedule: boolean; customers: CustomerRecord[] };
@@ -40,6 +42,7 @@ export async function getEmployeeWorkOrders(token: string) { return (await reque
 export const getEmployeePlanningOptions = (token: string) => request<EmployeePlanningOptions>('/api/employee/work-orders/planning-options', token);
 export async function selfScheduleWorkOrders(token: string, input: CreateWorkOrdersInput) { return (await request<WorkOrderResponse[]>('/api/employee/work-orders/self-schedule', token, { method: 'POST', body: JSON.stringify(input) })).map(mapWorkOrder); }
 export async function startEmployeeWorkOrder(token: string, id: string) { return mapWorkOrder(await request<WorkOrderResponse>(`/api/employee/work-orders/${id}/start`, token, { method: 'POST' })); }
+export async function changeEmployeeVisitState(token: string, id: string, action: 'Stop' | 'Pause' | 'Skip' | 'Cancel', reason?: string) { return mapWorkOrder(await request<WorkOrderResponse>(`/api/employee/work-orders/${id}/visit-state`, token, { method: 'POST', body: JSON.stringify({ action, reason }) })); }
 export async function completeEmployeeWorkOrder(token: string, id: string, completionNote: string, recommendation: string, photos: File[]) {
   const form = new FormData();
   form.set('completionNote', completionNote); form.set('recommendation', recommendation);
@@ -55,7 +58,8 @@ function mapWorkOrder(item: WorkOrderResponse): WorkOrder {
     durationMinutes: item.durationMinutes, date: new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(start),
     time: `${formatTime(start)} - ${formatTime(end)}`, service: item.serviceType, visitType: item.visitType, recurrenceType: item.recurrenceType,
     recurrenceGroupId: item.recurrenceGroupId, technician: item.employeeName, technicalStatus: item.status, status: mapStatus(item.status), area: '-', notes: item.notes,
-    startedAt: item.startedAt, completedAt: item.completedAt, completionNote: item.completionNote, recommendation: item.recommendation,
+    startedAt: item.startedAt, completedAt: item.completedAt, customerDurationMinutes: item.customerDurationMinutes, totalLaborMinutes: item.totalLaborMinutes ?? 0,
+    assignments: item.assignments ?? [], visitSessions: item.visitSessions ?? [], completionNote: item.completionNote, recommendation: item.recommendation,
     history: item.history ?? [], photos: item.photos ?? [],
   };
 }
@@ -63,7 +67,8 @@ function mapWorkOrder(item: WorkOrderResponse): WorkOrder {
 function mapStatus(status: string): WorkStatus {
   if (status === 'InProgress') return 'Sahada';
   if (status === 'Completed') return 'Tamamlandı';
-  if (status === 'Cancelled') return 'İptal';
+  if (status === 'Cancelled' || status === 'Skipped') return 'İptal';
+  if (status === 'Paused') return 'Planlandı';
   return 'Planlandı';
 }
 function formatTime(value: Date) { return new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(value); }

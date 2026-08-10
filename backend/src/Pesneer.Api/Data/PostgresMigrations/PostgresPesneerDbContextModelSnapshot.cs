@@ -485,6 +485,10 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Property<DateTimeOffset?>("LogoUpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ReportNotificationEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -1733,11 +1737,76 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.ToTable("ReceivableEntries");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.ReportEmailDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NormalizedRecipientEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("RecipientType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ServiceReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceReportId", "NormalizedRecipientEmail")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextAttemptAt", "CreatedAt");
+
+                    b.ToTable("ReportEmailDeliveries");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("AdditionalEmailRecipients")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<string>("ApplicationSummary")
                         .HasMaxLength(3000)
@@ -2525,6 +2594,9 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Property<Guid?>("CustomerContractId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("CustomerDurationMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
@@ -2568,6 +2640,9 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
+                    b.Property<int>("TotalLaborMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<string>("VisitType")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -2589,6 +2664,39 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .IsUnique();
 
                     b.ToTable("WorkOrders");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EmployeeAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsLead")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeAccountId");
+
+                    b.HasIndex("WorkOrderId", "EmployeeAccountId")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "EmployeeAccountId", "AssignedAt");
+
+                    b.ToTable("WorkOrderAssignments");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderEconomics", b =>
@@ -2735,6 +2843,50 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.HasIndex("CompanyId", "WorkOrderId", "OccurredAt");
 
                     b.ToTable("WorkOrderStatusHistories");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderVisitSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("EmployeeAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeAccountId");
+
+                    b.HasIndex("WorkOrderId", "EmployeeAccountId", "Status");
+
+                    b.HasIndex("CompanyId", "WorkOrderId", "EmployeeAccountId", "StartedAt");
+
+                    b.ToTable("WorkOrderVisitSessions");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkShift", b =>
@@ -3297,6 +3449,17 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("CustomerContract");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.ReportEmailDelivery", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.ServiceReport", "ServiceReport")
+                        .WithMany("EmailDeliveries")
+                        .HasForeignKey("ServiceReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ServiceReport");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.Account", "CreatedByAccount")
@@ -3558,6 +3721,25 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("CustomerContract");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderAssignment", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "EmployeeAccount")
+                        .WithMany()
+                        .HasForeignKey("EmployeeAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
+                        .WithMany("Assignments")
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EmployeeAccount");
+
+                    b.Navigation("WorkOrder");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderEconomics", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
@@ -3595,6 +3777,25 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .IsRequired();
 
                     b.Navigation("ChangedByAccount");
+
+                    b.Navigation("WorkOrder");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderVisitSession", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Account", "EmployeeAccount")
+                        .WithMany()
+                        .HasForeignKey("EmployeeAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
+                        .WithMany("VisitSessions")
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EmployeeAccount");
 
                     b.Navigation("WorkOrder");
                 });
@@ -3671,6 +3872,8 @@ namespace Pesneer.Api.Data.PostgresMigrations
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReport", b =>
                 {
+                    b.Navigation("EmailDeliveries");
+
                     b.Navigation("Products");
 
                     b.Navigation("Stations");
@@ -3698,9 +3901,13 @@ namespace Pesneer.Api.Data.PostgresMigrations
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrder", b =>
                 {
+                    b.Navigation("Assignments");
+
                     b.Navigation("History");
 
                     b.Navigation("Photos");
+
+                    b.Navigation("VisitSessions");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkShift", b =>

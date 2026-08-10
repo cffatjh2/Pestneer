@@ -272,6 +272,7 @@ public static class CustomerPortalEndpoints
 
     private static IQueryable<WorkOrder> WorkOrderQuery(PesneerDbContext dbContext, ICompanyContext context) => dbContext.WorkOrders.AsNoTracking()
         .Include(item => item.CustomerBranch).Include(item => item.AssignedEmployeeAccount)
+        .Include(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
         .Where(item => item.CustomerId == context.CustomerId!.Value)
         .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
 
@@ -305,7 +306,12 @@ public static class CustomerPortalEndpoints
     }
     private static CustomerReceivableResponse ToCustomerReceivable(ReceivableEntry item, DateOnly today) { var status = item.Status == "Paid" ? "Paid" : item.DueDate < today ? "Overdue" : item.Status; return new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez / Genel", item.CustomerContract?.Number ?? "—", item.Description, item.IssueDate, item.DueDate, item.Amount, item.PaidAmount, item.Amount - item.PaidAmount, item.Currency, status, item.PaidAt); }
 
-    private static CustomerPortalWorkOrderResponse ToWorkOrderResponse(WorkOrder item) => new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.ServiceType, item.VisitType, item.ScheduledAt, item.DurationMinutes, item.Status, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.CompletionNote, item.Recommendation);
+    private static CustomerPortalWorkOrderResponse ToWorkOrderResponse(WorkOrder item)
+    {
+        var team = item.Assignments.Select(assignment => assignment.EmployeeAccount.DisplayName).Distinct().ToArray();
+        var employeeName = team.Length > 0 ? string.Join(", ", team) : item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor";
+        return new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.ServiceType, item.VisitType, item.ScheduledAt, item.DurationMinutes, item.Status, employeeName, item.CustomerDurationMinutes, item.TotalLaborMinutes, item.CompletionNote, item.Recommendation);
+    }
     private static EmergencyRequestResponse ToResponse(EmergencyRequest item) => new(item.Id, item.Number, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.RequestType, item.Subject, item.ServiceType, item.CustomerContractId, item.ContractCoverage, item.ChargeAmount, item.SlaDueAt, item.Priority, item.Status, item.Description, item.ContactPhone, item.AssignedEmployeeAccountId, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.RequestedAt, item.DueAt, item.RequestedAppointmentAt, item.ClosureApprovalStatus, item.ClosureApprovedAt, item.ClosureApprovalNote, item.AcknowledgedAt, item.CompletedAt, item.History.OrderBy(history => history.OccurredAt).Select(history => new EmergencyHistoryResponse(history.Status, history.Note, history.OccurredAt, history.ChangedByAccount.DisplayName)).ToArray());
     private static EmergencyRequestHistory NewHistory(EmergencyRequest item, Guid accountId, string status, string? note) => new() { Id = Guid.NewGuid(), CompanyId = item.CompanyId, EmergencyRequestId = item.Id, ChangedByAccountId = accountId, Status = status, Note = note };
     private static string TypeLabel(string type) => type switch { "Complaint" => "Şikâyet", "NewBranch" => "Yeni şube talebi", "AppointmentChange" => "Randevu değişikliği", "DocumentRequest" => "Belge talebi", "StructuralCompletion" => "Yapısal faaliyet tamamlandı", _ => "Acil çağrı" };

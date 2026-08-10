@@ -25,9 +25,12 @@ public class PesneerDbContext(
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
     public DbSet<WorkOrderStatusHistory> WorkOrderStatusHistories => Set<WorkOrderStatusHistory>();
     public DbSet<WorkOrderPhoto> WorkOrderPhotos => Set<WorkOrderPhoto>();
+    public DbSet<WorkOrderAssignment> WorkOrderAssignments => Set<WorkOrderAssignment>();
+    public DbSet<WorkOrderVisitSession> WorkOrderVisitSessions => Set<WorkOrderVisitSession>();
     public DbSet<ServiceReport> ServiceReports => Set<ServiceReport>();
     public DbSet<ServiceReportStation> ServiceReportStations => Set<ServiceReportStation>();
     public DbSet<ServiceReportProduct> ServiceReportProducts => Set<ServiceReportProduct>();
+    public DbSet<ReportEmailDelivery> ReportEmailDeliveries => Set<ReportEmailDelivery>();
     public DbSet<QualityAnalysis> QualityAnalyses => Set<QualityAnalysis>();
     public DbSet<QualityDocument> QualityDocuments => Set<QualityDocument>();
     public DbSet<AuditPackage> AuditPackages => Set<AuditPackage>();
@@ -59,6 +62,7 @@ public class PesneerDbContext(
             entity.Property(company => company.LegalName).HasMaxLength(240);
             entity.Property(company => company.LogoContentType).HasMaxLength(80);
             entity.Property(company => company.LogoFileName).HasMaxLength(240);
+            entity.Property(company => company.ReportNotificationEmail).HasMaxLength(320);
         });
 
         modelBuilder.Entity<Account>(entity =>
@@ -291,6 +295,26 @@ public class PesneerDbContext(
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
+        modelBuilder.Entity<WorkOrderAssignment>(entity =>
+        {
+            entity.HasIndex(item => new { item.WorkOrderId, item.EmployeeAccountId }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.EmployeeAccountId, item.AssignedAt });
+            entity.HasOne(item => item.WorkOrder).WithMany(item => item.Assignments).HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.EmployeeAccount).WithMany().HasForeignKey(item => item.EmployeeAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<WorkOrderVisitSession>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId, item.EmployeeAccountId, item.StartedAt });
+            entity.HasIndex(item => new { item.WorkOrderId, item.EmployeeAccountId, item.Status });
+            entity.Property(item => item.Status).HasMaxLength(24);
+            entity.Property(item => item.Reason).HasMaxLength(1000);
+            entity.HasOne(item => item.WorkOrder).WithMany(item => item.VisitSessions).HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.EmployeeAccount).WithMany().HasForeignKey(item => item.EmployeeAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
         modelBuilder.Entity<WorkOrderPhoto>(entity =>
         {
             entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId, item.UploadedAt });
@@ -329,9 +353,23 @@ public class PesneerDbContext(
             entity.Property(item => item.CustomerRepresentativeName).HasMaxLength(160);
             entity.Property(item => item.ManagerSignatureData).HasMaxLength(500000);
             entity.Property(item => item.CustomerSignatureData).HasMaxLength(500000);
+            entity.Property(item => item.AdditionalEmailRecipients).HasMaxLength(2000);
             entity.Property(item => item.VerificationCode).HasMaxLength(64);
             entity.HasOne(item => item.WorkOrder).WithOne().HasForeignKey<ServiceReport>(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<ReportEmailDelivery>(entity =>
+        {
+            entity.HasIndex(item => new { item.ServiceReportId, item.NormalizedRecipientEmail }).IsUnique();
+            entity.HasIndex(item => new { item.Status, item.NextAttemptAt, item.CreatedAt });
+            entity.Property(item => item.RecipientEmail).HasMaxLength(320);
+            entity.Property(item => item.NormalizedRecipientEmail).HasMaxLength(320);
+            entity.Property(item => item.RecipientType).HasMaxLength(32);
+            entity.Property(item => item.Status).HasMaxLength(24);
+            entity.Property(item => item.LastError).HasMaxLength(2000);
+            entity.HasOne(item => item.ServiceReport).WithMany(report => report.EmailDeliveries).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 

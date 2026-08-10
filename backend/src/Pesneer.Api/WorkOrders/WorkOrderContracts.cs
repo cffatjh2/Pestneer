@@ -81,10 +81,12 @@ public sealed record CreateWorkOrdersRequest(
     string RecurrenceType = "Once",
     int? OccurrenceCount = null,
     IReadOnlyList<DateOnly>? ManualDates = null,
-    IReadOnlyList<BranchEmployeeAssignmentRequest>? BranchAssignments = null);
+    IReadOnlyList<BranchEmployeeAssignmentRequest>? BranchAssignments = null,
+    IReadOnlyList<Guid>? EmployeeAccountIds = null);
 
 public sealed record UpdateWorkOrderRequest(
     Guid? EmployeeAccountId,
+    IReadOnlyList<Guid>? EmployeeAccountIds,
     string ServiceType,
     string VisitType,
     DateOnly Date,
@@ -111,6 +113,18 @@ public sealed record WorkOrderPhotoResponse(
     string? Status,
     string? Description);
 
+public sealed record WorkOrderAssignmentResponse(Guid EmployeeAccountId, string EmployeeName, bool IsLead);
+
+public sealed record WorkOrderVisitSessionResponse(
+    Guid Id,
+    Guid EmployeeAccountId,
+    string EmployeeName,
+    string Status,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? EndedAt,
+    int DurationMinutes,
+    string? Reason);
+
 public sealed record WorkOrderResponse(
     Guid Id,
     string Number,
@@ -132,12 +146,18 @@ public sealed record WorkOrderResponse(
     string? Notes,
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
+    int? CustomerDurationMinutes,
+    int TotalLaborMinutes,
     string? CompletionNote,
     string? Recommendation,
+    IReadOnlyList<WorkOrderAssignmentResponse> Assignments,
+    IReadOnlyList<WorkOrderVisitSessionResponse> VisitSessions,
     IReadOnlyList<WorkOrderHistoryResponse> History,
     IReadOnlyList<WorkOrderPhotoResponse> Photos);
 
 public sealed record CompleteWorkOrderRequest(string CompletionNote, string? Recommendation);
+
+public sealed record ChangeVisitStateRequest(string Action, string? Reason);
 
 public sealed record EmployeePlanningOptionsResponse(
     bool CanSelfSchedule,

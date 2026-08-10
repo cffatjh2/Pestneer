@@ -29,6 +29,24 @@ services:
         value: TURA-ANKARA
       - key: BootstrapOwner__CompanyName
         value: Tura Çevre Sağlığı
+      - key: Email__Enabled
+        value: "false"
+      - key: Email__Host
+        sync: false
+      - key: Email__Port
+        value: "587"
+      - key: Email__Username
+        sync: false
+      - key: Email__Password
+        sync: false
+      - key: Email__FromAddress
+        sync: false
+      - key: Email__FromName
+        value: Pestneer Raporlama
+      - key: Email__EnableSsl
+        value: "true"
+      - key: Email__PublicBaseUrl
+        value: https://pesneer.onrender.com
 
 databases:
   - name: pesneer-db

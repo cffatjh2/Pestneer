@@ -47,6 +47,8 @@ export interface WorkOrder {
   branchAddress: string;
   branchMapUrl?: string;
   employeeAccountId?: string;
+  assignments: { employeeAccountId: string; employeeName: string; isLead: boolean }[];
+  visitSessions: { id: string; employeeAccountId: string; employeeName: string; status: string; startedAt: string; endedAt?: string; durationMinutes: number; reason?: string }[];
   scheduledAt: string;
   durationMinutes: number;
   date: string;
@@ -62,6 +64,8 @@ export interface WorkOrder {
   notes?: string;
   startedAt?: string;
   completedAt?: string;
+  customerDurationMinutes?: number;
+  totalLaborMinutes: number;
   completionNote?: string;
   recommendation?: string;
   history: WorkOrderHistory[];

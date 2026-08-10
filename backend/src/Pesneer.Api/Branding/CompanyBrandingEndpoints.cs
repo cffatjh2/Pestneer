@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Net.Mail;
 using Pesneer.Api.Data;
 
 namespace Pesneer.Api.Branding;
@@ -20,6 +21,7 @@ public static class CompanyBrandingEndpoints
         var owner = app.MapGroup("/api/company/branding").RequireAuthorization("OwnerPortal");
         owner.MapPost("/logo", UploadLogoAsync).DisableAntiforgery();
         owner.MapDelete("/logo", DeleteLogoAsync);
+        owner.MapPut("/report-notification-email", UpdateReportNotificationEmailAsync);
         return app;
     }
 
@@ -34,6 +36,7 @@ public static class CompanyBrandingEndpoints
                 hasLogo = company.LogoData != null,
                 logoFileName = company.LogoFileName,
                 logoUpdatedAt = company.LogoUpdatedAt,
+                reportNotificationEmail = company.ReportNotificationEmail,
                 logoUrl = company.LogoData == null ? null : $"/api/company/branding/logo?v={company.LogoUpdatedAt?.ToUnixTimeSeconds()}"
             });
     }
@@ -84,6 +87,22 @@ public static class CompanyBrandingEndpoints
         return Results.NoContent();
     }
 
+    private static async Task<IResult> UpdateReportNotificationEmailAsync(
+        UpdateReportNotificationEmailRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
+    {
+        var email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+        if (email is not null && !MailAddress.TryCreate(email, out _))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["email"] = ["Geçerli bir firma bildirim e-postası girin."] });
+        var company = await CompanyQuery(dbContext, context).SingleOrDefaultAsync(cancellationToken);
+        if (company is null) return Results.NotFound(new { message = "Firma bulunamadı." });
+        company.ReportNotificationEmail = email;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { reportNotificationEmail = company.ReportNotificationEmail });
+    }
+
     private static IQueryable<Domain.Company> CompanyQuery(PesneerDbContext dbContext, ICompanyContext context)
     {
         if (!context.CompanyId.HasValue) return dbContext.Companies.Where(_ => false);
@@ -98,3 +117,5 @@ public static class CompanyBrandingEndpoints
         _ => false
     };
 }
+
+public sealed record UpdateReportNotificationEmailRequest(string? Email);

@@ -16,6 +16,7 @@ using Pesneer.Api.Customers;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.Employees;
+using Pesneer.Api.Email;
 using Pesneer.Api.FieldOperations;
 using Pesneer.Api.Health;
 using Pesneer.Api.Inventory;
@@ -47,6 +48,7 @@ if (jwtOptions.SigningKey.Length < 32)
 }
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.Configure<EmailDeliveryOptions>(builder.Configuration.GetSection(EmailDeliveryOptions.SectionName));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICompanyContext, HttpCompanyContext>();
 if (string.Equals(databaseProvider, "Sqlite", StringComparison.OrdinalIgnoreCase))
@@ -65,6 +67,9 @@ else
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<IReportEmailDispatcher, ReportEmailDispatcher>();
+builder.Services.AddHostedService<ReportEmailDeliveryWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("OpenMeteo", client =>
 {

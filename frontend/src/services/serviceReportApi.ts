@@ -27,6 +27,7 @@ export type UpsertServiceReportInput = {
   areaSquareMeters?: number; workType?: string; consumables?: string; safetyMeasures?: string;
   applicationSummary?: string; findings?: string; correctiveActions?: string; recommendations?: string;
   customerRepresentativeName?: string; managerSignatureData?: string; customerSignatureData?: string;
+  additionalEmailRecipients?: string[];
   baseUpdatedAt?: string; forceOverwrite?: boolean;
   finalize: boolean; stations: ReportStationInput[]; products: ReportProductInput[];
 };
@@ -38,7 +39,7 @@ export type ReportPhoto = { id: string; fileName: string; contentType: string; u
 export type ServiceReportRecord = {
   id: string; workOrderId: string; workOrderNumber: string; reportNumber: string; status: 'Draft' | 'Finalized';
   customerId: string; customerName: string; branchId?: string; branchName: string; branchAddress: string;
-  scheduledAt: string; startedAt?: string; completedAt?: string; operatorName: string;
+  scheduledAt: string; startedAt?: string; completedAt?: string; customerDurationMinutes?: number; totalLaborMinutes: number; operatorName: string;
   firmName: string; firmAddress?: string; firmPhone?: string; firmWeb?: string; responsibleManager?: string;
   permissionNumber?: string; teamManager?: string; targetPests?: string; residenceType?: string;
   areaSquareMeters?: number; workType?: string; consumables?: string; safetyMeasures?: string;
@@ -47,6 +48,7 @@ export type ServiceReportRecord = {
   verificationCode: string; updatedAt: string; finalizedAt?: string; totalStations: number; activeStations: number;
   plateChanges: number; totalCaught: number; activityRate: number; riskScore: number; riskLevel: 'Low' | 'Medium' | 'High';
   infestationIndicator: boolean; stations: ReportStation[]; products: ReportProduct[]; photos: ReportPhoto[];
+  additionalEmailRecipients: string[]; emailDeliveryStatus: string; emailSentCount: number; emailRecipientCount: number;
 };
 
 export type TrendPeriod = { period: string; reportCount: number; totalStations: number; activeStations: number; plateChanges: number; totalCaught: number; activityRate: number; riskScore: number; riskLevel: string };

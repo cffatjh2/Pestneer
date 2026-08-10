@@ -34,6 +34,7 @@ public sealed class Company
     public string? LogoContentType { get; set; }
     public string? LogoFileName { get; set; }
     public DateTimeOffset? LogoUpdatedAt { get; set; }
+    public string? ReportNotificationEmail { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -341,6 +342,8 @@ public sealed class WorkOrder : ICompanyScoped
     public decimal ChargeAmount { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
+    public int? CustomerDurationMinutes { get; set; }
+    public int TotalLaborMinutes { get; set; }
     public string? CompletionNote { get; set; }
     public string? Recommendation { get; set; }
     public Customer Customer { get; set; } = null!;
@@ -350,6 +353,35 @@ public sealed class WorkOrder : ICompanyScoped
     public ContractServicePlan? ContractServicePlan { get; set; }
     public ICollection<WorkOrderStatusHistory> History { get; set; } = [];
     public ICollection<WorkOrderPhoto> Photos { get; set; } = [];
+    public ICollection<WorkOrderAssignment> Assignments { get; set; } = [];
+    public ICollection<WorkOrderVisitSession> VisitSessions { get; set; } = [];
+}
+
+public sealed class WorkOrderAssignment : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WorkOrderId { get; set; }
+    public Guid EmployeeAccountId { get; set; }
+    public bool IsLead { get; set; }
+    public DateTimeOffset AssignedAt { get; set; } = DateTimeOffset.UtcNow;
+    public WorkOrder WorkOrder { get; set; } = null!;
+    public Account EmployeeAccount { get; set; } = null!;
+}
+
+public sealed class WorkOrderVisitSession : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WorkOrderId { get; set; }
+    public Guid EmployeeAccountId { get; set; }
+    public required string Status { get; set; } = "Active";
+    public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? EndedAt { get; set; }
+    public int DurationMinutes { get; set; }
+    public string? Reason { get; set; }
+    public WorkOrder WorkOrder { get; set; } = null!;
+    public Account EmployeeAccount { get; set; } = null!;
 }
 
 public sealed class WorkOrderStatusHistory : ICompanyScoped
@@ -409,6 +441,7 @@ public sealed class ServiceReport : ICompanyScoped
     public string? CustomerRepresentativeName { get; set; }
     public string? ManagerSignatureData { get; set; }
     public string? CustomerSignatureData { get; set; }
+    public string? AdditionalEmailRecipients { get; set; }
     public required string VerificationCode { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -417,6 +450,25 @@ public sealed class ServiceReport : ICompanyScoped
     public Account CreatedByAccount { get; set; } = null!;
     public ICollection<ServiceReportStation> Stations { get; set; } = [];
     public ICollection<ServiceReportProduct> Products { get; set; } = [];
+    public ICollection<ReportEmailDelivery> EmailDeliveries { get; set; } = [];
+}
+
+public sealed class ReportEmailDelivery : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid ServiceReportId { get; set; }
+    public required string RecipientEmail { get; set; }
+    public required string NormalizedRecipientEmail { get; set; }
+    public required string RecipientType { get; set; }
+    public required string Status { get; set; } = "Pending";
+    public int AttemptCount { get; set; }
+    public DateTimeOffset? LastAttemptAt { get; set; }
+    public DateTimeOffset? NextAttemptAt { get; set; }
+    public DateTimeOffset? SentAt { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public ServiceReport ServiceReport { get; set; } = null!;
 }
 
 public sealed class ServiceReportStation : ICompanyScoped

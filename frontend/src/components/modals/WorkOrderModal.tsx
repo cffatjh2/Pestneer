@@ -20,6 +20,7 @@ export default function WorkOrderModal({ customers, employees = [], editingOrder
   const [customerId, setCustomerId] = useState(editingOrder?.customerId ?? customers[0]?.id ?? '');
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(editingOrder?.branchId ? [editingOrder.branchId] : []);
   const [branchAssignments, setBranchAssignments] = useState<Record<string, string>>(editingOrder?.branchId ? { [editingOrder.branchId]: editingOrder.employeeAccountId ?? '' } : {});
+  const [teamEmployeeIds, setTeamEmployeeIds] = useState<string[]>(editingOrder?.assignments.map((item) => item.employeeAccountId) ?? []);
   const [branchSearch, setBranchSearch] = useState('');
   const [recurrenceType, setRecurrenceType] = useState('Once');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,6 +54,7 @@ export default function WorkOrderModal({ customers, employees = [], editingOrder
       if (isEditing && onUpdate) {
         await onUpdate({
           employeeAccountId: String(form.get('employeeAccountId') || '') || undefined,
+          employeeAccountIds: teamEmployeeIds,
           serviceType: String(form.get('serviceType')), visitType: String(form.get('visitType')), date: String(form.get('date')),
           time: String(form.get('time')), durationMinutes: Number(form.get('durationMinutes')), notes: String(form.get('notes') || '') || undefined,
           status: String(form.get('status') || 'Planned'),
@@ -65,6 +67,7 @@ export default function WorkOrderModal({ customers, employees = [], editingOrder
           visitType: String(form.get('visitType')), recurrenceType, occurrenceCount: Number(form.get('occurrenceCount') || 0) || undefined,
           manualDates: recurrenceType === 'Manual' ? manualDates : undefined,
           branchAssignments: selfSchedule ? undefined : selectedBranchIds.map((branchId) => ({ branchId, employeeAccountId: branchAssignments[branchId] || undefined })),
+          employeeAccountIds: selfSchedule ? undefined : teamEmployeeIds,
         });
       }
     } catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'İş emri kaydedilemedi.'); }
@@ -80,6 +83,7 @@ export default function WorkOrderModal({ customers, employees = [], editingOrder
         {!isEditing && <section className="branch-picker"><div className="branch-picker-heading"><div><strong>Şubeleri seçin</strong><span>{selectedBranchIds.length} / {selectedCustomer?.branches.length ?? 0} şube seçildi</span></div><button type="button" onClick={toggleAllVisible}>{visibleBranches.length > 0 && visibleBranches.every((branch) => selectedBranchIds.includes(branch.id)) ? <CheckSquare2 size={16} /> : <Square size={16} />} Görünenlerin tümü</button></div><div className="branch-picker-search"><Search size={17} /><input value={branchSearch} onChange={(event) => setBranchSearch(event.target.value)} placeholder="Şube adı, kodu, il veya ilçe ara" /></div><div className="branch-picker-list">{visibleBranches.map((branch) => { const selected = selectedBranchIds.includes(branch.id); return <button type="button" key={branch.id} className={selected ? 'selected' : ''} onClick={() => toggleBranch(branch.id)}><span className="branch-check">{selected ? <CheckSquare2 size={18} /> : <Square size={18} />}</span><span><strong>{branch.name}</strong><small><MapPin size={12} /> {[branch.district, branch.city].filter(Boolean).join(' / ') || branch.address}</small></span><em>{branch.code}</em></button>; })}</div></section>}
 
         {!selfSchedule && !isEditing && selectedBranchIds.length > 0 && <section className="branch-assignment-panel"><div className="assignment-heading"><div><strong>Şube bazlı personel ataması</strong><span>Her lokasyon için farklı saha personeli belirleyebilirsiniz.</span></div><select defaultValue="" onChange={(event) => applyEmployeeToAll(event.target.value)}><option value="">Toplu personel ata</option>{employees.filter((item) => item.isActive).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div className="assignment-list">{selectedBranchIds.map((id) => { const branch = selectedCustomer?.branches.find((item) => item.id === id); return <label key={id}><span>{branch?.name}</span><select value={branchAssignments[id] ?? ''} onChange={(event) => setBranchAssignments((current) => ({ ...current, [id]: event.target.value }))}><option value="">Atama bekliyor</option>{employees.filter((item) => item.isActive).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>; })}</div></section>}
+        {!selfSchedule && (isEditing || selectedBranchIds.length > 0) && <section className="branch-assignment-panel work-team-panel"><div className="assignment-heading"><div><strong>Ortak saha ekibi</strong><span>Büyük tesislerde birden fazla personel aynı işi eş zamanlı başlatabilir.</span></div></div><div className="work-team-options">{employees.filter((item) => item.isActive).map((item) => <label key={item.id}><input type="checkbox" checked={teamEmployeeIds.includes(item.id)} onChange={() => setTeamEmployeeIds((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])} /><span>{item.name}</span><small>{item.role}</small></label>)}</div></section>}
 
         <div className="form-grid work-order-details">
           <label>Hizmet türü<select name="serviceType" defaultValue={editingOrder?.service ?? 'Genel ilaçlama'}><option>Genel ilaçlama</option><option>Kemirgen kontrolü</option><option>Periyodik kontrol</option><option>Uçan haşere kontrolü</option><option>Yürüyen haşere kontrolü</option></select></label>

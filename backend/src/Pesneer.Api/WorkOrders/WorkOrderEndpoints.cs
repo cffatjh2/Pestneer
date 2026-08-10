@@ -34,6 +34,7 @@ public static class WorkOrderEndpoints
         employeeWorkOrders.MapGet("/planning-options", GetEmployeePlanningOptionsAsync);
         employeeWorkOrders.MapPost("/self-schedule", CreateEmployeeWorkOrdersAsync);
         employeeWorkOrders.MapPost("/{workOrderId:guid}/start", StartWorkOrderAsync);
+        employeeWorkOrders.MapPost("/{workOrderId:guid}/visit-state", ChangeVisitStateAsync);
         employeeWorkOrders.MapPost("/{workOrderId:guid}/complete", CompleteWorkOrderAsync).DisableAntiforgery();
 
         app.MapGet("/api/work-orders/photos/{photoId:guid}", GetWorkOrderPhotoAsync)
@@ -208,7 +209,7 @@ public static class WorkOrderEndpoints
     {
         if (!companyContext.AccountId.HasValue) return Results.Forbid();
         var workOrders = await WorkOrderQuery(dbContext)
-            .Where(item => item.AssignedEmployeeAccountId == companyContext.AccountId.Value)
+            .Where(item => item.AssignedEmployeeAccountId == companyContext.AccountId.Value || item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value))
             .ToListAsync(cancellationToken);
         return Results.Ok(workOrders.OrderBy(item => item.ScheduledAt).Select(ToResponse));
     }
@@ -286,7 +287,11 @@ public static class WorkOrderEndpoints
             .ToListAsync(cancellationToken);
         if (branches.Count != branchIds.Length) return Validation("branchIds", "Seçilen şubelerden biri müşteriye ait değil veya aktif değil.");
 
-        var employeeIds = assignments.Where(item => item.EmployeeAccountId.HasValue).Select(item => item.EmployeeAccountId!.Value).Distinct().ToArray();
+        var requestedTeamIds = forcedEmployeeAccountId.HasValue
+            ? new[] { forcedEmployeeAccountId.Value }
+            : (request.EmployeeAccountIds ?? []).Distinct().ToArray();
+        var employeeIds = assignments.Where(item => item.EmployeeAccountId.HasValue).Select(item => item.EmployeeAccountId!.Value)
+            .Concat(requestedTeamIds).Distinct().ToArray();
         var employees = employeeIds.Length == 0
             ? []
             : await dbContext.CompanyMemberships.AsNoTracking()
@@ -324,6 +329,15 @@ public static class WorkOrderEndpoints
                     ContractCoverage = "OutOfContract"
                 };
                 workOrder.History.Add(NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, null, "Planned", "İş emri oluşturuldu."));
+                var teamIds = requestedTeamIds.Concat(assignment.EmployeeAccountId.HasValue ? [assignment.EmployeeAccountId.Value] : []).Distinct();
+                foreach (var employeeId in teamIds)
+                {
+                    workOrder.Assignments.Add(new WorkOrderAssignment
+                    {
+                        Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, WorkOrderId = workOrder.Id,
+                        EmployeeAccountId = employeeId, IsLead = employeeId == assignment.EmployeeAccountId, AssignedAt = DateTimeOffset.UtcNow
+                    });
+                }
                 workOrders.Add(workOrder);
             }
         }
@@ -344,7 +358,7 @@ public static class WorkOrderEndpoints
         CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
-        var workOrder = await dbContext.WorkOrders.Include(item => item.Customer).Include(item => item.CustomerBranch)
+        var workOrder = await dbContext.WorkOrders.Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.Assignments)
             .SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
         if (workOrder is null) return Results.NotFound(new { message = "İş emri bulunamadı." });
         if (workOrder.Status is "InProgress" or "Completed") return Results.Conflict(new { message = "Başlamış veya tamamlanmış iş emri yeniden planlanamaz." });
@@ -356,17 +370,29 @@ public static class WorkOrderEndpoints
             return Validation("serviceType", "Hizmet türünü, saati ve süreyi kontrol edin.");
         }
 
+        var requestedEmployeeIds = (request.EmployeeAccountIds ?? [])
+            .Concat(request.EmployeeAccountId.HasValue ? [request.EmployeeAccountId.Value] : []).Distinct().ToArray();
         Account? employee = null;
-        if (request.EmployeeAccountId.HasValue)
+        if (requestedEmployeeIds.Length > 0)
         {
-            employee = await dbContext.CompanyMemberships.AsNoTracking()
-                .Where(item => item.CompanyId == companyContext.CompanyId.Value && item.AccountId == request.EmployeeAccountId.Value && item.IsActive && item.Account.IsActive && item.Account.Portal == PortalType.Employee)
-                .Select(item => item.Account).SingleOrDefaultAsync(cancellationToken);
-            if (employee is null) return Results.NotFound(new { message = "Atanacak aktif personel bulunamadı." });
+            var activeEmployees = await dbContext.CompanyMemberships.AsNoTracking()
+                .Where(item => item.CompanyId == companyContext.CompanyId.Value && requestedEmployeeIds.Contains(item.AccountId) && item.IsActive && item.Account.IsActive && item.Account.Portal == PortalType.Employee)
+                .Select(item => item.Account).ToListAsync(cancellationToken);
+            if (activeEmployees.Count != requestedEmployeeIds.Length) return Results.NotFound(new { message = "Atanacak aktif personellerden biri bulunamadı." });
+            employee = activeEmployees.FirstOrDefault(item => item.Id == request.EmployeeAccountId) ?? activeEmployees[0];
         }
 
         var previousStatus = workOrder.Status;
         workOrder.AssignedEmployeeAccountId = request.EmployeeAccountId;
+        dbContext.WorkOrderAssignments.RemoveRange(workOrder.Assignments);
+        foreach (var employeeId in requestedEmployeeIds)
+        {
+            workOrder.Assignments.Add(new WorkOrderAssignment
+            {
+                Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, WorkOrderId = workOrder.Id,
+                EmployeeAccountId = employeeId, IsLead = employeeId == request.EmployeeAccountId, AssignedAt = DateTimeOffset.UtcNow
+            });
+        }
         workOrder.ServiceType = request.ServiceType.Trim();
         workOrder.VisitType = request.VisitType;
         workOrder.ScheduledAt = ToIstanbulDateTime(request.Date, time);
@@ -387,13 +413,74 @@ public static class WorkOrderEndpoints
         CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue) return Results.Forbid();
-        var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId && item.AssignedEmployeeAccountId == companyContext.AccountId.Value, cancellationToken);
+        var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId &&
+            (item.AssignedEmployeeAccountId == companyContext.AccountId.Value || item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value)), cancellationToken);
         if (workOrder is null) return Results.NotFound(new { message = "Atanmış iş emri bulunamadı." });
-        if (workOrder.Status != "Planned") return Results.Conflict(new { message = "Yalnızca planlanan işler başlatılabilir." });
+        if (workOrder.Status is "Completed" or "Cancelled" or "Skipped") return Results.Conflict(new { message = "Kapanmış ziyaret tekrar başlatılamaz." });
 
+        var now = DateTimeOffset.UtcNow;
+        if (!workOrder.VisitSessions.Any(item => item.EmployeeAccountId == companyContext.AccountId.Value && item.Status == "Active"))
+        {
+            var visitSession = new WorkOrderVisitSession
+            {
+                Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId!.Value, WorkOrderId = workOrder.Id,
+                EmployeeAccountId = companyContext.AccountId.Value, Status = "Active", StartedAt = now
+            };
+            dbContext.WorkOrderVisitSessions.Add(visitSession);
+        }
+        var previousStatus = workOrder.Status;
         workOrder.Status = "InProgress";
-        workOrder.StartedAt = DateTimeOffset.UtcNow;
-        AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId!.Value, workOrder.Id, companyContext.AccountId.Value, "Planned", "InProgress", "Saha uygulaması başlatıldı."));
+        workOrder.StartedAt ??= now;
+        AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId!.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, "InProgress", "Personel ziyaret oturumunu başlattı."));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(workOrder));
+    }
+
+    private static async Task<IResult> ChangeVisitStateAsync(
+        Guid workOrderId,
+        ChangeVisitStateRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        CancellationToken cancellationToken)
+    {
+        if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
+        var action = request.Action.Trim();
+        if (action is not ("Stop" or "Pause" or "Skip" or "Cancel")) return Validation("action", "Geçerli bir ziyaret işlemi seçin.");
+        var reason = NullIfEmpty(request.Reason);
+        if (action is "Skip" or "Cancel" && (reason is null || reason.Length < 3)) return Validation("reason", "Ziyaretin yoksayılma veya iptal nedenini yazın.");
+        var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId &&
+            (item.AssignedEmployeeAccountId == companyContext.AccountId.Value || item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value)), cancellationToken);
+        if (workOrder is null) return Results.NotFound(new { message = "Atanmış iş emri bulunamadı." });
+        if (workOrder.Status is "Completed" or "Cancelled" or "Skipped") return Results.Conflict(new { message = "Kapanmış ziyaret güncellenemez." });
+
+        var now = DateTimeOffset.UtcNow;
+        var sessionsToClose = action == "Stop"
+            ? workOrder.VisitSessions.Where(item => item.EmployeeAccountId == companyContext.AccountId.Value && item.Status == "Active").ToArray()
+            : workOrder.VisitSessions.Where(item => item.Status == "Active").ToArray();
+        foreach (var session in sessionsToClose)
+        {
+            session.EndedAt = now;
+            session.DurationMinutes = Math.Max(1, (int)Math.Round((now - session.StartedAt).TotalMinutes));
+            session.Status = action switch
+            {
+                "Pause" => "Paused",
+                "Skip" => "Skipped",
+                "Cancel" => "Cancelled",
+                _ => "Stopped"
+            };
+            session.Reason = reason;
+        }
+        var previousStatus = workOrder.Status;
+        var hasActiveTeamMember = workOrder.VisitSessions.Any(item => item.Status == "Active");
+        workOrder.Status = action switch
+        {
+            "Pause" => "Paused",
+            "Skip" => "Skipped",
+            "Cancel" => "Cancelled",
+            _ => hasActiveTeamMember ? "InProgress" : "Paused"
+        };
+        workOrder.TotalLaborMinutes = workOrder.VisitSessions.Where(item => item.EndedAt.HasValue).Sum(item => item.DurationMinutes);
+        AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, workOrder.Status, reason ?? action));
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToResponse(workOrder));
     }
@@ -406,7 +493,8 @@ public static class WorkOrderEndpoints
         CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue) return Results.Forbid();
-        var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId && item.AssignedEmployeeAccountId == companyContext.AccountId.Value, cancellationToken);
+        var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId &&
+            (item.AssignedEmployeeAccountId == companyContext.AccountId.Value || item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value)), cancellationToken);
         if (workOrder is null) return Results.NotFound(new { message = "Atanmış iş emri bulunamadı." });
         if (workOrder.Status != "InProgress") return Results.Conflict(new { message = "İş tamamlanmadan önce saha uygulamasını başlatın." });
         if (!request.HasFormContentType) return Validation("form", "Tamamlama bilgilerini form olarak gönderin.");
@@ -444,6 +532,7 @@ public static class WorkOrderEndpoints
 
         workOrder.Status = "Completed";
         workOrder.CompletedAt = DateTimeOffset.UtcNow;
+        CloseVisitSessions(workOrder, workOrder.CompletedAt.Value);
         workOrder.CompletionNote = completionNote;
         workOrder.Recommendation = recommendation;
         AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId!.Value, workOrder.Id, companyContext.AccountId.Value, "InProgress", "Completed", "Saha uygulaması tamamlandı."));
@@ -461,7 +550,8 @@ public static class WorkOrderEndpoints
         var photo = await dbContext.WorkOrderPhotos.AsNoTracking().Include(item => item.WorkOrder)
             .SingleOrDefaultAsync(item => item.Id == photoId, cancellationToken);
         if (photo is null) return Results.NotFound();
-        if (companyContext.Portal == PortalType.Employee && photo.WorkOrder.AssignedEmployeeAccountId != companyContext.AccountId.Value) return Results.Forbid();
+        if (companyContext.Portal == PortalType.Employee && photo.WorkOrder.AssignedEmployeeAccountId != companyContext.AccountId.Value &&
+            !await dbContext.WorkOrderAssignments.AnyAsync(item => item.WorkOrderId == photo.WorkOrderId && item.EmployeeAccountId == companyContext.AccountId.Value, cancellationToken)) return Results.Forbid();
         if (companyContext.Portal == PortalType.Customer &&
             (photo.WorkOrder.CustomerId != companyContext.CustomerId || companyContext.CustomerBranchId.HasValue && photo.WorkOrder.CustomerBranchId != companyContext.CustomerBranchId)) return Results.Forbid();
         return Results.File(photo.Data, photo.ContentType, photo.FileName);
@@ -471,6 +561,8 @@ public static class WorkOrderEndpoints
         .Include(item => item.Customer)
         .Include(item => item.CustomerBranch)
         .Include(item => item.AssignedEmployeeAccount)
+        .Include(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
+        .Include(item => item.VisitSessions).ThenInclude(item => item.EmployeeAccount)
         .Include(item => item.History).ThenInclude(item => item.ChangedByAccount)
         .Include(item => item.Photos)
         .AsSplitQuery();
@@ -611,7 +703,25 @@ public static class WorkOrderEndpoints
         branch?.Name ?? "Merkez", branch?.Address ?? customer.Address ?? string.Empty, branch?.MapUrl ?? customer.MapUrl,
         workOrder.ServiceType, workOrder.VisitType, workOrder.RecurrenceType, workOrder.RecurrenceGroupId,
         workOrder.ScheduledAt, workOrder.DurationMinutes, workOrder.AssignedEmployeeAccountId, employee?.DisplayName ?? "Atama bekliyor",
-        workOrder.Status, workOrder.Notes, workOrder.StartedAt, workOrder.CompletedAt, workOrder.CompletionNote, workOrder.Recommendation,
+        workOrder.Status, workOrder.Notes, workOrder.StartedAt, workOrder.CompletedAt, workOrder.CustomerDurationMinutes, workOrder.TotalLaborMinutes, workOrder.CompletionNote, workOrder.Recommendation,
+        workOrder.Assignments.OrderByDescending(item => item.IsLead).ThenBy(item => item.EmployeeAccount.DisplayName)
+            .Select(item => new WorkOrderAssignmentResponse(item.EmployeeAccountId, item.EmployeeAccount.DisplayName, item.IsLead)).ToArray(),
+        workOrder.VisitSessions.OrderBy(item => item.StartedAt)
+            .Select(item => new WorkOrderVisitSessionResponse(item.Id, item.EmployeeAccountId, item.EmployeeAccount.DisplayName, item.Status, item.StartedAt, item.EndedAt, item.DurationMinutes, item.Reason)).ToArray(),
         workOrder.History.OrderBy(item => item.OccurredAt).Select(item => new WorkOrderHistoryResponse(item.Id, item.FromStatus, item.ToStatus, item.Note, item.OccurredAt, item.ChangedByAccount?.DisplayName ?? "Sistem")).ToArray(),
         workOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new WorkOrderPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}", item.Location, item.Status, item.Description)).ToArray());
+
+    internal static void CloseVisitSessions(WorkOrder workOrder, DateTimeOffset completedAt)
+    {
+        foreach (var session in workOrder.VisitSessions.Where(item => item.Status == "Active"))
+        {
+            session.EndedAt = completedAt;
+            session.DurationMinutes = Math.Max(1, (int)Math.Round((completedAt - session.StartedAt).TotalMinutes));
+            session.Status = "Completed";
+        }
+        workOrder.CustomerDurationMinutes = workOrder.StartedAt.HasValue
+            ? Math.Max(1, (int)Math.Round((completedAt - workOrder.StartedAt.Value).TotalMinutes))
+            : null;
+        workOrder.TotalLaborMinutes = workOrder.VisitSessions.Where(item => item.EndedAt.HasValue).Sum(item => item.DurationMinutes);
+    }
 }

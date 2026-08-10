@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using System.Net.Mail;
 using System.Text.Json;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.Inventory;
 using Pesneer.Api.Compliance;
+using Pesneer.Api.Email;
+using Pesneer.Api.WorkOrders;
 
 namespace Pesneer.Api.Reports;
 
@@ -40,16 +43,17 @@ public static class ServiceReportEndpoints
     private static async Task<IResult> GetCompanyReportsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
     {
         var reports = await ReportQuery(dbContext).ToListAsync(cancellationToken);
-        return Results.Ok(reports.OrderByDescending(item => item.UpdatedAt).Select(ToResponse));
+        return Results.Ok(reports.OrderByDescending(item => item.UpdatedAt).Select(item => ToResponse(item)));
     }
 
     private static async Task<IResult> GetEmployeeReportsAsync(PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue) return Results.Forbid();
         var reports = await ReportQuery(dbContext)
-            .Where(item => item.WorkOrder.AssignedEmployeeAccountId == companyContext.AccountId.Value)
+            .Where(item => item.WorkOrder.AssignedEmployeeAccountId == companyContext.AccountId.Value ||
+                           item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value))
             .ToListAsync(cancellationToken);
-        return Results.Ok(reports.OrderByDescending(item => item.UpdatedAt).Select(ToResponse));
+        return Results.Ok(reports.OrderByDescending(item => item.UpdatedAt).Select(item => ToResponse(item)));
     }
 
     private static async Task<IResult> GetCustomerReportsAsync(PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
@@ -59,7 +63,7 @@ public static class ServiceReportEndpoints
             .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == companyContext.CustomerId.Value)
             .Where(item => !companyContext.CustomerBranchId.HasValue || item.WorkOrder.CustomerBranchId == companyContext.CustomerBranchId.Value)
             .ToListAsync(cancellationToken);
-        return Results.Ok(reports.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).Select(ToResponse));
+        return Results.Ok(reports.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).Select(item => ToResponse(item, false)));
     }
 
     private static async Task<IResult> UpsertAsync(
@@ -73,6 +77,14 @@ public static class ServiceReportEndpoints
         if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
         var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
         if (workOrder is null || !CanAccess(workOrder, companyContext)) return Results.NotFound(new { message = "İş emri bulunamadı." });
+        if (request.Finalize && companyContext.Portal == PortalType.Employee &&
+            workOrder.VisitSessions.Any(item => item.Status == "Active" && item.EmployeeAccountId != companyContext.AccountId.Value))
+        {
+            var activeEmployees = workOrder.VisitSessions
+                .Where(item => item.Status == "Active" && item.EmployeeAccountId != companyContext.AccountId.Value)
+                .Select(item => item.EmployeeAccount.DisplayName).Distinct().ToArray();
+            return Results.Conflict(new { message = $"Rapor kapatılamadı. Sahada aktif ekip üyesi bulunuyor: {string.Join(", ", activeEmployees)}." });
+        }
         var validation = Validate(request);
         if (validation.Count > 0) return Results.ValidationProblem(validation);
 
@@ -162,6 +174,21 @@ public static class ServiceReportEndpoints
 
         if (request.Finalize)
         {
+            var previousStatus = workOrder.Status;
+            workOrder.Status = "Completed";
+            workOrder.CompletedAt = now;
+            workOrder.CompletionNote = NullIfEmpty(request.ApplicationSummary);
+            workOrder.Recommendation = NullIfEmpty(request.Recommendations);
+            WorkOrderEndpoints.CloseVisitSessions(workOrder, now);
+            if (previousStatus != "Completed")
+            {
+                dbContext.WorkOrderStatusHistories.Add(new WorkOrderStatusHistory
+                {
+                    Id = Guid.NewGuid(), CompanyId = workOrder.CompanyId, WorkOrderId = workOrder.Id,
+                    ChangedByAccountId = companyContext.AccountId.Value, FromStatus = previousStatus, ToStatus = "Completed",
+                    Note = "İmzalı saha raporu onaylandı ve ziyaret tamamlandı.", OccurredAt = now
+                });
+            }
             await CorrectiveActionAutomation.SyncAsync(
                 dbContext, companyContext.CompanyId.Value, companyContext.AccountId.Value,
                 workOrder.CustomerId, workOrder.CustomerBranchId, "ServiceReport", report.Id,
@@ -170,6 +197,7 @@ public static class ServiceReportEndpoints
                 string.Join("\n", new[] { request.CorrectiveActions, request.Recommendations }.Where(value => !string.IsNullOrWhiteSpace(value))),
                 "Joint", stations.Any(item => item.DeviceStatus is "Damaged" or "Missing") ? "High" : "Normal",
                 DateOnly.FromDateTime(DateTime.UtcNow).AddDays(7), cancellationToken);
+            await ReportEmailAutomation.SyncRecipientsAsync(dbContext, report, workOrder, request.AdditionalEmailRecipients ?? [], cancellationToken);
         }
 
         try
@@ -265,18 +293,27 @@ public static class ServiceReportEndpoints
         .Include(item => item.WorkOrder).ThenInclude(item => item.Customer)
         .Include(item => item.WorkOrder).ThenInclude(item => item.CustomerBranch)
         .Include(item => item.WorkOrder).ThenInclude(item => item.AssignedEmployeeAccount)
+        .Include(item => item.WorkOrder).ThenInclude(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
+        .Include(item => item.WorkOrder).ThenInclude(item => item.VisitSessions).ThenInclude(item => item.EmployeeAccount)
         .Include(item => item.WorkOrder).ThenInclude(item => item.Photos)
-        .Include(item => item.Stations).Include(item => item.Products).AsSplitQuery();
+        .Include(item => item.Stations).Include(item => item.Products).Include(item => item.EmailDeliveries).AsSplitQuery();
 
     private static IQueryable<WorkOrder> WorkOrderQuery(PesneerDbContext dbContext) => dbContext.WorkOrders
-        .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.AssignedEmployeeAccount);
+        .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.AssignedEmployeeAccount)
+        .Include(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
+        .Include(item => item.VisitSessions).ThenInclude(item => item.EmployeeAccount);
 
     private static bool CanAccess(WorkOrder order, ICompanyContext companyContext) => companyContext.Portal == PortalType.Owner ||
-        (companyContext.Portal == PortalType.Employee && companyContext.AccountId.HasValue && order.AssignedEmployeeAccountId == companyContext.AccountId.Value);
+        (companyContext.Portal == PortalType.Employee && companyContext.AccountId.HasValue &&
+            (order.AssignedEmployeeAccountId == companyContext.AccountId.Value || order.Assignments.Any(item => item.EmployeeAccountId == companyContext.AccountId.Value)));
 
     private static Dictionary<string, string[]> Validate(UpsertServiceReportRequest request)
     {
         var errors = new Dictionary<string, string[]>();
+        var additionalRecipients = request.AdditionalEmailRecipients ?? [];
+        if (additionalRecipients.Count > 10) errors["additionalEmailRecipients"] = ["En fazla 10 ek e-posta alıcısı ekleyebilirsiniz."];
+        for (var index = 0; index < additionalRecipients.Count; index++)
+            if (!MailAddress.TryCreate(additionalRecipients[index]?.Trim(), out _)) errors[$"additionalEmailRecipients[{index}]"] = [$"{index + 1}. ek e-posta adresi geçerli değil."];
         if (request.FirmName.Trim().Length is < 2 or > 240) errors["firmName"] = ["Uygulayıcı firma adı 2-240 karakter arasında olmalıdır."];
         if (request.Stations.Count > 500) errors["stations"] = ["Bir raporda en fazla 500 istasyon kaydedilebilir."];
         if (request.Products.Count > 30) errors["products"] = ["Bir raporda en fazla 30 ürün kaydedilebilir."];
@@ -331,7 +368,9 @@ public static class ServiceReportEndpoints
         if (usedProducts.Length == 0) return null;
         if (usedProducts.Any(item => !item.VehicleStockItemId.HasValue))
             return new Dictionary<string, string[]> { ["products"] = ["Kullanılan her ürün için personele atanmış araç stoğundan bir ürün seçin."] };
-        if (!workOrder.AssignedEmployeeAccountId.HasValue)
+        var assignedEmployeeIds = workOrder.Assignments.Select(item => item.EmployeeAccountId)
+            .Concat(workOrder.AssignedEmployeeAccountId.HasValue ? [workOrder.AssignedEmployeeAccountId.Value] : []).ToHashSet();
+        if (assignedEmployeeIds.Count == 0)
             return new Dictionary<string, string[]> { ["products"] = ["İlaç tüketimi kaydetmek için iş emrine önce saha personeli atayın."] };
 
         var itemIds = usedProducts.Select(item => item.VehicleStockItemId!.Value).Distinct().ToArray();
@@ -339,8 +378,8 @@ public static class ServiceReportEndpoints
             .Include(item => item.Vehicle)
             .Where(item => itemIds.Contains(item.Id) && item.IsActive && item.Vehicle.IsActive)
             .ToDictionaryAsync(item => item.Id, cancellationToken);
-        if (stockItems.Count != itemIds.Length || stockItems.Values.Any(item => item.Vehicle.AssignedEmployeeAccountId != workOrder.AssignedEmployeeAccountId))
-            return new Dictionary<string, string[]> { ["products"] = ["Seçilen ürünlerden biri iş emrine atanmış personelin aktif aracında bulunmuyor."] };
+        if (stockItems.Count != itemIds.Length || stockItems.Values.Any(item => !item.Vehicle.AssignedEmployeeAccountId.HasValue || !assignedEmployeeIds.Contains(item.Vehicle.AssignedEmployeeAccountId.Value)))
+            return new Dictionary<string, string[]> { ["products"] = ["Seçilen ürünlerden biri iş emrine atanmış ekip üyelerinin aktif araçlarında bulunmuyor."] };
 
         var deductions = new Dictionary<Guid, decimal>();
         foreach (var product in usedProducts)
@@ -383,6 +422,9 @@ public static class ServiceReportEndpoints
         report.Consumables = NullIfEmpty(request.Consumables); report.SafetyMeasures = NullIfEmpty(request.SafetyMeasures); report.ApplicationSummary = NullIfEmpty(request.ApplicationSummary);
         report.Findings = NullIfEmpty(request.Findings); report.CorrectiveActions = NullIfEmpty(request.CorrectiveActions); report.Recommendations = NullIfEmpty(request.Recommendations);
         report.CustomerRepresentativeName = NullIfEmpty(request.CustomerRepresentativeName); report.ManagerSignatureData = NullIfEmpty(request.ManagerSignatureData); report.CustomerSignatureData = NullIfEmpty(request.CustomerSignatureData);
+        report.AdditionalEmailRecipients = request.AdditionalEmailRecipients is { Count: > 0 }
+            ? string.Join(';', request.AdditionalEmailRecipients.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+            : null;
     }
 
     private static (decimal ActivityRate, int Score, string Level, bool Infestation) CalculateRisk(IEnumerable<ServiceReportStation> source)
@@ -396,25 +438,39 @@ public static class ServiceReportEndpoints
         return (rate, score, level, infestation);
     }
 
-    private static ServiceReportResponse ToResponse(ServiceReport report)
+    private static ServiceReportResponse ToResponse(ServiceReport report, bool includeEmailDetails = true)
     {
         var risk = CalculateRisk(report.Stations);
+        var emailStatus = EmailDeliveryStatus(report.EmailDeliveries);
+        var additionalRecipients = includeEmailDetails && !string.IsNullOrWhiteSpace(report.AdditionalEmailRecipients)
+            ? report.AdditionalEmailRecipients.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : [];
         return new ServiceReportResponse(report.Id, report.WorkOrderId, report.WorkOrder.Number, report.ReportNumber, report.Status,
             report.WorkOrder.CustomerId, report.WorkOrder.Customer.LegalName, report.WorkOrder.CustomerBranchId,
             report.WorkOrder.CustomerBranch?.Name ?? "Merkez", report.WorkOrder.CustomerBranch?.Address ?? report.WorkOrder.Customer.Address ?? string.Empty,
-            report.WorkOrder.ScheduledAt, report.WorkOrder.StartedAt, report.WorkOrder.CompletedAt,
+            report.WorkOrder.ScheduledAt, report.WorkOrder.StartedAt, report.WorkOrder.CompletedAt, report.WorkOrder.CustomerDurationMinutes, report.WorkOrder.TotalLaborMinutes,
             report.WorkOrder.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", report.FirmName, report.FirmAddress, report.FirmPhone, report.FirmWeb,
             report.ResponsibleManager, report.PermissionNumber, report.TeamManager, report.TargetPests, report.ResidenceType, report.AreaSquareMeters,
             report.WorkType, report.Consumables, report.SafetyMeasures, report.ApplicationSummary, report.Findings, report.CorrectiveActions,
             report.Recommendations, report.CustomerRepresentativeName, report.ManagerSignatureData, report.CustomerSignatureData,
             report.VerificationCode, report.UpdatedAt, report.FinalizedAt, report.Stations.Count, report.Stations.Count(item => item.HasActivity),
             report.Stations.Count(item => item.PlateChanged), report.Stations.Sum(item => item.CaughtCount), risk.ActivityRate, risk.Score, risk.Level, risk.Infestation,
+            additionalRecipients, emailStatus, report.EmailDeliveries.Count(item => item.Status == "Sent"), report.EmailDeliveries.Count,
             report.Stations.OrderBy(item => item.DeviceNumber).Select(item => new ServiceReportStationResponse(item.Id, item.SitePlanId, item.SitePlanElementId, item.DeviceNumber, item.Area, item.DeviceType, item.TargetPest, item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.ActivityType, item.InaccessibilityReason, item.AppliedVehicleStockItemId, item.AppliedProductName, item.AppliedAmount, item.AppliedUnit, item.ReplacementVehicleStockItemId, item.ReplacementProductName, item.ReplacementQuantity, item.ReplacementUnit, item.Notes)).ToArray(),
             report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
             report.WorkOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new ServiceReportPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}", item.Location, item.Status, item.Description)).ToArray());
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string EmailDeliveryStatus(ICollection<ReportEmailDelivery> deliveries)
+    {
+        if (deliveries.Count == 0) return "NotQueued";
+        var sent = deliveries.Count(item => item.Status == "Sent");
+        if (sent == deliveries.Count) return "Sent";
+        if (sent > 0) return "Partial";
+        if (deliveries.All(item => item.Status == "Failed")) return "Failed";
+        return "Pending";
+    }
     private sealed record StockUsage(Guid? VehicleStockItemId, string ProductName, decimal Amount, string Unit);
     private sealed record ServiceReportPhotoMetadata(string? Location, string? Status, string? Description);
 }
