@@ -160,8 +160,8 @@ public static class AuditPackageEndpoints
             ? await dbContext.CustomerBranches.AsNoTracking().SingleAsync(item => item.Id == filter.BranchId.Value, cancellationToken)
             : null;
         var creator = await dbContext.Accounts.AsNoTracking().SingleAsync(item => item.Id == context.AccountId, cancellationToken);
-        var rangeStart = new DateTimeOffset(filter.PeriodStart.ToDateTime(TimeOnly.MinValue), TurkeyOffset);
-        var rangeEnd = new DateTimeOffset(filter.PeriodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset);
+        var rangeStart = new DateTimeOffset(filter.PeriodStart.ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
+        var rangeEnd = new DateTimeOffset(filter.PeriodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
 
         var contracts = await dbContext.CustomerContracts.AsNoTracking()
             .Include(item => item.Customer).Include(item => item.CustomerBranch)

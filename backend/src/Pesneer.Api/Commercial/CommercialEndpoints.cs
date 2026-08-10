@@ -363,7 +363,7 @@ public static class CommercialEndpoints
         try { timeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul"); }
         catch (TimeZoneNotFoundException) { timeZone = TimeZoneInfo.FindSystemTimeZoneById("Turkey Standard Time"); }
         var local = DateTime.SpecifyKind(date.ToDateTime(time), DateTimeKind.Unspecified);
-        return new DateTimeOffset(local, timeZone.GetUtcOffset(local));
+        return new DateTimeOffset(local, timeZone.GetUtcOffset(local)).ToUniversalTime();
     }
 
     private static DateOnly Min(DateOnly left, DateOnly right) => left <= right ? left : right;

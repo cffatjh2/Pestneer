@@ -110,8 +110,8 @@ public static class QualityEndpoints
         if (request.PeriodEnd.DayNumber - request.PeriodStart.DayNumber > 366) return Validation("periodEnd", "Trend dönemi en fazla 12 ay olabilir.");
         if (!await CanUseLocationAsync(request.CustomerId, request.BranchId, dbContext, context, cancellationToken)) return Results.Forbid();
 
-        var start = new DateTimeOffset(request.PeriodStart.ToDateTime(TimeOnly.MinValue), TurkeyOffset);
-        var end = new DateTimeOffset(request.PeriodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset);
+        var start = new DateTimeOffset(request.PeriodStart.ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
+        var end = new DateTimeOffset(request.PeriodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
         var reportQuery = dbContext.ServiceReports.AsNoTracking().Include(item => item.WorkOrder).Include(item => item.Stations)
             .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == request.CustomerId);
         if (request.BranchId.HasValue) reportQuery = reportQuery.Where(item => item.WorkOrder.CustomerBranchId == request.BranchId.Value);

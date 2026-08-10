@@ -569,7 +569,7 @@ public static class WorkOrderEndpoints
         TimeZoneInfo timeZone;
         try { timeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul"); }
         catch (TimeZoneNotFoundException) { timeZone = TimeZoneInfo.FindSystemTimeZoneById("Turkey Standard Time"); }
-        return new DateTimeOffset(localDateTime, timeZone.GetUtcOffset(localDateTime));
+        return new DateTimeOffset(localDateTime, timeZone.GetUtcOffset(localDateTime)).ToUniversalTime();
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
