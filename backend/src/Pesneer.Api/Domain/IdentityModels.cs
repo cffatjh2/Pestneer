@@ -374,6 +374,9 @@ public sealed class WorkOrderPhoto : ICompanyScoped
     public required string FileName { get; set; }
     public required string ContentType { get; set; }
     public required byte[] Data { get; set; }
+    public string? Location { get; set; }
+    public string? Status { get; set; }
+    public string? Description { get; set; }
     public DateTimeOffset UploadedAt { get; set; } = DateTimeOffset.UtcNow;
     public WorkOrder WorkOrder { get; set; } = null!;
 }

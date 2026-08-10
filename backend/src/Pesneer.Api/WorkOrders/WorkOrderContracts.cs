@@ -106,7 +106,10 @@ public sealed record WorkOrderPhotoResponse(
     string FileName,
     string ContentType,
     DateTimeOffset UploadedAt,
-    string Url);
+    string Url,
+    string? Location,
+    string? Status,
+    string? Description);
 
 public sealed record WorkOrderResponse(
     Guid Id,

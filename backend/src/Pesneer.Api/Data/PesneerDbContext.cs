@@ -296,6 +296,9 @@ public class PesneerDbContext(
             entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId, item.UploadedAt });
             entity.Property(item => item.FileName).HasMaxLength(240);
             entity.Property(item => item.ContentType).HasMaxLength(80);
+            entity.Property(item => item.Location).HasMaxLength(240);
+            entity.Property(item => item.Status).HasMaxLength(80);
+            entity.Property(item => item.Description).HasMaxLength(1000);
             entity.HasOne(item => item.WorkOrder).WithMany(workOrder => workOrder.Photos).HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
@@ -316,7 +319,7 @@ public class PesneerDbContext(
             entity.Property(item => item.TargetPests).HasMaxLength(500);
             entity.Property(item => item.ResidenceType).HasMaxLength(80);
             entity.Property(item => item.AreaSquareMeters).HasPrecision(12, 2);
-            entity.Property(item => item.WorkType).HasMaxLength(120);
+            entity.Property(item => item.WorkType).HasMaxLength(500);
             entity.Property(item => item.Consumables).HasMaxLength(1000);
             entity.Property(item => item.SafetyMeasures).HasMaxLength(2000);
             entity.Property(item => item.ApplicationSummary).HasMaxLength(3000);

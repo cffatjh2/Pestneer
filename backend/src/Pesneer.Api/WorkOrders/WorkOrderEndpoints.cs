@@ -613,5 +613,5 @@ public static class WorkOrderEndpoints
         workOrder.ScheduledAt, workOrder.DurationMinutes, workOrder.AssignedEmployeeAccountId, employee?.DisplayName ?? "Atama bekliyor",
         workOrder.Status, workOrder.Notes, workOrder.StartedAt, workOrder.CompletedAt, workOrder.CompletionNote, workOrder.Recommendation,
         workOrder.History.OrderBy(item => item.OccurredAt).Select(item => new WorkOrderHistoryResponse(item.Id, item.FromStatus, item.ToStatus, item.Note, item.OccurredAt, item.ChangedByAccount?.DisplayName ?? "Sistem")).ToArray(),
-        workOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new WorkOrderPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}")).ToArray());
+        workOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new WorkOrderPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}", item.Location, item.Status, item.Description)).ToArray());
 }

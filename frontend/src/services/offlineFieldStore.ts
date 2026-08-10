@@ -1,6 +1,6 @@
 import type { WorkOrder } from '../types';
 import type { VehicleStockCheck } from './fieldOperationsApi';
-import type { ServiceReportRecord, UpsertServiceReportInput } from './serviceReportApi';
+import type { ReportPhotoUpload, ServiceReportRecord, UpsertServiceReportInput } from './serviceReportApi';
 import type { SitePlanRecord } from './sitePlanApi';
 import type { EmployeePlanningOptions } from './workOrderApi';
 
@@ -16,6 +16,9 @@ export type OfflinePhoto = {
   type: string;
   lastModified: number;
   blob: Blob;
+  location: string;
+  status: string;
+  description: string;
 };
 
 export type LocalReportDraft = {
@@ -80,24 +83,32 @@ export async function removeLocalReportDraft(workOrderId: string) {
   dispatchSyncEvent();
 }
 
-export async function toOfflinePhotos(files: File[]) {
-  return Promise.all(files.map(async (file) => ({
+export async function toOfflinePhotos(photos: ReportPhotoUpload[]) {
+  return Promise.all(photos.map(async ({ file, location, status, description }) => ({
     id: crypto.randomUUID(),
     name: file.name,
     type: file.type,
     lastModified: file.lastModified,
     blob: file.slice(0, file.size, file.type),
+    location,
+    status,
+    description,
   })));
 }
 
 export function toFiles(photos: OfflinePhoto[]) {
-  return photos.map((photo) => new File([photo.blob], photo.name, { type: photo.type, lastModified: photo.lastModified }));
+  return photos.map((photo) => ({
+    file: new File([photo.blob], photo.name, { type: photo.type, lastModified: photo.lastModified }),
+    location: photo.location ?? '',
+    status: photo.status ?? 'Genel saha görünümü',
+    description: photo.description ?? '',
+  }));
 }
 
-export async function queueReportSubmission(workOrderId: string, input: UpsertServiceReportInput, files: File[], reportSaved?: ServiceReportRecord) {
+export async function queueReportSubmission(workOrderId: string, input: UpsertServiceReportInput, photos: ReportPhotoUpload[], reportSaved?: ServiceReportRecord) {
   const now = new Date().toISOString();
   const item: QueuedReportSubmission = {
-    id: crypto.randomUUID(), workOrderId, input, photos: await toOfflinePhotos(files), createdAt: now,
+    id: crypto.randomUUID(), workOrderId, input, photos: await toOfflinePhotos(photos), createdAt: now,
     updatedAt: now, status: 'pending', attempts: 0, reportSaved,
   };
   await put(QUEUE_STORE, item);

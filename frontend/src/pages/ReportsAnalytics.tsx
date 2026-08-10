@@ -5,7 +5,7 @@ import type { WorkOrder } from '../types';
 import ServiceReportModal from '../components/modals/ServiceReportModal';
 import ServiceReportPrintSheet from '../components/report/ServiceReportPrintSheet';
 import { FieldSessionExpiredError, getWorkforceAnalytics, type WorkforceAnalytics } from '../services/fieldOperationsApi';
-import { getCompanyServiceReports, getServiceReportAnalytics, ReportSessionExpiredError, saveServiceReport, type ServiceReportAnalytics, type ServiceReportRecord, type UpsertServiceReportInput } from '../services/serviceReportApi';
+import { getCompanyServiceReports, getServiceReportAnalytics, ReportSessionExpiredError, saveServiceReport, uploadServiceReportPhotos, type ReportPhotoUpload, type ServiceReportAnalytics, type ServiceReportRecord, type UpsertServiceReportInput } from '../services/serviceReportApi';
 import { exportServiceReportExcel, exportTrendExcel } from '../utils/serviceReportExcel';
 import { getVehicles, type VehicleRecord } from '../services/inventoryApi';
 
@@ -37,7 +37,7 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
   const branches = useMemo(() => Array.from(new Map(workOrders.filter((item) => !customerId || item.customerId === customerId).filter((item) => item.branchId).map((item) => [item.branchId!, { id: item.branchId!, name: item.branch }])).values()), [workOrders, customerId]);
   const reportByOrder = useMemo(() => new Map(reports.map((item) => [item.workOrderId, item])), [reports]);
   const reportableOrders = workOrders.filter((item) => item.technicalStatus === 'InProgress' || item.technicalStatus === 'Completed');
-  const save = async (input: UpsertServiceReportInput) => { if (!editing) return; const saved = await saveServiceReport(accessToken, editing.order.recordId, input); setReports((current) => [saved, ...current.filter((item) => item.id !== saved.id)]); setEditing(null); await load(); };
+  const save = async (input: UpsertServiceReportInput, photos: ReportPhotoUpload[]) => { if (!editing) return; const saved = await saveServiceReport(accessToken, editing.order.recordId, input); await uploadServiceReportPhotos(accessToken, editing.order.recordId, photos); setReports((current) => [saved, ...current.filter((item) => item.id !== saved.id)]); setEditing(null); await load(); };
 
   return <section className="page analytics-page phase3-reports-page">
     <div className="page-heading"><div><p className="eyebrow">SAHA KALİTE & UYUM</p><h1>Rapor & Analizler</h1><p>Uygulama raporlarını, saha trendlerini ve personel performansını tek merkezden yönetin.</p></div><button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} />Verileri Yenile</button></div>

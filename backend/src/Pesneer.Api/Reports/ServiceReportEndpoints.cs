@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.Inventory;
@@ -199,11 +200,18 @@ public static class ServiceReportEndpoints
         var form = await request.ReadFormAsync(cancellationToken);
         var files = form.Files.Take(8).ToArray();
         if (files.Length == 0) return Results.Ok(Array.Empty<ServiceReportPhotoResponse>());
+        List<ServiceReportPhotoMetadata> metadata;
+        try { metadata = JsonSerializer.Deserialize<List<ServiceReportPhotoMetadata>>(form["metadata"].FirstOrDefault() ?? "[]", new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? []; }
+        catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["metadata"] = ["Fotoğraf açıklama bilgileri okunamadı."] }); }
         var responses = new List<ServiceReportPhotoResponse>();
-        foreach (var file in files)
+        for (var index = 0; index < files.Length; index++)
         {
+            var file = files[index];
+            var detail = index < metadata.Count ? metadata[index] : null;
             if (file.Length is <= 0 or > 8 * 1024 * 1024 || !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["photos"] = ["Her fotoğraf JPG, PNG veya WebP biçiminde ve en fazla 8 MB olmalıdır."] });
+            if (detail?.Location?.Length > 240 || detail?.Status?.Length > 80 || detail?.Description?.Length > 1000)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["metadata"] = ["Fotoğraf yer, durum veya açıklama alanı izin verilen uzunluğu aşıyor."] });
             await using var stream = file.OpenReadStream();
             using var memory = new MemoryStream();
             await stream.CopyToAsync(memory, cancellationToken);
@@ -211,10 +219,11 @@ public static class ServiceReportEndpoints
             {
                 Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, WorkOrderId = workOrderId,
                 FileName = Path.GetFileName(file.FileName),
-                ContentType = file.ContentType, Data = memory.ToArray(), UploadedAt = DateTimeOffset.UtcNow
+                ContentType = file.ContentType, Data = memory.ToArray(), Location = NullIfEmpty(detail?.Location),
+                Status = NullIfEmpty(detail?.Status), Description = NullIfEmpty(detail?.Description), UploadedAt = DateTimeOffset.UtcNow
             };
             dbContext.WorkOrderPhotos.Add(photo);
-            responses.Add(new ServiceReportPhotoResponse(photo.Id, photo.FileName, photo.ContentType, photo.UploadedAt, $"/api/work-orders/photos/{photo.Id}"));
+            responses.Add(new ServiceReportPhotoResponse(photo.Id, photo.FileName, photo.ContentType, photo.UploadedAt, $"/api/work-orders/photos/{photo.Id}", photo.Location, photo.Status, photo.Description));
         }
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(responses);
@@ -402,9 +411,10 @@ public static class ServiceReportEndpoints
             report.Stations.Count(item => item.PlateChanged), report.Stations.Sum(item => item.CaughtCount), risk.ActivityRate, risk.Score, risk.Level, risk.Infestation,
             report.Stations.OrderBy(item => item.DeviceNumber).Select(item => new ServiceReportStationResponse(item.Id, item.SitePlanId, item.SitePlanElementId, item.DeviceNumber, item.Area, item.DeviceType, item.TargetPest, item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.ActivityType, item.InaccessibilityReason, item.AppliedVehicleStockItemId, item.AppliedProductName, item.AppliedAmount, item.AppliedUnit, item.ReplacementVehicleStockItemId, item.ReplacementProductName, item.ReplacementQuantity, item.ReplacementUnit, item.Notes)).ToArray(),
             report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
-            report.WorkOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new ServiceReportPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}")).ToArray());
+            report.WorkOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new ServiceReportPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}", item.Location, item.Status, item.Description)).ToArray());
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private sealed record StockUsage(Guid? VehicleStockItemId, string ProductName, decimal Amount, string Unit);
+    private sealed record ServiceReportPhotoMetadata(string? Location, string? Status, string? Description);
 }

@@ -99,7 +99,7 @@ public sealed record ServiceReportProductResponse(
     decimal AmountUsed,
     string Unit);
 
-public sealed record ServiceReportPhotoResponse(Guid Id, string FileName, string ContentType, DateTimeOffset UploadedAt, string Url);
+public sealed record ServiceReportPhotoResponse(Guid Id, string FileName, string ContentType, DateTimeOffset UploadedAt, string Url, string? Location, string? Status, string? Description);
 
 public sealed record ServiceReportResponse(
     Guid Id,

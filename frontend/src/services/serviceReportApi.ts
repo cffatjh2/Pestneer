@@ -14,6 +14,13 @@ export type ReportProductInput = {
   activeIngredient?: string; antidote?: string; packingQuantity?: string; amountUsed: number; unit: string;
 };
 
+export type ReportPhotoUpload = {
+  file: File;
+  location: string;
+  status: string;
+  description: string;
+};
+
 export type UpsertServiceReportInput = {
   firmName: string; firmAddress?: string; firmPhone?: string; firmWeb?: string; responsibleManager?: string;
   permissionNumber?: string; teamManager?: string; targetPests?: string; residenceType?: string;
@@ -26,7 +33,7 @@ export type UpsertServiceReportInput = {
 
 export type ReportStation = ReportStationInput & { id: string };
 export type ReportProduct = ReportProductInput & { id: string };
-export type ReportPhoto = { id: string; fileName: string; contentType: string; uploadedAt: string; url: string };
+export type ReportPhoto = { id: string; fileName: string; contentType: string; uploadedAt: string; url: string; location?: string; status?: string; description?: string };
 
 export type ServiceReportRecord = {
   id: string; workOrderId: string; workOrderNumber: string; reportNumber: string; status: 'Draft' | 'Finalized';
@@ -62,10 +69,11 @@ export const getEmployeeServiceReports = (token: string) => request<ServiceRepor
 export const getCustomerServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/customer/service-reports', token);
 export const getServiceReportByWorkOrder = (token: string, workOrderId: string) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token);
 export const saveServiceReport = (token: string, workOrderId: string, input: UpsertServiceReportInput) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token, { method: 'PUT', body: JSON.stringify(input) });
-export async function uploadServiceReportPhotos(token: string, workOrderId: string, photos: File[]) {
+export async function uploadServiceReportPhotos(token: string, workOrderId: string, photos: ReportPhotoUpload[]) {
   if (photos.length === 0) return [];
   const body = new FormData();
-  photos.forEach((photo) => body.append('photos', photo));
+  photos.forEach((photo) => body.append('photos', photo.file));
+  body.append('metadata', JSON.stringify(photos.map(({ location, status, description }) => ({ location, status, description }))));
   return request<ReportPhoto[]>(`/api/service-reports/work-orders/${workOrderId}/photos`, token, { method: 'POST', body }, false);
 }
 export const getServiceReportAnalytics = (token: string, query = '') => request<ServiceReportAnalytics>(`/api/company/service-reports/analytics${query ? `?${query}` : ''}`, token);
