@@ -17,11 +17,11 @@
   ],
   "models": {
     "pVision": {
-      "url": "/models/pestneer-vision/pestneer-vision-nano-v1.onnx",
+      "url": "/models/pestneer-vision/pestneer-pvision-v1.onnx",
       "preferredRuntime": "wasm"
     },
     "pLens": {
-      "url": "/models/pestneer-vision/pestneer-vision-tiny-v1.onnx",
+      "url": "/models/pestneer-vision/pestneer-plens-v1.onnx",
       "preferredRuntime": "webgpu"
     }
   }

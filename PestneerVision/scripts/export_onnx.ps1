@@ -18,8 +18,8 @@ function Export-One([string]$name, [string]$exp, [string]$fileName) {
     } finally { Pop-Location }
 }
 
-if ($Model -in @('nano','both')) { Export-One 'pestneer_yolox_nano' (Join-Path $root 'exps/pestneer_yolox_nano.py') 'pestneer-vision-nano-v1.onnx' }
-if ($Model -in @('tiny','both')) { Export-One 'pestneer_yolox_tiny' (Join-Path $root 'exps/pestneer_yolox_tiny.py') 'pestneer-vision-tiny-v1.onnx' }
+if ($Model -in @('nano','both')) { Export-One 'pestneer_yolox_nano' (Join-Path $root 'exps/pestneer_yolox_nano.py') 'pestneer-pvision-v1.onnx' }
+if ($Model -in @('tiny','both')) { Export-One 'pestneer_yolox_tiny' (Join-Path $root 'exps/pestneer_yolox_tiny.py') 'pestneer-plens-v1.onnx' }
 
 $manifest = @{
     version = '1.1.0'
@@ -30,8 +30,8 @@ $manifest = @{
     nmsThreshold = 0.45
     classes = @('fly','bee_wasp','moth_butterfly','beetle','cockroach','grasshopper_cricket','termite','other_insect')
     models = @{
-        pVision = @{ url = '/models/pestneer-vision/pestneer-vision-nano-v1.onnx'; preferredRuntime = 'wasm' }
-        pLens = @{ url = '/models/pestneer-vision/pestneer-vision-tiny-v1.onnx'; preferredRuntime = 'webgpu' }
+        pVision = @{ url = '/models/pestneer-vision/pestneer-pvision-v1.onnx'; preferredRuntime = 'wasm' }
+        pLens = @{ url = '/models/pestneer-vision/pestneer-plens-v1.onnx'; preferredRuntime = 'webgpu' }
     }
 } | ConvertTo-Json -Depth 6
 Set-Content -Path (Join-Path $webModels 'manifest.json') -Value $manifest -Encoding utf8

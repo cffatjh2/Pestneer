@@ -135,7 +135,14 @@ async function getSession(url: string, runtime: VisionAnalysis['runtime']) {
   try { return await promise; }
   catch (error) {
     sessionCache.delete(key);
-    if (runtime === 'webgpu') return getSession(url.replace('tiny', 'nano').replace('pLens', 'pVision'), 'wasm');
+    if (runtime === 'webgpu') {
+      return getSession(
+        url
+          .replace('pestneer-plens-v1.onnx', 'pestneer-pvision-v1.onnx')
+          .replace('pestneer-vision-tiny-v1.onnx', 'pestneer-pvision-v1.onnx'),
+        'wasm',
+      );
+    }
     throw error;
   }
 }
