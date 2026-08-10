@@ -16,11 +16,11 @@
     "other_insect"
   ],
   "models": {
-    "nano": {
+    "pVision": {
       "url": "/models/pestneer-vision/pestneer-vision-nano-v1.onnx",
       "preferredRuntime": "wasm"
     },
-    "tiny": {
+    "pLens": {
       "url": "/models/pestneer-vision/pestneer-vision-tiny-v1.onnx",
       "preferredRuntime": "webgpu"
     }

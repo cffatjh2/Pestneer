@@ -6,7 +6,7 @@ namespace Pesneer.Api.Vision;
 
 public static class VisionSettingsEndpoints
 {
-    private static readonly HashSet<string> Models = ["Auto", "Nano", "Tiny"];
+    private static readonly HashSet<string> Models = ["Auto", "pVision", "pLens", "Vision", "Lens", "Nano", "Tiny"];
 
     public static IEndpointRouteBuilder MapVisionSettingsEndpoints(this IEndpointRouteBuilder app)
     {
@@ -26,11 +26,11 @@ public static class VisionSettingsEndpoints
     {
         if (!context.CompanyId.HasValue) return Results.Forbid();
         if (!Models.Contains(request.PreferredModel))
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["preferredModel"] = ["Model tercihi Auto, Nano veya Tiny olmalıdır."] });
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["preferredModel"] = ["Model tercihi Auto, pVision veya pLens olmalıdır."] });
         var company = await dbContext.Companies.SingleAsync(item => item.Id == context.CompanyId.Value, cancellationToken);
         company.VisionEnabled = request.Enabled;
         company.VisionReviewRequired = request.ReviewRequired;
-        company.VisionPreferredModel = request.PreferredModel;
+        company.VisionPreferredModel = NormalizeModel(request.PreferredModel);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToResponse(company));
     }
@@ -38,8 +38,16 @@ public static class VisionSettingsEndpoints
     private static VisionSettingsResponse ToResponse(Company company) => new(
         company.VisionEnabled,
         company.VisionReviewRequired,
-        company.VisionPreferredModel,
+        NormalizeModel(company.VisionPreferredModel),
         "PestneerVision bir yapay zeka modelidir ve hata yapabilir. Sonuçları kontrol edin.");
+
+    private static string NormalizeModel(string? value) => value switch
+    {
+        "Nano" or "Vision" => "pVision",
+        "Tiny" or "Lens" => "pLens",
+        "pVision" or "pLens" or "Auto" => value,
+        _ => "Auto",
+    };
 }
 
 public sealed record UpdateVisionSettingsRequest(bool Enabled, bool ReviewRequired, string PreferredModel);

@@ -1,7 +1,7 @@
 import type { InferenceSession } from 'onnxruntime-web';
 import type { VisionModelPreference } from './pestneerVisionApi';
 
-type ModelKey = 'nano' | 'tiny';
+type ModelKey = 'pVision' | 'pLens';
 type Manifest = {
   version: string;
   inputSize: number;
@@ -11,6 +11,11 @@ type Manifest = {
   nmsThreshold: number;
   classes: string[];
   models: Record<ModelKey, { url: string; preferredRuntime: string }>;
+};
+
+const modelLabels: Record<ModelKey, string> = {
+  pVision: 'pVision',
+  pLens: 'pLens',
 };
 
 export type VisionDetection = {
@@ -55,16 +60,16 @@ export async function analyzePestImage(file: File, preference: VisionModelPrefer
   const image = await createImageBitmap(file);
   try {
     const modelKey = selectModel(preference);
-    const wantsWebGpu = modelKey === 'tiny' && supportsWebGpu();
+    const wantsWebGpu = modelKey === 'pLens' && supportsWebGpu();
     let runtime: VisionAnalysis['runtime'] = wantsWebGpu ? 'webgpu' : 'wasm';
     let activeKey: ModelKey = modelKey;
     let session: InferenceSession;
     try {
       session = await getSession(manifest.models[activeKey].url, runtime);
     } catch {
-      activeKey = 'nano';
+      activeKey = 'pVision';
       runtime = 'wasm';
-      session = await getSession(manifest.models.nano.url, runtime);
+      session = await getSession(manifest.models.pVision.url, runtime);
     }
     const ort = await loadRuntime();
     const tiles = createTiles(image.width, image.height, manifest.tileSize, manifest.tileOverlap);
@@ -82,7 +87,7 @@ export async function analyzePestImage(file: File, preference: VisionModelPrefer
     }
     return {
       modelKey: activeKey,
-      modelName: `YOLOX-${activeKey === 'tiny' ? 'Tiny' : 'Nano'}`,
+      modelName: modelLabels[activeKey],
       modelVersion: manifest.version,
       runtime,
       imageWidth: image.width,
@@ -104,9 +109,9 @@ async function loadManifest() {
 }
 
 function selectModel(preference: VisionModelPreference): ModelKey {
-  if (preference === 'Nano') return 'nano';
-  if (preference === 'Tiny') return supportsWebGpu() ? 'tiny' : 'nano';
-  return supportsWebGpu() && !isMobileDevice() ? 'tiny' : 'nano';
+  if (preference === 'pVision') return 'pVision';
+  if (preference === 'pLens') return supportsWebGpu() ? 'pLens' : 'pVision';
+  return supportsWebGpu() && !isMobileDevice() ? 'pLens' : 'pVision';
 }
 
 function supportsWebGpu() {
@@ -130,7 +135,7 @@ async function getSession(url: string, runtime: VisionAnalysis['runtime']) {
   try { return await promise; }
   catch (error) {
     sessionCache.delete(key);
-    if (runtime === 'webgpu') return getSession(url.replace('tiny', 'nano'), 'wasm');
+    if (runtime === 'webgpu') return getSession(url.replace('tiny', 'nano').replace('pLens', 'pVision'), 'wasm');
     throw error;
   }
 }

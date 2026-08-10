@@ -1,6 +1,6 @@
 # PestneerVision
 
-PestneerVision, yapışkan UV kartı fotoğraflarındaki zararlıları tarayıcıda saymak için YOLOX-Nano ve YOLOX-Tiny modellerini eğitir ve ONNX Runtime Web ile çalıştırır.
+PestneerVision, yapışkan UV kartı fotoğraflarındaki zararlıları tarayıcıda saymak için **pVision** (hızlı) ve **pLens** (ayrıntılı) modellerini eğitir ve ONNX Runtime Web ile çalıştırır.
 
 ## Üretim ilkeleri
 
@@ -8,7 +8,7 @@ PestneerVision, yapışkan UV kartı fotoğraflarındaki zararlıları tarayıc�
 - Veri önce kart bazında `train/val/test` olarak ayrılır. Aynı kartın döndürülmüş veya kırpılmış hali farklı bölümlere girmez.
 - Eğitimde yatay çevirme, renk/ışık değişimi, Mosaic, MixUp ve hafif döndürme uygulanır.
 - Yüksek çözünürlüklü kartlar 1280 px örtüşmeli parçalara ayrılır ve 640 px model girdisine ölçeklenir.
-- Tarayıcıda WebGPU varsa Tiny, mobil veya WASM cihazlarda Nano seçilir.
+- Tarayıcıda WebGPU varsa **pLens**, mobil veya WASM cihazlarda **pVision** seçilir.
 - Model sonucu doğrudan resmî veri sayılmaz. Firma ayarına göre kullanıcı onayı zorunlu tutulur veya otomatik aktarılır.
 - Onaylanan sınıf adetleri saha raporuna ve trend analizine işlenir; ham tahmin ve model sürümü denetim izi olarak saklanır.
 

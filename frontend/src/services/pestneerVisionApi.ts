@@ -1,4 +1,4 @@
-export type VisionModelPreference = 'Auto' | 'Nano' | 'Tiny';
+export type VisionModelPreference = 'Auto' | 'pVision' | 'pLens';
 
 export type VisionSettings = {
   enabled: boolean;

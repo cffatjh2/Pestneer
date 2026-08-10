@@ -8,7 +8,7 @@
       "type": "object",
       "required": ["name", "version"],
       "properties": {
-        "name": { "enum": ["yolox-nano", "yolox-tiny"] },
+        "name": { "enum": ["pVision", "pLens"] },
         "version": { "type": "string" },
         "runtime": { "enum": ["webgpu", "wasm"] }
       }

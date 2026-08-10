@@ -22,16 +22,16 @@ if ($Model -in @('nano','both')) { Export-One 'pestneer_yolox_nano' (Join-Path $
 if ($Model -in @('tiny','both')) { Export-One 'pestneer_yolox_tiny' (Join-Path $root 'exps/pestneer_yolox_tiny.py') 'pestneer-vision-tiny-v1.onnx' }
 
 $manifest = @{
-    version = '1.0.0'
+    version = '1.1.0'
     inputSize = 640
     tileSize = 1280
     tileOverlap = 192
-    confidenceThreshold = 0.22
+    confidenceThreshold = 0.2
     nmsThreshold = 0.45
     classes = @('fly','bee_wasp','moth_butterfly','beetle','cockroach','grasshopper_cricket','termite','other_insect')
     models = @{
-        nano = @{ url = '/models/pestneer-vision/pestneer-vision-nano-v1.onnx'; preferredRuntime = 'wasm' }
-        tiny = @{ url = '/models/pestneer-vision/pestneer-vision-tiny-v1.onnx'; preferredRuntime = 'webgpu' }
+        pVision = @{ url = '/models/pestneer-vision/pestneer-vision-nano-v1.onnx'; preferredRuntime = 'wasm' }
+        pLens = @{ url = '/models/pestneer-vision/pestneer-vision-tiny-v1.onnx'; preferredRuntime = 'webgpu' }
     }
 } | ConvertTo-Json -Depth 6
 Set-Content -Path (Join-Path $webModels 'manifest.json') -Value $manifest -Encoding utf8
