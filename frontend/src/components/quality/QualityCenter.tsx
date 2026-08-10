@@ -119,6 +119,7 @@ const documentCategories = [
   { value: 'AuditPackages', label: 'Denetim Dosyaları' },
   { value: 'FieldInspections', label: 'Saha İncelemeleri' },
   { value: 'ServiceReports', label: 'Saha Hizmet Raporları' }, { value: 'CommercialProposals', label: 'Teklifler' }, { value: 'Contracts', label: 'Sözleşmeler' },
+  { value: 'SalesForms', label: 'Satış Formları' },
   { value: 'Certificates', label: 'İzin & Sertifikalar' }, { value: 'Photos', label: 'Fotoğraflar' },
   { value: 'General', label: 'Genel Belgeler' }, { value: 'Other', label: 'Diğer' },
 ];
