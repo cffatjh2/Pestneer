@@ -78,6 +78,12 @@ builder.Services.AddHttpClient("OpenMeteo", client =>
     client.Timeout = TimeSpan.FromSeconds(20);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.8.0 (+https://pesneer.onrender.com)");
 });
+builder.Services.AddHttpClient("MetNorway", client =>
+{
+    client.BaseAddress = new Uri("https://api.met.no/weatherapi/locationforecast/2.0/");
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.8.0 (+https://pesneer.onrender.com)");
+});
 builder.Services.AddHttpClient("GoogleMapsResolver", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(6);

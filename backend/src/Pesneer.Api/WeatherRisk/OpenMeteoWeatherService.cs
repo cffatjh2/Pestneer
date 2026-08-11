@@ -25,7 +25,7 @@ public sealed class OpenMeteoWeatherService(
         if (!forceRefresh && cached is not null && cached.FreshUntil > DateTimeOffset.UtcNow) return cached.Reading;
 
         Exception? lastError = null;
-        for (var attempt = 1; attempt <= 3; attempt++)
+        for (var attempt = 1; attempt <= 2; attempt++)
         {
             try
             {
@@ -48,12 +48,93 @@ public sealed class OpenMeteoWeatherService(
                 lastError = exception;
             }
 
-            if (attempt < 3) await Task.Delay(attempt == 1 ? 350 : 900, cancellationToken);
+            if (attempt < 2) await Task.Delay(350, cancellationToken);
         }
 
-        logger.LogWarning(lastError, "Open-Meteo weather request failed after retries for {Latitude}, {Longitude}.", latitude, longitude);
+        logger.LogWarning(lastError, "Open-Meteo weather request failed after retries for {Latitude}, {Longitude}; trying MET Norway.", latitude, longitude);
+        try
+        {
+            var fallback = await GetMetNorwayAsync(latitude, longitude, cancellationToken);
+            if (fallback is not null)
+            {
+                cache.Set(cacheKey, new CachedWeather(fallback, DateTimeOffset.UtcNow.Add(Freshness)), StaleLifetime);
+                return fallback;
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("MET Norway weather request timed out for {Latitude}, {Longitude}.", latitude, longitude);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "MET Norway weather request failed for {Latitude}, {Longitude}.", latitude, longitude);
+        }
+
         return cached is null ? null : cached.Reading with { IsStale = true };
     }
+
+    private async Task<WeatherReading?> GetMetNorwayAsync(decimal latitude, decimal longitude, CancellationToken cancellationToken)
+    {
+        var query = FormattableString.Invariant($"compact?lat={latitude}&lon={longitude}");
+        using var response = await httpClientFactory.CreateClient("MetNorway").GetAsync(query, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return ParseMetNorway(json.RootElement);
+    }
+
+    private static WeatherReading? ParseMetNorway(JsonElement root)
+    {
+        if (!root.TryGetProperty("properties", out var properties) ||
+            !properties.TryGetProperty("timeseries", out var timeseriesElement)) return null;
+        var timeseries = timeseriesElement.EnumerateArray().ToArray();
+        if (timeseries.Length == 0) return null;
+
+        var samples = timeseries.Select(item =>
+        {
+            var observedAt = DateTimeOffset.TryParse(item.GetProperty("time").GetString(), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed) ? parsed : DateTimeOffset.UtcNow;
+            var data = item.GetProperty("data");
+            var details = data.GetProperty("instant").GetProperty("details");
+            var precipitation = NestedDecimal(data, "next_1_hours", "details", "precipitation_amount");
+            var symbol = NestedString(data, "next_1_hours", "summary", "symbol_code") ??
+                NestedString(data, "next_6_hours", "summary", "symbol_code") ?? string.Empty;
+            return new ForecastSample(observedAt, Decimal(details, "air_temperature"),
+                (int)Math.Round(Decimal(details, "relative_humidity")), Decimal(details, "wind_speed"), precipitation, symbol);
+        }).ToArray();
+
+        var current = samples[0];
+        var forecast = samples
+            .GroupBy(item => DateOnly.FromDateTime(item.ObservedAt.ToOffset(TimeSpan.FromHours(3)).DateTime))
+            .OrderBy(group => group.Key)
+            .Take(3)
+            .Select(group => new ForecastDayResponse(group.Key, group.Min(item => item.TemperatureC),
+                group.Max(item => item.TemperatureC), decimal.Round(group.Sum(item => item.PrecipitationMm), 1), 0))
+            .ToArray();
+        return new WeatherReading(current.TemperatureC, current.TemperatureC, current.RelativeHumidity,
+            current.PrecipitationMm, decimal.Round(current.WindSpeedMs * 3.6m, 1), WeatherCode(current.Symbol),
+            current.ObservedAt, forecast);
+    }
+
+    private static decimal NestedDecimal(JsonElement element, string parent, string child, string property) =>
+        element.TryGetProperty(parent, out var parentElement) && parentElement.TryGetProperty(child, out var childElement)
+            ? Decimal(childElement, property) : 0;
+
+    private static string? NestedString(JsonElement element, string parent, string child, string property) =>
+        element.TryGetProperty(parent, out var parentElement) && parentElement.TryGetProperty(child, out var childElement) &&
+        childElement.TryGetProperty(property, out var value) ? value.GetString() : null;
+
+    private static int WeatherCode(string symbol) => symbol switch
+    {
+        var value when value.Contains("thunder", StringComparison.OrdinalIgnoreCase) => 95,
+        var value when value.Contains("snow", StringComparison.OrdinalIgnoreCase) => 71,
+        var value when value.Contains("sleet", StringComparison.OrdinalIgnoreCase) => 66,
+        var value when value.Contains("rain", StringComparison.OrdinalIgnoreCase) => 61,
+        var value when value.Contains("fog", StringComparison.OrdinalIgnoreCase) => 45,
+        var value when value.Contains("partlycloudy", StringComparison.OrdinalIgnoreCase) => 2,
+        var value when value.Contains("cloudy", StringComparison.OrdinalIgnoreCase) => 3,
+        _ => 0
+    };
 
     private static WeatherReading Parse(JsonElement root)
     {
@@ -81,5 +162,6 @@ public sealed class OpenMeteoWeatherService(
     private static int Integer(JsonElement element, string property) => element.TryGetProperty(property, out var value) && value.TryGetInt32(out var number) ? number : 0;
     private static decimal[] Decimals(JsonElement element, string property) => element.GetProperty(property).EnumerateArray().Select(item => item.TryGetDecimal(out var value) ? value : 0).ToArray();
     private static int[] Integers(JsonElement element, string property) => element.GetProperty(property).EnumerateArray().Select(item => item.TryGetInt32(out var value) ? value : 0).ToArray();
+    private sealed record ForecastSample(DateTimeOffset ObservedAt, decimal TemperatureC, int RelativeHumidity, decimal WindSpeedMs, decimal PrecipitationMm, string Symbol);
     private sealed record CachedWeather(WeatherReading Reading, DateTimeOffset FreshUntil);
 }
