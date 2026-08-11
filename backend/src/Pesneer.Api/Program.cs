@@ -145,7 +145,9 @@ if (app.Environment.IsDevelopment()) app.UseDeveloperExceptionPage();
 else app.UseExceptionHandler();
 app.UseCors();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+var staticFileContentTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+staticFileContentTypes.Mappings[".onnx"] = "application/octet-stream";
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = staticFileContentTypes });
 app.UseAuthentication();
 app.UseAuthorization();
 
