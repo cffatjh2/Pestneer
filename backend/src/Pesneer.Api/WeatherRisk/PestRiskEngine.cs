@@ -10,12 +10,9 @@ public static class PestRiskEngine
         var rainProbability = weather.Forecast.Count == 0 ? 0 : weather.Forecast.Max(item => item.PrecipitationProbability);
         var pests = new[]
         {
-            Cockroach(weather, maximum, rain),
-            Mosquito(weather, maximum, rain, rainProbability),
-            HouseFly(weather, maximum, rain),
-            Rodent(minimum, rain),
-            Ant(weather, maximum, rain),
-            StoredProduct(weather, maximum)
+            Aggregate("walking-pests", "Yürüyen haşere", Cockroach(weather, maximum, rain), Ant(weather, maximum, rain), StoredProduct(weather, maximum)),
+            Aggregate("flying-pests", "Kanatlı haşere", Mosquito(weather, maximum, rain, rainProbability), HouseFly(weather, maximum, rain)),
+            Aggregate("rodent", "Kemirgen", Rodent(minimum, rain))
         }.OrderByDescending(item => item.Score).ToArray();
         var score = pests.Max(item => item.Score);
         return (new RiskSummaryResponse(score, Level(score), score >= 65 ? "Önleyici kontrol önerilir" : score >= 35 ? "Yakın takip önerilir" : "Rutin takip yeterli"), pests);
@@ -82,6 +79,14 @@ public static class PestRiskEngine
     {
         score = Math.Clamp(score, 0, 100);
         return new PestRiskResponse(code, name, score, Level(score), reasons.Count == 0 ? ["Belirgin meteorolojik tetikleyici görülmedi."] : reasons, recommendations);
+    }
+
+    private static PestRiskResponse Aggregate(string code, string name, params PestRiskResponse[] components)
+    {
+        var score = components.Max(item => item.Score);
+        var reasons = components.OrderByDescending(item => item.Score).SelectMany(item => item.Reasons).Distinct().Take(4).ToArray();
+        var recommendations = components.OrderByDescending(item => item.Score).SelectMany(item => item.Recommendations).Distinct().Take(4).ToArray();
+        return new PestRiskResponse(code, name, score, Level(score), reasons, recommendations);
     }
 
     private static string Level(int score) => score >= 65 ? "High" : score >= 35 ? "Medium" : "Low";

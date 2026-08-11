@@ -13,7 +13,7 @@ type CalendarEntryModalProps = {
 };
 
 export default function CalendarEntryModal({ employees, selectedDate, entry, onClose, onSubmit, onDelete }: CalendarEntryModalProps) {
-  const [kind, setKind] = useState<'Task' | 'Note'>(entry?.kind ?? 'Task');
+  const [kind, setKind] = useState<'Task' | 'Note'>(entry?.kind === 'Note' ? 'Note' : 'Task');
   const [isAllDay, setIsAllDay] = useState(entry?.isAllDay ?? false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

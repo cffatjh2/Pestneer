@@ -19,6 +19,7 @@ public static class ServiceReportEndpoints
     {
         var shared = app.MapGroup("/api/service-reports").RequireAuthorization("CompanyStaff");
         shared.MapGet("/work-orders/{workOrderId:guid}", GetByWorkOrderAsync);
+        shared.MapGet("/work-orders/{workOrderId:guid}/previous", GetPreviousByWorkOrderAsync);
         shared.MapPut("/work-orders/{workOrderId:guid}", UpsertAsync);
         shared.MapPost("/work-orders/{workOrderId:guid}/photos", UploadPhotosAsync).DisableAntiforgery();
 
@@ -38,6 +39,18 @@ public static class ServiceReportEndpoints
         var report = await ReportQuery(dbContext).SingleOrDefaultAsync(item => item.WorkOrderId == workOrderId, cancellationToken);
         if (report is null) return Results.NotFound(new { message = "Bu iş emri için henüz saha raporu oluşturulmadı." });
         return Results.Ok(ToResponse(report));
+    }
+
+    private static async Task<IResult> GetPreviousByWorkOrderAsync(Guid workOrderId, PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
+    {
+        var workOrder = await WorkOrderQuery(dbContext).AsNoTracking().SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
+        if (workOrder is null || !CanAccess(workOrder, companyContext)) return Results.NotFound(new { message = "İş emri bulunamadı." });
+        var report = await ReportQuery(dbContext)
+            .Where(item => item.WorkOrderId != workOrderId && item.Status == "Finalized")
+            .Where(item => item.WorkOrder.CustomerId == workOrder.CustomerId && item.WorkOrder.CustomerBranchId == workOrder.CustomerBranchId)
+            .OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        return Results.Ok(report is null ? null : ToResponse(report));
     }
 
     private static async Task<IResult> GetCompanyReportsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
@@ -77,16 +90,22 @@ public static class ServiceReportEndpoints
         if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
         var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
         if (workOrder is null || !CanAccess(workOrder, companyContext)) return Results.NotFound(new { message = "İş emri bulunamadı." });
-        if (request.Finalize && companyContext.Portal == PortalType.Employee &&
-            workOrder.VisitSessions.Any(item => item.Status == "Active" && item.EmployeeAccountId != companyContext.AccountId.Value))
+        var participantIds = workOrder.Assignments.Select(item => item.EmployeeAccountId)
+            .Concat(workOrder.AssignedEmployeeAccountId.HasValue ? [workOrder.AssignedEmployeeAccountId.Value] : [])
+            .Distinct().ToArray();
+        if (request.Finalize && companyContext.Portal == PortalType.Employee)
         {
-            var activeEmployees = workOrder.VisitSessions
-                .Where(item => item.Status == "Active" && item.EmployeeAccountId != companyContext.AccountId.Value)
-                .Select(item => item.EmployeeAccount.DisplayName).Distinct().ToArray();
-            return Results.Conflict(new { message = $"Rapor kapatılamadı. Sahada aktif ekip üyesi bulunuyor: {string.Join(", ", activeEmployees)}." });
+            var pendingIds = participantIds.Where(id => id != companyContext.AccountId.Value &&
+                !workOrder.VisitSessions.Any(session => session.EmployeeAccountId == id && session.Status == "Completed")).ToHashSet();
+            if (pendingIds.Count > 0)
+            {
+                var pendingEmployees = workOrder.Assignments.Where(item => pendingIds.Contains(item.EmployeeAccountId)).Select(item => item.EmployeeAccount.DisplayName)
+                    .Concat(workOrder.AssignedEmployeeAccountId.HasValue && pendingIds.Contains(workOrder.AssignedEmployeeAccountId.Value)
+                        ? [workOrder.AssignedEmployeeAccount?.DisplayName ?? "Atanmış personel"] : [])
+                    .Distinct().ToArray();
+                return Results.Conflict(new { message = $"Rapor kapatılamadı. Ekipte saha payını tamamlamayan personel bulunuyor: {string.Join(", ", pendingEmployees)}." });
+            }
         }
-        var validation = Validate(request);
-        if (validation.Count > 0) return Results.ValidationProblem(validation);
 
         var report = await dbContext.ServiceReports
             .Include(item => item.Stations).ThenInclude(item => item.PestObservations)
@@ -96,7 +115,9 @@ public static class ServiceReportEndpoints
         {
             return Results.Conflict(new { message = "Tamamlanmış rapor yalnızca firma sahibi tarafından yeniden düzenlenebilir." });
         }
-        if (report is not null && !request.ForceOverwrite && request.BaseUpdatedAt.HasValue &&
+        var staleCollaborativeUpdate = report is not null && companyContext.Portal == PortalType.Employee && participantIds.Length > 1 &&
+            request.BaseUpdatedAt.HasValue && Math.Abs((report.UpdatedAt - request.BaseUpdatedAt.Value).TotalMilliseconds) > 1;
+        if (report is not null && !request.ForceOverwrite && !staleCollaborativeUpdate && request.BaseUpdatedAt.HasValue &&
             Math.Abs((report.UpdatedAt - request.BaseUpdatedAt.Value).TotalMilliseconds) > 1)
         {
             return Results.Conflict(new
@@ -105,6 +126,16 @@ public static class ServiceReportEndpoints
                 current = ToResponse(report)
             });
         }
+        if (report is not null && staleCollaborativeUpdate)
+        {
+            request = request with
+            {
+                Stations = MergeStations(report.Stations, request.Stations),
+                Products = MergeProducts(report.Products, request.Products)
+            };
+        }
+        var validation = Validate(request);
+        if (validation.Count > 0) return Results.ValidationProblem(validation);
 
         var now = DateTimeOffset.UtcNow;
         if (report is null)
@@ -142,7 +173,7 @@ public static class ServiceReportEndpoints
         var stockValidation = await ApplyVehicleConsumptionAsync(request, report, workOrder, dbContext, companyContext, now, cancellationToken);
         if (stockValidation is not null) return Results.ValidationProblem(stockValidation);
 
-        Apply(report, request);
+        Apply(report, request, staleCollaborativeUpdate);
         report.UpdatedAt = now;
         report.Status = request.Finalize ? "Finalized" : "Draft";
         report.FinalizedAt = request.Finalize ? now : null;
@@ -453,18 +484,73 @@ public static class ServiceReportEndpoints
         return null;
     }
 
-    private static void Apply(ServiceReport report, UpsertServiceReportRequest request)
+    private static IReadOnlyList<ServiceReportStationInput> MergeStations(
+        IEnumerable<ServiceReportStation> existingStations,
+        IReadOnlyList<ServiceReportStationInput> incomingStations)
     {
-        report.FirmName = request.FirmName.Trim(); report.FirmAddress = NullIfEmpty(request.FirmAddress); report.FirmPhone = NullIfEmpty(request.FirmPhone); report.FirmWeb = NullIfEmpty(request.FirmWeb);
-        report.ResponsibleManager = NullIfEmpty(request.ResponsibleManager); report.PermissionNumber = NullIfEmpty(request.PermissionNumber); report.TeamManager = NullIfEmpty(request.TeamManager);
-        report.TargetPests = NullIfEmpty(request.TargetPests); report.ResidenceType = NullIfEmpty(request.ResidenceType); report.AreaSquareMeters = request.AreaSquareMeters; report.WorkType = NullIfEmpty(request.WorkType);
-        report.Consumables = NullIfEmpty(request.Consumables); report.SafetyMeasures = NullIfEmpty(request.SafetyMeasures); report.ApplicationSummary = NullIfEmpty(request.ApplicationSummary);
-        report.Findings = NullIfEmpty(request.Findings); report.CorrectiveActions = NullIfEmpty(request.CorrectiveActions); report.Recommendations = NullIfEmpty(request.Recommendations);
-        report.CustomerRepresentativeName = NullIfEmpty(request.CustomerRepresentativeName); report.ManagerSignatureData = NullIfEmpty(request.ManagerSignatureData); report.CustomerSignatureData = NullIfEmpty(request.CustomerSignatureData);
-        report.AdditionalEmailRecipients = request.AdditionalEmailRecipients is { Count: > 0 }
-            ? string.Join(';', request.AdditionalEmailRecipients.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
-            : null;
+        var merged = existingStations.Select(ToInput).GroupBy(StationKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+        foreach (var incoming in incomingStations)
+        {
+            var key = StationKey(incoming);
+            if (!merged.TryGetValue(key, out var existing) || incoming.DeviceStatus != "Unchecked" || existing.DeviceStatus == "Unchecked")
+                merged[key] = incoming;
+        }
+        return merged.Values.OrderBy(item => item.DeviceNumber, StringComparer.OrdinalIgnoreCase).ToArray();
     }
+
+    private static IReadOnlyList<ServiceReportProductInput> MergeProducts(
+        IEnumerable<ServiceReportProduct> existingProducts,
+        IReadOnlyList<ServiceReportProductInput> incomingProducts)
+    {
+        var merged = existingProducts.Select(item => new ServiceReportProductInput(
+                item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate,
+                item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit))
+            .GroupBy(ProductKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+        foreach (var incoming in incomingProducts.Where(item => !string.IsNullOrWhiteSpace(item.ProductName)))
+        {
+            var key = ProductKey(incoming);
+            if (!merged.TryGetValue(key, out var existing) || incoming.AmountUsed > 0 || existing.AmountUsed <= 0)
+                merged[key] = incoming;
+        }
+        return merged.Values.ToArray();
+    }
+
+    private static ServiceReportStationInput ToInput(ServiceReportStation item) => new(
+        item.SitePlanId, item.SitePlanElementId, item.DeviceNumber, item.Area, item.DeviceType, item.TargetPest,
+        item.CaughtCount, item.HasActivity, item.PlateChanged, item.DeviceStatus, item.ActivityType, item.InaccessibilityReason,
+        item.AppliedVehicleStockItemId, item.AppliedProductName, item.AppliedAmount, item.AppliedUnit,
+        item.ReplacementVehicleStockItemId, item.ReplacementProductName, item.ReplacementQuantity, item.ReplacementUnit, item.Notes,
+        item.PestObservations.Select(observation => new ServiceReportPestObservationInput(
+            observation.PestKey, observation.PestName, observation.DetectedCount, observation.ApprovedCount,
+            observation.MeanConfidence, observation.Source, observation.ModelName, observation.ModelVersion,
+            observation.ReviewStatus, observation.VisionResultJson, observation.AnalyzedAt)).ToArray());
+
+    private static string StationKey(ServiceReportStationInput item) => !string.IsNullOrWhiteSpace(item.SitePlanElementId)
+        ? $"plan:{item.SitePlanId}:{item.SitePlanElementId.Trim()}"
+        : $"manual:{item.DeviceNumber.Trim()}";
+
+    private static string ProductKey(ServiceReportProductInput item) => item.VehicleStockItemId.HasValue
+        ? $"stock:{item.VehicleStockItemId.Value}"
+        : $"manual:{item.ProductName.Trim()}:{item.Unit.Trim()}";
+
+    private static void Apply(ServiceReport report, UpsertServiceReportRequest request, bool preserveExisting)
+    {
+        report.FirmName = request.FirmName.Trim(); report.FirmAddress = Keep(report.FirmAddress, request.FirmAddress, preserveExisting); report.FirmPhone = Keep(report.FirmPhone, request.FirmPhone, preserveExisting); report.FirmWeb = Keep(report.FirmWeb, request.FirmWeb, preserveExisting);
+        report.ResponsibleManager = Keep(report.ResponsibleManager, request.ResponsibleManager, preserveExisting); report.PermissionNumber = Keep(report.PermissionNumber, request.PermissionNumber, preserveExisting); report.TeamManager = Keep(report.TeamManager, request.TeamManager, preserveExisting);
+        report.TargetPests = Keep(report.TargetPests, request.TargetPests, preserveExisting); report.ResidenceType = Keep(report.ResidenceType, request.ResidenceType, preserveExisting); report.AreaSquareMeters = preserveExisting && !request.AreaSquareMeters.HasValue ? report.AreaSquareMeters : request.AreaSquareMeters; report.WorkType = Keep(report.WorkType, request.WorkType, preserveExisting);
+        report.Consumables = Keep(report.Consumables, request.Consumables, preserveExisting); report.SafetyMeasures = Keep(report.SafetyMeasures, request.SafetyMeasures, preserveExisting); report.ApplicationSummary = Keep(report.ApplicationSummary, request.ApplicationSummary, preserveExisting);
+        report.Findings = Keep(report.Findings, request.Findings, preserveExisting); report.CorrectiveActions = Keep(report.CorrectiveActions, request.CorrectiveActions, preserveExisting); report.Recommendations = Keep(report.Recommendations, request.Recommendations, preserveExisting);
+        report.CustomerRepresentativeName = Keep(report.CustomerRepresentativeName, request.CustomerRepresentativeName, preserveExisting); report.ManagerSignatureData = Keep(report.ManagerSignatureData, request.ManagerSignatureData, preserveExisting); report.CustomerSignatureData = Keep(report.CustomerSignatureData, request.CustomerSignatureData, preserveExisting);
+        var existingRecipients = preserveExisting && !string.IsNullOrWhiteSpace(report.AdditionalEmailRecipients)
+            ? report.AdditionalEmailRecipients.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : [];
+        var recipients = existingRecipients.Concat(request.AdditionalEmailRecipients ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        report.AdditionalEmailRecipients = recipients.Length > 0 ? string.Join(';', recipients) : null;
+    }
+
+    private static string? Keep(string? current, string? incoming, bool preserveExisting) =>
+        preserveExisting && string.IsNullOrWhiteSpace(incoming) ? current : NullIfEmpty(incoming);
 
     private static (decimal ActivityRate, int Score, string Level, bool Infestation) CalculateRisk(IEnumerable<ServiceReportStation> source)
     {

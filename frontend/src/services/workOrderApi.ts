@@ -42,7 +42,7 @@ export async function getEmployeeWorkOrders(token: string) { return (await reque
 export const getEmployeePlanningOptions = (token: string) => request<EmployeePlanningOptions>('/api/employee/work-orders/planning-options', token);
 export async function selfScheduleWorkOrders(token: string, input: CreateWorkOrdersInput) { return (await request<WorkOrderResponse[]>('/api/employee/work-orders/self-schedule', token, { method: 'POST', body: JSON.stringify(input) })).map(mapWorkOrder); }
 export async function startEmployeeWorkOrder(token: string, id: string) { return mapWorkOrder(await request<WorkOrderResponse>(`/api/employee/work-orders/${id}/start`, token, { method: 'POST' })); }
-export async function changeEmployeeVisitState(token: string, id: string, action: 'Stop' | 'Pause' | 'Skip' | 'Cancel', reason?: string) { return mapWorkOrder(await request<WorkOrderResponse>(`/api/employee/work-orders/${id}/visit-state`, token, { method: 'POST', body: JSON.stringify({ action, reason }) })); }
+export async function changeEmployeeVisitState(token: string, id: string, action: 'Stop' | 'Pause' | 'FinishPart' | 'Skip' | 'Cancel', reason?: string) { return mapWorkOrder(await request<WorkOrderResponse>(`/api/employee/work-orders/${id}/visit-state`, token, { method: 'POST', body: JSON.stringify({ action, reason }) })); }
 export async function completeEmployeeWorkOrder(token: string, id: string, completionNote: string, recommendation: string, photos: File[]) {
   const form = new FormData();
   form.set('completionNote', completionNote); form.set('recommendation', recommendation);

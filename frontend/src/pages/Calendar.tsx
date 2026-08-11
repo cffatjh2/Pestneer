@@ -19,7 +19,7 @@ type CalendarProps = {
   onNotify: (message: string) => void;
 };
 
-type CalendarView = 'day' | 'week' | 'month';
+type CalendarView = 'day' | 'month';
 
 export default function Calendar({ accessToken, employees, onSessionExpired, onNotify }: CalendarProps) {
   const [focusDate, setFocusDate] = useState(startOfDay(new Date()));
@@ -90,13 +90,13 @@ export default function Calendar({ accessToken, employees, onSessionExpired, onN
   const navigate = (direction: number) => {
     const next = new Date(focusDate);
     if (view === 'month') next.setMonth(next.getMonth() + direction, 1);
-    if (view === 'week') next.setDate(next.getDate() + direction * 7);
     if (view === 'day') next.setDate(next.getDate() + direction);
     setFocusDate(startOfDay(next));
     setSelectedDate(startOfDay(next));
   };
 
   const openEntry = (entry: CalendarEntryRecord) => {
+    if (!entry.canEdit) return;
     setEditingEntry(entry);
     setSelectedDate(startOfDay(new Date(entry.scheduledAt)));
     setIsModalOpen(true);
@@ -114,14 +114,12 @@ export default function Calendar({ accessToken, employees, onSessionExpired, onN
       <section className="surface calendar-surface">
         <div className="calendar-toolbar">
           <div><button className="icon-button" onClick={() => navigate(-1)} aria-label="Önceki dönem"><ChevronLeft size={20} /></button><button className="icon-button" onClick={() => navigate(1)} aria-label="Sonraki dönem"><ChevronRight size={20} /></button><button className="calendar-today-button" onClick={() => { const today = startOfDay(new Date()); setFocusDate(today); setSelectedDate(today); }}>Bugün</button><strong>{formatPeriodTitle(focusDate, view)}</strong></div>
-          <div>{(['day', 'week', 'month'] as const).map((item) => <button key={item} className={`calendar-view ${view === item ? 'active' : ''}`} onClick={() => setView(item)}>{viewLabels[item]}</button>)}</div>
+          <div>{(['day', 'month'] as const).map((item) => <button key={item} className={`calendar-view ${view === item ? 'active' : ''}`} onClick={() => setView(item)}>{viewLabels[item]}</button>)}</div>
         </div>
 
         {isLoading ? <div className="calendar-loading"><RefreshCw className="spin-icon" size={24} /> Takvim yükleniyor…</div> : view === 'month'
-          ? <MonthView focusDate={focusDate} entries={entries} selectedDate={selectedDate} onSelectDate={(date) => { setSelectedDate(date); }} onCreate={openCreate} onOpenEntry={openEntry} />
-          : view === 'week'
-            ? <WeekView focusDate={focusDate} entries={entries} onCreate={openCreate} onOpenEntry={openEntry} />
-            : <DayView date={focusDate} entries={entries} onCreate={openCreate} onOpenEntry={openEntry} />}
+          ? <MonthView focusDate={focusDate} entries={entries} selectedDate={selectedDate} onSelectDate={(date) => { setSelectedDate(date); setFocusDate(date); }} onCreate={openCreate} onOpenEntry={openEntry} />
+          : <DayView date={focusDate} entries={entries} onCreate={openCreate} onOpenEntry={openEntry} />}
       </section>
 
       {isModalOpen && <CalendarEntryModal employees={employees} selectedDate={toDateKey(selectedDate)} entry={editingEntry} onClose={() => { setIsModalOpen(false); setEditingEntry(null); }} onSubmit={saveEntry} onDelete={editingEntry ? removeEntry : undefined} />}
@@ -140,30 +138,24 @@ function MonthView({ focusDate, entries, selectedDate, onSelectDate, onCreate, o
   })}</div>;
 }
 
-function WeekView({ focusDate, entries, onCreate, onOpenEntry }: { focusDate: Date; entries: CalendarEntryRecord[]; onCreate: (date: Date) => void; onOpenEntry: (entry: CalendarEntryRecord) => void }) {
-  const start = startOfWeek(focusDate);
-  return <div className="calendar-week-view">{Array.from({ length: 7 }, (_, index) => addDays(start, index)).map((date, index) => <section key={toDateKey(date)} className={isToday(date) ? 'today' : ''}><button className="week-day-heading" onClick={() => onCreate(date)}><span>{weekdays[index]}</span><strong>{date.getDate()}</strong><Plus size={14} /></button><div>{entriesForDate(entries, date).map((entry) => <CalendarAgendaItem key={entry.id} entry={entry} onClick={onOpenEntry} />)}</div></section>)}</div>;
-}
-
 function DayView({ date, entries, onCreate, onOpenEntry }: { date: Date; entries: CalendarEntryRecord[]; onCreate: (date: Date) => void; onOpenEntry: (entry: CalendarEntryRecord) => void }) {
   const dayEntries = entriesForDate(entries, date);
   return <div className="calendar-day-view"><div className="day-view-heading"><div><CalendarDays size={22} /><div><strong>{formatFullDate(date)}</strong><span>{dayEntries.length} kayıt planlandı</span></div></div><button className="secondary-button" onClick={() => onCreate(date)}><Plus size={16} /> Bu güne ekle</button></div>{dayEntries.length > 0 ? <div className="day-agenda-list">{dayEntries.map((entry) => <CalendarAgendaItem key={entry.id} entry={entry} onClick={onOpenEntry} />)}</div> : <div className="calendar-empty-day"><CalendarDays size={30} /><strong>Bu gün için kayıt yok</strong><span>Not ekleyebilir veya personele görev atayabilirsiniz.</span></div>}</div>;
 }
 
 function CalendarEvent({ entry, onClick }: { entry: CalendarEntryRecord; onClick: (entry: CalendarEntryRecord) => void }) {
-  return <button className={`calendar-event event-${entry.priority.toLowerCase()} ${entry.status === 'Completed' ? 'completed' : ''}`} onClick={(event) => { event.stopPropagation(); onClick(entry); }} title={entry.title}><b>{entry.isAllDay ? 'Tüm gün' : formatEntryTime(new Date(entry.scheduledAt))}</b> {entry.title}</button>;
+  return <button className={`calendar-event event-${entry.priority.toLowerCase()} source-${entry.sourceType.toLowerCase()} ${entry.status === 'Completed' ? 'completed' : ''}`} onClick={(event) => { event.stopPropagation(); onClick(entry); }} title={entry.title}><b>{entry.isAllDay ? 'Tüm gün' : formatEntryTime(new Date(entry.scheduledAt))}</b> {entry.title}</button>;
 }
 
 function CalendarAgendaItem({ entry, onClick }: { entry: CalendarEntryRecord; onClick: (entry: CalendarEntryRecord) => void }) {
-  return <button className={`calendar-agenda-item priority-${entry.priority.toLowerCase()}`} onClick={() => onClick(entry)}><span className="agenda-time">{entry.isAllDay ? 'Tüm gün' : formatEntryTime(new Date(entry.scheduledAt))}</span><div><strong>{entry.title}</strong><small>{entry.kind === 'Task' ? entry.assignedEmployeeName || 'Atama bekliyor' : 'Kişisel not'}{entry.description ? ` · ${entry.description}` : ''}</small></div>{entry.status === 'Completed' ? <CheckCircle2 size={17} /> : entry.assignedEmployeeName ? <UserRound size={17} /> : <CalendarDays size={17} />}</button>;
+  return <button className={`calendar-agenda-item priority-${entry.priority.toLowerCase()} source-${entry.sourceType.toLowerCase()} ${entry.status === 'Completed' ? 'completed' : ''}`} onClick={() => onClick(entry)}><span className="agenda-time">{entry.isAllDay ? 'Tüm gün' : formatEntryTime(new Date(entry.scheduledAt))}</span><div><strong>{entry.title}</strong><small>{entry.kind === 'WorkOrder' ? `${entry.workOrderNumber} · ${entry.serviceType ?? 'Saha hizmeti'} · ${entry.assignedEmployeeName || 'Atama bekliyor'}` : entry.kind === 'Task' ? entry.assignedEmployeeName || 'Atama bekliyor' : 'Kişisel not'}{entry.description ? ` · ${entry.description}` : ''}</small></div>{entry.status === 'Completed' ? <CheckCircle2 size={17} /> : entry.assignedEmployeeName ? <UserRound size={17} /> : <CalendarDays size={17} />}</button>;
 }
 
 const weekdays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-const viewLabels = { day: 'Gün', week: 'Hafta', month: 'Ay' };
+const viewLabels = { day: 'Gün', month: 'Ay' };
 
 function getVisibleRange(date: Date, view: CalendarView) {
   if (view === 'day') return { from: startOfDay(date), to: startOfDay(date) };
-  if (view === 'week') { const from = startOfWeek(date); return { from, to: addDays(from, 6) }; }
   const from = startOfWeek(new Date(date.getFullYear(), date.getMonth(), 1));
   return { from, to: addDays(from, 41) };
 }
@@ -179,4 +171,4 @@ function toDateKey(value: Date) { return `${value.getFullYear()}-${String(value.
 function formatTime(value: Date) { return new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(value); }
 function formatEntryTime(value: Date) { return new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(value); }
 function formatFullDate(value: Date) { return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric', weekday: 'long' }).format(value); }
-function formatPeriodTitle(value: Date, view: CalendarView) { if (view === 'month') return new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(value); if (view === 'day') return formatFullDate(value); const start = startOfWeek(value); return `${new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' }).format(start)} – ${new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }).format(addDays(start, 6))}`; }
+function formatPeriodTitle(value: Date, view: CalendarView) { return view === 'month' ? new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(value) : formatFullDate(value); }

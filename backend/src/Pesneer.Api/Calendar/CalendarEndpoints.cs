@@ -36,19 +36,30 @@ public static class CalendarEndpoints
         var fromDate = ToIstanbulDateTime(from, TimeOnly.MinValue);
         var toDate = ToIstanbulDateTime(to.AddDays(1), TimeOnly.MinValue);
         IQueryable<CalendarEntry> query = dbContext.CalendarEntries.AsNoTracking()
-            .Include(item => item.AssignedEmployeeAccount);
+            .Include(item => item.AssignedEmployeeAccount)
+            .Where(item => item.ScheduledAt >= fromDate && item.ScheduledAt < toDate);
+        IQueryable<WorkOrder> workOrderQuery = dbContext.WorkOrders.AsNoTracking()
+            .Include(item => item.Customer)
+            .Include(item => item.CustomerBranch)
+            .Include(item => item.AssignedEmployeeAccount)
+            .Include(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
+            .Where(item => item.ScheduledAt >= fromDate && item.ScheduledAt < toDate);
 
         if (companyContext.Portal == PortalType.Employee)
         {
             if (!companyContext.AccountId.HasValue) return Results.Forbid();
             query = query.Where(item => item.AssignedEmployeeAccountId == companyContext.AccountId.Value);
+            workOrderQuery = workOrderQuery.Where(item => item.AssignedEmployeeAccountId == companyContext.AccountId.Value ||
+                item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value));
         }
 
         var entries = await query.ToListAsync(cancellationToken);
-        return Results.Ok(entries
-            .Where(item => item.ScheduledAt >= fromDate && item.ScheduledAt < toDate)
+        var workOrders = await workOrderQuery.ToListAsync(cancellationToken);
+        var result = entries.Select(ToResponse)
+            .Concat(workOrders.Select(ToResponse))
             .OrderBy(item => item.ScheduledAt)
-            .Select(ToResponse));
+            .ToArray();
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> CreateEntryAsync(
@@ -170,5 +181,39 @@ public static class CalendarEndpoints
         entry.AssignedEmployeeAccount?.DisplayName,
         entry.Priority,
         entry.Status,
-        entry.CreatedAt);
+        entry.CreatedAt,
+        "CalendarEntry",
+        null,
+        null,
+        null,
+        null,
+        null,
+        true);
+
+    private static CalendarEntryResponse ToResponse(WorkOrder workOrder)
+    {
+        var employees = workOrder.Assignments.Select(item => item.EmployeeAccount.DisplayName)
+            .Concat(workOrder.AssignedEmployeeAccount is null ? [] : [workOrder.AssignedEmployeeAccount.DisplayName])
+            .Distinct().ToArray();
+        var branchName = workOrder.CustomerBranch?.Name ?? "Merkez / Genel";
+        return new CalendarEntryResponse(
+            workOrder.Id,
+            "WorkOrder",
+            $"{workOrder.Customer.LegalName} · {branchName}",
+            workOrder.Notes,
+            workOrder.ScheduledAt,
+            false,
+            workOrder.AssignedEmployeeAccountId,
+            employees.Length > 0 ? string.Join(", ", employees) : null,
+            workOrder.VisitType.StartsWith("Emergency", StringComparison.Ordinal) ? "High" : "Normal",
+            workOrder.Status == "Completed" ? "Completed" : "Planned",
+            workOrder.ScheduledAt,
+            "WorkOrder",
+            workOrder.Id,
+            workOrder.Number,
+            workOrder.Customer.LegalName,
+            branchName,
+            workOrder.ServiceType,
+            false);
+    }
 }

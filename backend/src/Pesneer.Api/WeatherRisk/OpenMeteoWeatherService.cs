@@ -19,27 +19,40 @@ public sealed class OpenMeteoWeatherService(
 
     public async Task<WeatherReading?> GetAsync(decimal latitude, decimal longitude, bool forceRefresh, CancellationToken cancellationToken)
     {
+        if (latitude is < -90 or > 90 || longitude is < -180 or > 180) return null;
         var cacheKey = $"weather:{decimal.Round(latitude, 4)}:{decimal.Round(longitude, 4)}";
         cache.TryGetValue(cacheKey, out CachedWeather? cached);
         if (!forceRefresh && cached is not null && cached.FreshUntil > DateTimeOffset.UtcNow) return cached.Reading;
 
-        try
+        Exception? lastError = null;
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            var query = FormattableString.Invariant(
-                $"forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&forecast_days=3&timezone=auto");
-            using var response = await httpClientFactory.CreateClient("OpenMeteo").GetAsync(query, cancellationToken);
-            response.EnsureSuccessStatusCode();
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            var reading = Parse(json.RootElement);
-            cache.Set(cacheKey, new CachedWeather(reading, DateTimeOffset.UtcNow.Add(Freshness)), StaleLifetime);
-            return reading;
+            try
+            {
+                var query = FormattableString.Invariant(
+                    $"forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&forecast_days=3&timezone=auto");
+                using var response = await httpClientFactory.CreateClient("OpenMeteo").GetAsync(query, cancellationToken);
+                response.EnsureSuccessStatusCode();
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                var reading = Parse(json.RootElement);
+                cache.Set(cacheKey, new CachedWeather(reading, DateTimeOffset.UtcNow.Add(Freshness)), StaleLifetime);
+                return reading;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                lastError = new TimeoutException("Open-Meteo request timed out.");
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                lastError = exception;
+            }
+
+            if (attempt < 3) await Task.Delay(attempt == 1 ? 350 : 900, cancellationToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            logger.LogWarning(exception, "Open-Meteo weather request failed for {Latitude}, {Longitude}.", latitude, longitude);
-            return cached is null ? null : cached.Reading with { IsStale = true };
-        }
+
+        logger.LogWarning(lastError, "Open-Meteo weather request failed after retries for {Latitude}, {Longitude}.", latitude, longitude);
+        return cached is null ? null : cached.Reading with { IsStale = true };
     }
 
     private static WeatherReading Parse(JsonElement root)

@@ -445,7 +445,7 @@ public static class WorkOrderEndpoints
     {
         if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
         var action = request.Action.Trim();
-        if (action is not ("Stop" or "Pause" or "Skip" or "Cancel")) return Validation("action", "Geçerli bir ziyaret işlemi seçin.");
+        if (action is not ("Stop" or "Pause" or "FinishPart" or "Skip" or "Cancel")) return Validation("action", "Geçerli bir ziyaret işlemi seçin.");
         var reason = NullIfEmpty(request.Reason);
         if (action is "Skip" or "Cancel" && (reason is null || reason.Length < 3)) return Validation("reason", "Ziyaretin yoksayılma veya iptal nedenini yazın.");
         var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId &&
@@ -454,7 +454,7 @@ public static class WorkOrderEndpoints
         if (workOrder.Status is "Completed" or "Cancelled" or "Skipped") return Results.Conflict(new { message = "Kapanmış ziyaret güncellenemez." });
 
         var now = DateTimeOffset.UtcNow;
-        var sessionsToClose = action == "Stop"
+        var sessionsToClose = action is "Stop" or "Pause" or "FinishPart"
             ? workOrder.VisitSessions.Where(item => item.EmployeeAccountId == companyContext.AccountId.Value && item.Status == "Active").ToArray()
             : workOrder.VisitSessions.Where(item => item.Status == "Active").ToArray();
         foreach (var session in sessionsToClose)
@@ -464,6 +464,7 @@ public static class WorkOrderEndpoints
             session.Status = action switch
             {
                 "Pause" => "Paused",
+                "FinishPart" => "Completed",
                 "Skip" => "Skipped",
                 "Cancel" => "Cancelled",
                 _ => "Stopped"
@@ -475,12 +476,14 @@ public static class WorkOrderEndpoints
         workOrder.Status = action switch
         {
             "Pause" => "Paused",
+            "FinishPart" => "InProgress",
             "Skip" => "Skipped",
             "Cancel" => "Cancelled",
             _ => hasActiveTeamMember ? "InProgress" : "Paused"
         };
         workOrder.TotalLaborMinutes = workOrder.VisitSessions.Where(item => item.EndedAt.HasValue).Sum(item => item.DurationMinutes);
-        AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, workOrder.Status, reason ?? action));
+        var historyNote = action == "FinishPart" ? "Personel kendi saha payını tamamladı; ekip raporu diğer katılımcıları bekliyor." : reason ?? action;
+        AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, workOrder.Status, historyNote));
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToResponse(workOrder));
     }

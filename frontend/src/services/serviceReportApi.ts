@@ -85,6 +85,7 @@ export const getCompanyServiceReports = (token: string) => request<ServiceReport
 export const getEmployeeServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/employee/service-reports', token);
 export const getCustomerServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/customer/service-reports', token);
 export const getServiceReportByWorkOrder = (token: string, workOrderId: string) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token);
+export const getPreviousServiceReport = (token: string, workOrderId: string) => request<ServiceReportRecord | null>(`/api/service-reports/work-orders/${workOrderId}/previous`, token);
 export const saveServiceReport = (token: string, workOrderId: string, input: UpsertServiceReportInput) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token, { method: 'PUT', body: JSON.stringify(input) });
 export async function uploadServiceReportPhotos(token: string, workOrderId: string, photos: ReportPhotoUpload[]) {
   if (photos.length === 0) return [];

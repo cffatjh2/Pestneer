@@ -1,4 +1,6 @@
 import type { InferenceSession } from 'onnxruntime-web';
+import * as ortWasm from 'onnxruntime-web';
+import * as ortWebGpu from 'onnxruntime-web/webgpu';
 import type { VisionModelPreference } from './pestneerVisionApi';
 
 type ModelKey = 'pVision' | 'pLens';
@@ -51,13 +53,12 @@ const labels: Record<string, string> = {
 };
 
 let manifestPromise: Promise<Manifest> | undefined;
-let runtimePromise: Promise<typeof import('onnxruntime-web/webgpu')> | undefined;
 const sessionCache = new Map<string, Promise<InferenceSession>>();
 
 export async function analyzePestImage(file: File, preference: VisionModelPreference): Promise<VisionAnalysis> {
   const startedAt = performance.now();
   const manifest = await loadManifest();
-  const image = await createImageBitmap(file);
+  const image = await loadImage(file);
   try {
     const modelKey = selectModel(preference);
     const wantsWebGpu = modelKey === 'pLens' && supportsWebGpu();
@@ -71,13 +72,13 @@ export async function analyzePestImage(file: File, preference: VisionModelPrefer
       runtime = 'wasm';
       session = await getSession(manifest.models.pVision.url, runtime);
     }
-    const ort = await loadRuntime();
+    const ort = getRuntime(runtime);
     const tiles = createTiles(image.width, image.height, manifest.tileSize, manifest.tileOverlap);
     const detections: VisionDetection[] = [];
     const inputName = session.inputNames[0] ?? 'images';
     const outputName = session.outputNames[0] ?? 'output';
     for (const tile of tiles) {
-      const prepared = prepareTile(image, tile, manifest.inputSize);
+      const prepared = prepareTile(image.source, tile, manifest.inputSize);
       const result = await session.run({
         [inputName]: new ort.Tensor('float32', prepared.data, [1, 3, manifest.inputSize, manifest.inputSize]),
       });
@@ -123,7 +124,7 @@ function isMobileDevice() {
 }
 
 async function getSession(url: string, runtime: VisionAnalysis['runtime']) {
-  const ort = await loadRuntime();
+  const ort = getRuntime(runtime);
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.proxy = false;
   const key = `${runtime}:${url}`;
@@ -135,21 +136,37 @@ async function getSession(url: string, runtime: VisionAnalysis['runtime']) {
   try { return await promise; }
   catch (error) {
     sessionCache.delete(key);
-    if (runtime === 'webgpu') {
-      return getSession(
-        url
-          .replace('pestneer-plens-v1.onnx', 'pestneer-pvision-v1.onnx')
-          .replace('pestneer-vision-tiny-v1.onnx', 'pestneer-pvision-v1.onnx'),
-        'wasm',
-      );
-    }
     throw error;
   }
 }
 
-function loadRuntime() {
-  runtimePromise ??= import('onnxruntime-web/webgpu');
-  return runtimePromise;
+function getRuntime(runtime: VisionAnalysis['runtime']): typeof ortWasm {
+  return (runtime === 'webgpu' ? ortWebGpu : ortWasm) as typeof ortWasm;
+}
+
+type LoadedImage = { source: CanvasImageSource; width: number; height: number; close: () => void };
+
+async function loadImage(file: File): Promise<LoadedImage> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+    } catch {}
+  }
+
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = 'async';
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Fotoğraf tarayıcı tarafından açılamadı.'));
+      image.src = url;
+    });
+    return { source: image, width: image.naturalWidth, height: image.naturalHeight, close: () => undefined };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 type Tile = { x: number; y: number; width: number; height: number };
@@ -170,7 +187,7 @@ function axisStarts(length: number, tileSize: number, step: number) {
   return [...new Set(values)];
 }
 
-function prepareTile(image: ImageBitmap, tile: Tile, inputSize: number) {
+function prepareTile(image: CanvasImageSource, tile: Tile, inputSize: number) {
   const canvas = document.createElement('canvas');
   canvas.width = inputSize;
   canvas.height = inputSize;

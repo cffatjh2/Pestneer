@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { AlertTriangle, Ban, Bug, Camera, Check, CheckCircle2, ChevronLeft, ChevronRight, Cloud, FileCheck2, ImagePlus, MapPinned, PackageCheck, Plus, QrCode, Save, Trash2, Undo2, WandSparkles, Wrench, X, Zap } from 'lucide-react';
 import type { WorkOrder } from '../../types';
-import { ReportConflictError, type ReportPhotoUpload, type ReportProductInput, type ReportStationInput, type ServiceReportRecord, type UpsertServiceReportInput } from '../../services/serviceReportApi';
+import { getPreviousServiceReport, ReportConflictError, type ReportPhotoUpload, type ReportProductInput, type ReportStationInput, type ServiceReportRecord, type UpsertServiceReportInput } from '../../services/serviceReportApi';
 import { getSitePlans, type SitePlanElement, type SitePlanRecord } from '../../services/sitePlanApi';
 import type { VehicleStockCheck } from '../../services/fieldOperationsApi';
 import { getLocalReportDraft, removeLocalReportDraft, saveLocalReportDraft, toOfflinePhotos } from '../../services/offlineFieldStore';
@@ -46,6 +46,15 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   const [conflictFinalize, setConflictFinalize] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [undoState, setUndoState] = useState<{ stations: ReportStationInput[]; message: string } | null>(null);
+  const [referenceReport, setReferenceReport] = useState<ServiceReportRecord | undefined>(previousReport);
+
+  useEffect(() => {
+    let active = true;
+    getPreviousServiceReport(accessToken, order.recordId)
+      .then((report) => { if (active && report) setReferenceReport(report); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [accessToken, order.recordId]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -58,13 +67,13 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
         if (existing?.stations.length || restoredDraft) setStations((current) => attachStationQrCodes(current, matched));
         else {
           const planned = stationsFromPlan(matched);
-          const manualPrevious = (previousReport?.stations ?? []).filter((item) => !item.sitePlanElementId)
+          const manualPrevious = (referenceReport?.stations ?? []).filter((item) => !item.sitePlanElementId)
             .map((item) => resetStationForVisit(stripStationId(item)));
           setStations([...planned, ...manualPrevious]);
         }
       } else {
-        if (!existing?.stations.length) setStations(previousReport?.stations.length ? previousReport.stations.map((item) => resetStationForVisit(stripStationId(item))) : [blankStation()]);
-        setPlanWarning(previousReport?.stations.length ? 'Önceki ziyarette kurulan kalıcı istasyon listesi yüklendi. Yeni istasyonları opsiyonel olarak ekleyebilirsiniz.' : 'Bu şubedeki ilk ziyarette istasyon kurulum listesini oluşturun. Kaydettiğiniz istasyonlar sonraki ziyaretlerde otomatik açılır.');
+        if (!existing?.stations.length) setStations(referenceReport?.stations.length ? referenceReport.stations.map((item) => resetStationForVisit(stripStationId(item))) : [blankStation()]);
+        setPlanWarning(referenceReport?.stations.length ? 'Önceki ziyarette kurulan kalıcı istasyon listesi yüklendi. Yeni istasyonları opsiyonel olarak ekleyebilirsiniz.' : 'Bu şubedeki ilk ziyarette istasyon kurulum listesini oluşturun. Kaydettiğiniz istasyonlar sonraki ziyaretlerde otomatik açılır.');
       }
     }).catch(() => {
       if (!active) return;
@@ -72,7 +81,7 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
       setPlanWarning('Kroki bilgisi alınamadı. İstasyonları manuel ekleyebilirsiniz.');
     }).finally(() => { if (active) setPlanLoading(false); });
     return () => { active = false; };
-  }, [accessToken, draftReady, existing?.stations.length, order.branchId, order.customerId, previousReport, restoredDraft]);
+  }, [accessToken, draftReady, existing?.stations.length, order.branchId, order.customerId, referenceReport, restoredDraft]);
 
   useEffect(() => {
     if (readOnly) return;
@@ -148,10 +157,10 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   };
 
   const copyPreviousVisit = () => {
-    if (!previousReport) return setError('Bu şube için önceki saha raporu bulunamadı.');
+    if (!referenceReport) return setError('Bu şube için önceki saha raporu bulunamadı.');
     rememberForUndo('Önceki ziyaret verileri getirildi.');
     setStations((current) => current.map((station) => {
-      const previous = previousReport.stations.find((item) => item.sitePlanElementId && item.sitePlanElementId === station.sitePlanElementId) ?? previousReport.stations.find((item) => item.deviceNumber === station.deviceNumber);
+      const previous = referenceReport.stations.find((item) => item.sitePlanElementId && item.sitePlanElementId === station.sitePlanElementId) ?? referenceReport.stations.find((item) => item.deviceNumber === station.deviceNumber);
       return previous ? { ...station, ...stripStationId(previous), sitePlanId: station.sitePlanId, sitePlanElementId: station.sitePlanElementId } : station;
     }));
   };
@@ -163,7 +172,7 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
       setError(null);
       return;
     }
-    const previous = previousReport?.stations.find((item) => item.sitePlanElementId === currentStation?.sitePlanElementId || item.deviceNumber === currentStation?.deviceNumber);
+    const previous = referenceReport?.stations.find((item) => item.sitePlanElementId === currentStation?.sitePlanElementId || item.deviceNumber === currentStation?.deviceNumber);
     const suggestedStock = previous?.appliedProductName ? vehicleStockItems.find((item) => item.productName === previous.appliedProductName) : undefined;
     updateStation(stationIndex, value === 'Activity' ? {
       ...clearStationStatus(), deviceStatus: value, hasActivity: true,
@@ -206,12 +215,12 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
     <nav className="field-report-steps"><button className={stage === 'inspection' ? 'active' : ''} onClick={() => setStage('inspection')}><span>1</span><div><strong>İstasyon kontrolü</strong><small>{checkedCount}/{stations.length || 0} nokta tamamlandı</small></div></button><button className={stage === 'report' ? 'active' : ''} onClick={() => inspectionComplete || readOnly ? setStage('report') : setError('Önce tüm istasyonların kontrol sonucunu girin.')}><span>2</span><div><strong>Rapor & imza</strong><small>Uygulama, ürün ve onay</small></div></button><div className={`local-draft-state ${localSaveState}`}><Cloud size={15} /><span>{readOnly ? 'Sunucu kaydı' : localSaveState === 'saving' ? 'Cihaza kaydediliyor…' : 'Cihaza kaydoldu'}</span></div></nav>
 
     {stage === 'inspection' ? <div className="station-inspection-stage">
-      {!readOnly && <div className="fast-field-toolbar"><div><Zap size={18} /><span><strong>Hızlı saha modu</strong><small>Toplu başlangıç yapın, yalnızca istisnaları değiştirin.</small></span></div><button onClick={markAllNoActivity}><CheckCircle2 size={16} /> Tümünü aktivite yok yap</button><button disabled={!previousReport} onClick={copyPreviousVisit}><WandSparkles size={16} /> Önceki ziyaretten getir</button><button onClick={() => setScannerOpen(true)}><QrCode size={16} /> QR okut</button>{sitePlan && <button onClick={() => void downloadStationLabelPdf(sitePlan, stations, companyName).catch((downloadError) => setError(downloadError instanceof Error ? downloadError.message : 'QR etiketleri oluşturulamadı.'))}><QrCode size={16} /> Etiket PDF</button>}</div>}
+      {!readOnly && <div className="fast-field-toolbar"><div><Zap size={18} /><span><strong>Hızlı saha modu</strong><small>Toplu başlangıç yapın, yalnızca istisnaları değiştirin.</small></span></div><button onClick={markAllNoActivity}><CheckCircle2 size={16} /> Tümünü aktivite yok yap</button><button disabled={!referenceReport} onClick={copyPreviousVisit}><WandSparkles size={16} /> Önceki ziyaretten getir</button><button onClick={() => setScannerOpen(true)}><QrCode size={16} /> QR okut</button>{sitePlan && <button onClick={() => void downloadStationLabelPdf(sitePlan, stations, companyName).catch((downloadError) => setError(downloadError instanceof Error ? downloadError.message : 'QR etiketleri oluşturulamadı.'))}><QrCode size={16} /> Etiket PDF</button>}</div>}
       <div className="inspection-overview"><div><strong>{progress}%</strong><span>Kontrol ilerlemesi</span></div><div className="inspection-progress"><i style={{ width: `${progress}%` }} /></div><div className="inspection-metrics"><span><Bug /> {groupedStatus.activity} aktivite</span><span><Wrench /> {groupedStatus.damaged} kırık</span><span><Ban /> {groupedStatus.inaccessible} ulaşılamadı</span></div></div>
       {sitePlan && <div className="inspection-plan-note"><MapPinned /><div><strong>{sitePlan.title} · R{String(sitePlan.revision).padStart(2, '0')}</strong><span>{sitePlan.areaName} krokisindeki {stations.length} ekipman noktası otomatik yüklendi.</span></div></div>}
-      {sitePlan && <StationRouteMap plan={sitePlan} stations={stations} activeIndex={stationIndex} previousReport={previousReport} onSelect={setStationIndex} />}
+      {sitePlan && <StationRouteMap plan={sitePlan} stations={stations} activeIndex={stationIndex} previousReport={referenceReport} onSelect={setStationIndex} />}
       {planWarning && <div className="inspection-warning"><AlertTriangle /><span>{planWarning}</span></div>}
-      {!previousReport && !sitePlan && <div className="inspection-plan-note first-install"><MapPinned /><div><strong>İlk ziyaret · istasyon kurulumu</strong><span>Numara, konum ve ekipman kodunu girin. Bu liste şubeye bağlı kalır ve sonraki işlerde otomatik yüklenir.</span></div></div>}
+      {!referenceReport && !sitePlan && <div className="inspection-plan-note first-install"><MapPinned /><div><strong>İlk ziyaret · istasyon kurulumu</strong><span>Numara, konum ve ekipman kodunu girin. Bu liste şubeye bağlı kalır ve sonraki işlerde otomatik yüklenir.</span></div></div>}
       {planLoading ? <div className="inspection-loading">Kroki ve istasyon listesi hazırlanıyor…</div> : <div className="inspection-layout">
         <aside className="inspection-station-list">{stations.map((station, index) => <button className={`${index === stationIndex ? 'active' : ''} status-${station.deviceStatus.toLowerCase()}`} key={`${station.sitePlanElementId ?? 'manual'}-${index}`} onClick={() => setStationIndex(index)}><span>{station.deviceNumber || `Yeni ${index + 1}`}</span><small>{station.area || 'Alan girilmedi'}</small><em>{statusLabel(station.deviceStatus)}</em></button>)}{!readOnly && <button className="inspection-add-station" onClick={() => { setStations((items) => [...items, blankStation()]); setStationIndex(stations.length); }}><Plus /> Manuel istasyon ekle</button>}</aside>
         {currentStation && <main className="inspection-card"><header><div><p>{currentStation.deviceType} EKİPMAN NOKTASI</p><h3>{currentStation.deviceNumber || 'Yeni istasyon'}</h3><span>{currentStation.area || 'Alan bilgisi bekleniyor'}</span></div><b>{stationIndex + 1}/{stations.length}</b></header>

@@ -75,7 +75,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("OpenMeteo", client =>
 {
     client.BaseAddress = new Uri("https://api.open-meteo.com/v1/");
-    client.Timeout = TimeSpan.FromSeconds(8);
+    client.Timeout = TimeSpan.FromSeconds(20);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Pestneer/0.8.0 (+https://pesneer.onrender.com)");
 });
 builder.Services.AddHttpClient("GoogleMapsResolver", client =>

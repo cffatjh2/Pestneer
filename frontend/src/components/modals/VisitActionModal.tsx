@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Ban, CirclePause, LogOut, OctagonX, X } from 'lucide-react';
+import { Ban, CheckCircle2, CirclePause, LogOut, OctagonX, X } from 'lucide-react';
 
-export type VisitAction = 'Stop' | 'Pause' | 'Skip' | 'Cancel';
+export type VisitAction = 'Stop' | 'Pause' | 'FinishPart' | 'Skip' | 'Cancel';
 
 const actions: { value: VisitAction; title: string; description: string; icon: React.ReactNode; requiresReason: boolean }[] = [
   { value: 'Stop', title: 'Ziyareti durdur', description: 'Bu personelin oturumunu kapatır; diğer ekip üyeleri çalışmaya devam edebilir.', icon: <LogOut />, requiresReason: false },
   { value: 'Pause', title: 'Ziyareti yarım bırak', description: 'Kayıtlar korunur ve daha sonra kaldığınız yerden devam edebilirsiniz.', icon: <CirclePause />, requiresReason: false },
+  { value: 'FinishPart', title: 'Saha payımı tamamla', description: 'Sizin oturumunuz tamamlanır. Ziyaret, ekipteki herkes işini bitirene kadar açık kalır.', icon: <CheckCircle2 />, requiresReason: false },
   { value: 'Skip', title: 'Ziyareti yoksay', description: 'Müşteri o gün hizmet istemediğinde gerekçesiyle birlikte kapatır.', icon: <Ban />, requiresReason: true },
   { value: 'Cancel', title: 'Ziyareti iptal et', description: 'Planlanan ziyareti iptal eder ve tekrar başlatılmasını engeller.', icon: <OctagonX />, requiresReason: true },
 ];

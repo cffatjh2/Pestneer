@@ -1,4 +1,4 @@
-export type CalendarEntryKind = 'Task' | 'Note';
+export type CalendarEntryKind = 'Task' | 'Note' | 'WorkOrder';
 export type CalendarEntryPriority = 'Low' | 'Normal' | 'High';
 export type CalendarEntryStatus = 'Planned' | 'Completed';
 
@@ -14,10 +14,17 @@ export type CalendarEntryRecord = {
   priority: CalendarEntryPriority;
   status: CalendarEntryStatus;
   createdAt: string;
+  sourceType: 'CalendarEntry' | 'WorkOrder';
+  workOrderId?: string;
+  workOrderNumber?: string;
+  customerName?: string;
+  branchName?: string;
+  serviceType?: string;
+  canEdit: boolean;
 };
 
 export type SaveCalendarEntryInput = {
-  kind: CalendarEntryKind;
+  kind: Exclude<CalendarEntryKind, 'WorkOrder'>;
   title: string;
   description?: string;
   date: string;

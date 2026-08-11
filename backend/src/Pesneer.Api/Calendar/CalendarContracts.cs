@@ -22,4 +22,11 @@ public sealed record CalendarEntryResponse(
     string? AssignedEmployeeName,
     string Priority,
     string Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string SourceType,
+    Guid? WorkOrderId,
+    string? WorkOrderNumber,
+    string? CustomerName,
+    string? BranchName,
+    string? ServiceType,
+    bool CanEdit);

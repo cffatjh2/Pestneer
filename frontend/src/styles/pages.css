@@ -598,6 +598,8 @@
 .event-normal { color: var(--blue-700); background: var(--blue-50); }
 .event-high { color: var(--red-600); background: var(--red-50); }
 .calendar-event.completed { opacity: .62; text-decoration: line-through; }
+.calendar-event.source-workorder { background: #fff; border: 1px solid var(--color-border); color: var(--gray-800); opacity: 1; text-decoration: none; }
+.calendar-event.source-workorder.completed { background: #eafaf2; border-color: #8ed8b5; color: #087a52; opacity: 1; text-decoration: none; }
 .calendar-more { padding: 3px 5px; color: var(--gray-500); font-size: 9px; font-weight: var(--font-bold); text-align: left; }
 .calendar-week-view { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); min-height: 460px; border-top: 1px solid var(--color-border); border-left: 1px solid var(--color-border); overflow-x: auto; }
 .calendar-week-view > section { min-width: 130px; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
@@ -617,6 +619,20 @@
 .calendar-agenda-item strong { color: var(--gray-800); font-size: var(--text-xs); }
 .calendar-agenda-item small { margin-top: 4px; color: var(--gray-400); font-size: 9px; }
 .calendar-agenda-item > svg { color: var(--green-600); }
+.calendar-agenda-item.source-workorder { background: #fff; }
+.calendar-agenda-item.source-workorder.completed { background: #eafaf2; border-color: #8ed8b5; }
+.employee-day-calendar { display: grid; gap: 12px; margin: 18px 0; }
+.employee-day-navigation { display: flex; align-items: center; gap: 8px; }
+.employee-day-navigation strong { flex: 1; color: var(--gray-800); text-align: center; text-transform: capitalize; }
+.employee-day-navigation button, .employee-day-strip button { border: 1px solid var(--color-border); border-radius: 12px; background: #fff; color: var(--gray-700); }
+.employee-day-navigation button { min-width: 42px; min-height: 42px; }
+.employee-day-navigation .today { padding: 0 14px; color: var(--blue-700); font-weight: 700; }
+.employee-day-strip { display: grid; grid-template-columns: repeat(7, minmax(48px, 1fr)); gap: 8px; overflow-x: auto; }
+.employee-day-strip button { display: grid; place-items: center; gap: 3px; min-height: 64px; padding: 8px; }
+.employee-day-strip button span { font-size: 11px; text-transform: capitalize; }
+.employee-day-strip button.active { border-color: var(--blue-500); background: var(--blue-600); color: #fff; }
+.employee-task-list article.work-order { border: 1px solid var(--color-border); background: #fff; }
+.employee-task-list article.completed { border-color: #8ed8b5; background: #eafaf2; }
 .calendar-day-view { min-height: 440px; }
 .day-view-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--gray-50); }
 .day-view-heading > div { display: flex; align-items: center; gap: var(--space-3); color: var(--blue-600); }

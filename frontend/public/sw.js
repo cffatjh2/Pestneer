@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pestneer-field-v2';
+const CACHE_NAME = 'pestneer-field-v3';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pesneer-mark.jpeg'];
 
 self.addEventListener('install', (event) => {
@@ -33,14 +33,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const isModelAsset = url.pathname.startsWith('/models/') || url.pathname.startsWith('/ort/');
+  if (isModelAsset) {
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+        if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+        return response;
+      }))
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      if (response.ok) {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-      }
-      return response;
-    }))
+    fetch(request)
+      .then((response) => {
+        if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+        return response;
+      })
+      .catch(() => caches.match(request))
   );
 });
 
