@@ -116,7 +116,11 @@ public static class StationActivationEndpoints
             if (string.IsNullOrWhiteSpace(station.DeviceNumber) || string.IsNullOrWhiteSpace(station.Area)) return "Her istasyon için numara ve konum girin.";
             if (request.Finalize && !Statuses.Contains(station.DeviceStatus)) return $"{station.DeviceNumber} için kontrol sonucunu seçin.";
             if (station.DeviceStatus == "Inaccessible" && string.IsNullOrWhiteSpace(station.InaccessibilityReason)) return $"{station.DeviceNumber} için ulaşılamama nedenini yazın.";
-            if (station.DeviceStatus == "Activity" && station.CaughtCount < 1) return $"{station.DeviceNumber} için aktivite adedini girin.";
+            if (station.DeviceStatus == "Activity" && station.CaughtCount < 1) return $"{station.DeviceNumber} için aktivite adedini seçin.";
+            if (station.DeviceStatus == "Activity" && string.IsNullOrWhiteSpace(station.TargetPest)) return $"{station.DeviceNumber} için zararlı türünü seçin.";
+            if (!string.IsNullOrWhiteSpace(station.ActivityType) && !ServiceReportCatalog.ActivityTypes.Contains(station.ActivityType, StringComparer.OrdinalIgnoreCase)) return $"{station.DeviceNumber} için aktivite türünü listeden seçin.";
+            if (!ServiceReportCatalog.IsKnownOrOther(station.TargetPest, ServiceReportCatalog.PestTypes)) return $"{station.DeviceNumber} için zararlı türünü listeden seçin; listede yoksa Diğer seçeneğini kullanın.";
+            if (!ServiceReportCatalog.IsKnownOrOther(station.InaccessibilityReason, ServiceReportCatalog.InaccessibilityReasons)) return $"{station.DeviceNumber} için erişim nedenini listeden seçin; listede yoksa Diğer seçeneğini kullanın.";
         }
         return null;
     }

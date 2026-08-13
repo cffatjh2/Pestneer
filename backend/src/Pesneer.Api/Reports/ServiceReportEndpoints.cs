@@ -20,6 +20,11 @@ public static class ServiceReportEndpoints
     {
         var shared = app.MapGroup("/api/service-reports").RequireAuthorization("CompanyStaff");
         shared.MapGet("/work-orders/{workOrderId:guid}", GetByWorkOrderAsync);
+        shared.MapGet("/catalog", () => Results.Ok(new ServiceReportCatalogResponse(
+            ServiceReportCatalog.PestTypes, ServiceReportCatalog.ActivityTypes, ServiceReportCatalog.EquipmentTypes,
+            ServiceReportCatalog.InaccessibilityReasons, ServiceReportCatalog.ResidenceTypes, ServiceReportCatalog.WorkTypes,
+            ServiceReportCatalog.SafetyMeasures, ServiceReportCatalog.ApplicationMethods, ServiceReportCatalog.ProductUnits,
+            Enumerable.Range(1, 10).ToArray())));
         shared.MapGet("/work-orders/{workOrderId:guid}/previous", GetPreviousByWorkOrderAsync);
         shared.MapPut("/work-orders/{workOrderId:guid}", UpsertAsync);
         shared.MapPost("/work-orders/{workOrderId:guid}/photos", UploadPhotosAsync).DisableAntiforgery();
@@ -393,6 +398,10 @@ public static class ServiceReportEndpoints
         if (request.FirmName.Trim().Length is < 2 or > 240) errors["firmName"] = ["Uygulayıcı firma adı 2-240 karakter arasında olmalıdır."];
         if (request.Stations.Count > 500) errors["stations"] = ["Bir raporda en fazla 500 istasyon kaydedilebilir."];
         if (request.Products.Count > 30) errors["products"] = ["Bir raporda en fazla 30 ürün kaydedilebilir."];
+        if (!ServiceReportCatalog.IsKnownList(request.TargetPests, ServiceReportCatalog.PestTypes)) errors["targetPests"] = ["Hedef zararlı listesinden bir değer seçin; listede yoksa Diğer seçeneğini kullanın."];
+        if (!ServiceReportCatalog.IsKnownOrOther(request.ResidenceType, ServiceReportCatalog.ResidenceTypes)) errors["residenceType"] = ["Mahal türü listesinden bir değer seçin; listede yoksa Diğer seçeneğini kullanın."];
+        if (!ServiceReportCatalog.IsKnownList(request.WorkType, ServiceReportCatalog.WorkTypes)) errors["workType"] = ["İş türü listesinden seçim yapın; listede yoksa Diğer seçeneğini kullanın."];
+        if (!ServiceReportCatalog.IsKnownList(request.SafetyMeasures, ServiceReportCatalog.SafetyMeasures)) errors["safetyMeasures"] = ["Güvenlik önlemlerini listeden seçin; listede yoksa Diğer seçeneğini kullanın."];
         for (var index = 0; index < request.Stations.Count; index++)
         {
             var item = request.Stations[index];
@@ -410,6 +419,7 @@ public static class ServiceReportEndpoints
                 errors[$"stations[{index}].pestObservations"] = [$"{index + 1}. istasyonun PestneerVision sonuçları geçerli değil."];
             if (item.DeviceNumber.Trim().Length is < 1 or > 80 || item.Area.Trim().Length is < 2 or > 240) errors[$"stations[{index}]"] = [$"{index + 1}. istasyonun numara ve alan bilgisini kontrol edin."];
             if (item.DeviceType.Trim().Length is < 1 or > 40 || !DeviceStatuses.Contains(item.DeviceStatus) || item.CaughtCount is < 0 or > 100000) errors[$"stations[{index}].status"] = [$"{index + 1}. istasyonun tür, durum veya gözlem adedi bilgisini kontrol edin."];
+            if (!ServiceReportCatalog.IsKnownOrOther(item.TargetPest, ServiceReportCatalog.PestTypes)) errors[$"stations[{index}].targetPest"] = [$"{index + 1}. istasyonun zararlı türünü listeden seçin; listede yoksa Diğer seçeneğini kullanın."];
             if (!string.IsNullOrWhiteSpace(item.ActivityType) && !ActivityTypes.Contains(item.ActivityType)) errors[$"stations[{index}].activityType"] = [$"{index + 1}. istasyonun aktivite türü geçersiz."];
             if (item.AppliedAmount < 0 || item.ReplacementQuantity < 0) errors[$"stations[{index}].quantity"] = [$"{index + 1}. istasyonun kullanım miktarları negatif olamaz."];
             if (item.DeviceStatus == "Inaccessible" && string.IsNullOrWhiteSpace(item.InaccessibilityReason)) errors[$"stations[{index}].inaccessibilityReason"] = [$"{index + 1}. istasyona ulaşılamama nedenini yazın."];
@@ -425,6 +435,8 @@ public static class ServiceReportEndpoints
         {
             var item = request.Products[index];
             if (item.ProductName.Trim().Length is < 2 or > 240 || item.AmountUsed < 0 || item.Unit.Trim().Length is < 1 or > 32) errors[$"products[{index}]"] = [$"{index + 1}. ürünün ad, miktar ve birim bilgisini kontrol edin."];
+            if (!ServiceReportCatalog.IsKnownOrOther(item.ApplicationMethod, ServiceReportCatalog.ApplicationMethods)) errors[$"products[{index}].applicationMethod"] = [$"{index + 1}. ürünün uygulama yöntemini listeden seçin; listede yoksa Diğer seçeneğini kullanın."];
+            if (!ServiceReportCatalog.IsKnownOrOther(item.Unit, ServiceReportCatalog.ProductUnits)) errors[$"products[{index}].unit"] = [$"{index + 1}. ürünün birimini listeden seçin; listede yoksa Diğer seçeneğini kullanın."];
         }
         if (request.Finalize)
         {

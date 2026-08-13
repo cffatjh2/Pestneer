@@ -30,7 +30,7 @@ services:
       - key: BootstrapOwner__CompanyName
         value: Tura Çevre Sağlığı
       - key: Email__Enabled
-        value: "false"
+        value: "true"
       - key: Email__Host
         sync: false
       - key: Email__Port

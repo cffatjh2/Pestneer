@@ -70,6 +70,19 @@ export type ServiceReportRecord = {
 export type TrendPeriod = { period: string; reportCount: number; totalStations: number; activeStations: number; plateChanges: number; totalCaught: number; activityRate: number; riskScore: number; riskLevel: string };
 export type ServiceReportAnalytics = { from: string; to: string; reportCount: number; totalStations: number; activeStations: number; totalCaught: number; activityRate: number; riskScore: number; riskLevel: string; periods: TrendPeriod[]; pestTotals: { pest: string; totalCaught: number }[] };
 
+export type ServiceReportCatalog = {
+  pestTypes: string[];
+  activityTypes: string[];
+  equipmentTypes: string[];
+  inaccessibilityReasons: string[];
+  residenceTypes: string[];
+  workTypes: string[];
+  safetyMeasures: string[];
+  applicationMethods: string[];
+  productUnits: string[];
+  quickCounts: number[];
+};
+
 export class ReportSessionExpiredError extends Error {
   constructor(message = 'Oturumunuz güncel değil. Lütfen yeniden giriş yapın.') { super(message); this.name = 'ReportSessionExpiredError'; }
 }
@@ -85,6 +98,7 @@ export class ReportConflictError extends Error {
 export const getCompanyServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/company/service-reports', token);
 export const getEmployeeServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/employee/service-reports', token);
 export const getCustomerServiceReports = (token: string) => request<ServiceReportRecord[]>('/api/customer/service-reports', token);
+export const getServiceReportCatalog = (token: string) => request<ServiceReportCatalog>('/api/service-reports/catalog', token);
 export const getServiceReportByWorkOrder = (token: string, workOrderId: string) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token);
 export const getPreviousServiceReport = (token: string, workOrderId: string) => request<ServiceReportRecord | null>(`/api/service-reports/work-orders/${workOrderId}/previous`, token);
 export const saveServiceReport = (token: string, workOrderId: string, input: UpsertServiceReportInput) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token, { method: 'PUT', body: JSON.stringify(input) });

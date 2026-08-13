@@ -32,6 +32,7 @@ const emptyManualBranch: ManualBranchDraft = {
 
 export default function CustomerBranchModal({ customers, onClose, onSubmit }: CustomerBranchModalProps) {
   const [mode, setMode] = useState<'existing' | 'new'>(customers.length > 0 ? 'existing' : 'new');
+  const [newCustomerStructure, setNewCustomerStructure] = useState<'single' | 'multi'>('single');
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? '');
   const [importMode, setImportMode] = useState<'manual' | 'excel' | 'text'>('manual');
   const [manualBranch, setManualBranch] = useState<ManualBranchDraft>(emptyManualBranch);
@@ -86,7 +87,8 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const hasIncompleteManualBranch = importMode === 'manual' && Object.values(manualBranch).some((value) => value.trim()) && manualBranches.length === 0;
+    const singleLocation = mode === 'new' && newCustomerStructure === 'single';
+    const hasIncompleteManualBranch = !singleLocation && importMode === 'manual' && Object.values(manualBranch).some((value) => value.trim()) && manualBranches.length === 0;
     if (hasIncompleteManualBranch) {
       setError('Şube adı ve açık adres alanlarını tamamlayın.');
       return;
@@ -111,11 +113,28 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
       portalEmail: String(formData.get('portalEmail') || '') || undefined,
       portalPassword: String(formData.get('portalPassword') || '') || undefined,
     } : null;
+    const branchesToSave: CreateBranchInput[] = singleLocation && customer ? [{
+      name: 'Merkez',
+      code: customer.code ? `${customer.code}-MRK` : undefined,
+      address: customer.address ?? '',
+      city: customer.city,
+      district: customer.district,
+      contactName: customer.contactName,
+      phoneNumber: customer.phoneNumber,
+      email: customer.email,
+      latitude: customer.latitude,
+      longitude: customer.longitude,
+      mapUrl: customer.mapUrl,
+    }] : parsedBranches;
+    if (singleLocation && !customer?.address?.trim()) {
+      setError('Tek lokasyonlu müşteri için açık adresi girin. Bu adres Merkez lokasyonu olarak kaydedilecek.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
     try {
-      await onSubmit(mode === 'existing' ? customerId : null, customer, parsedBranches);
+      await onSubmit(mode === 'existing' ? customerId : null, customer, branchesToSave);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Müşteri ve şubeler kaydedilemedi.');
     } finally {
@@ -130,13 +149,15 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
         <form onSubmit={handleSubmit}>
           <div className="customer-mode-switch"><button type="button" className={mode === 'new' ? 'active' : ''} onClick={() => setMode('new')}><Building2 size={15} /> Yeni çatı müşteri</button><button type="button" className={mode === 'existing' ? 'active' : ''} onClick={() => setMode('existing')} disabled={customers.length === 0}><Plus size={15} /> Mevcut müşteriye şube</button></div>
 
+          {mode === 'new' && <div className="customer-structure-switch" role="radiogroup" aria-label="Müşteri lokasyon yapısı"><button type="button" role="radio" aria-checked={newCustomerStructure === 'single'} className={newCustomerStructure === 'single' ? 'active' : ''} onClick={() => { setNewCustomerStructure('single'); setError(null); }}><MapPin size={18} /><span><strong>Tek lokasyon</strong><small>Fabrika, depo veya tek işletme</small></span><CheckCircle2 size={17} /></button><button type="button" role="radio" aria-checked={newCustomerStructure === 'multi'} className={newCustomerStructure === 'multi' ? 'active' : ''} onClick={() => { setNewCustomerStructure('multi'); setError(null); }}><Building2 size={18} /><span><strong>Şubeli yapı</strong><small>Bir çatı altında birden çok lokasyon</small></span><CheckCircle2 size={17} /></button></div>}
+
           {mode === 'existing' ? <label className="standalone-field">Müşteri<select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.legalName} · {customer.branches.length} şube</option>)}</select></label> : <section className="customer-data-section">
-            <div className="modal-subheading"><Building2 size={18} /><div><strong>Çatı müşteri bilgileri</strong><span>Merkez iletişim ve fatura/operasyon konumu</span></div></div>
+            <div className="modal-subheading"><Building2 size={18} /><div><strong>{newCustomerStructure === 'single' ? 'Müşteri ve tek lokasyon bilgileri' : 'Çatı müşteri bilgileri'}</strong><span>{newCustomerStructure === 'single' ? 'Bu bilgiler otomatik olarak Merkez lokasyonuna da bağlanır.' : 'Merkez iletişim ve fatura/operasyon konumu'}</span></div></div>
             <div className="form-grid customer-data-grid">
               <label>Müşteri / marka adı<input name="legalName" required placeholder="Arabica Coffee House" /></label><label>Müşteri kodu<input name="code" placeholder="Otomatik oluşturulur" /></label>
               <label>Merkez yetkilisi<input name="contactName" placeholder="Ad Soyad" /></label><label>Merkez telefonu<input name="phoneNumber" type="tel" placeholder="0 (5xx) xxx xx xx" /></label>
               <label>Merkez e-postası<input name="email" type="email" placeholder="operasyon@firma.com" /></label><label>İl / İlçe<span className="inline-field-pair"><input name="city" placeholder="İl" /><input name="district" placeholder="İlçe" /></span></label>
-              <label className="form-field-wide">Merkez adresi<input name="address" placeholder="Açık adres" /></label>
+              <label className="form-field-wide">Merkez adresi<input name="address" required={newCustomerStructure === 'single'} placeholder="Açık adres" /></label>
               <label className="form-field-wide">Google Haritalar bağlantısı<input name="mapUrl" type="url" placeholder="https://maps.app.goo.gl/..." /></label>
               <label>Enlem<input name="latitude" type="number" step="0.000001" placeholder="39.933365" /></label><label>Boylam<input name="longitude" type="number" step="0.000001" placeholder="32.859742" /></label>
             </div>
@@ -151,7 +172,9 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
             </div>
           </section>}
 
-          <section className="bulk-branch-section">
+          {mode === 'new' && newCustomerStructure === 'single' && <div className="single-location-summary"><MapPin size={20} /><div><strong>Merkez lokasyonu otomatik oluşturulacak</strong><span>Yukarıdaki adres, yetkili, telefon, e-posta ve harita bilgileri tek operasyon noktası olarak kullanılacak. Daha sonra yeni şubeler ekleyebilirsiniz.</span></div></div>}
+
+          {(mode === 'existing' || newCustomerStructure === 'multi') && <section className="bulk-branch-section">
             <div className="modal-subheading"><FileSpreadsheet size={18} /><div><strong>Şubeleri içe aktar</strong><span>{mode === 'new' ? 'İsterseniz müşteriyi şubesiz kaydedebilir veya ' : ''}Excel dosyasıyla ya da metin listesiyle 250 lokasyona kadar ekleyin.</span></div><em>{parsedBranches.length} şube</em></div>
             <div className="branch-import-switch" role="tablist" aria-label="Şube ekleme yöntemi">
               <button type="button" className={importMode === 'manual' ? 'active' : ''} onClick={() => { setImportMode('manual'); setError(null); }}><Plus size={15} /> Tek şube</button>
@@ -199,10 +222,10 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
               <textarea value={branchText} onChange={(event) => setBranchText(event.target.value)} rows={7} placeholder={'Şube Adı | İl | İlçe | Açık Adres | Yetkili | Telefon | E-posta | Enlem | Boylam | Google Haritalar | Portal Yetkilisi | Portal E-posta | Geçici Şifre\nATG Şube | Ankara | Altındağ | Zübeyde Hanım Mah. No:10 | Ayşe Yılmaz | 0500 000 00 00 | atg@arabica.com | 39.950000 | 32.850000 | https://maps.app.goo.gl/... | Ayşe Yılmaz | atg.portal@arabica.com | Degistir123'} />
               <div className="bulk-format-note"><MapPin size={15} /><span>Zorunlu alanlar: <strong>Şube adı</strong> ve <strong>açık adres</strong>. Kullanılmayan sütunları boş bırakabilirsiniz; ayırıcı olarak <strong>|</strong> kullanın.</span></div>
             </>}
-          </section>
+          </section>}
 
           {error && <div className="modal-form-error" role="alert">{error}</div>}
-          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button" disabled={isSubmitting || isReadingExcel || (mode === 'existing' && parsedBranches.length === 0)}>{isSubmitting ? 'Kaydediliyor…' : parsedBranches.length > 0 ? `${parsedBranches.length} Şubeyi Kaydet` : mode === 'existing' ? 'Şube Bilgilerini Tamamlayın' : 'Çatı Müşteriyi Kaydet'} <Plus size={17} /></button></div>
+          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button" disabled={isSubmitting || isReadingExcel || (mode === 'existing' && parsedBranches.length === 0)}>{isSubmitting ? 'Kaydediliyor…' : mode === 'new' && newCustomerStructure === 'single' ? 'Müşteri ve Merkez Lokasyonu Kaydet' : parsedBranches.length > 0 ? `${parsedBranches.length} Şubeyi Kaydet` : mode === 'existing' ? 'Şube Bilgilerini Tamamlayın' : 'Çatı Müşteriyi Kaydet'} <Plus size={17} /></button></div>
         </form>
       </div>
     </div>

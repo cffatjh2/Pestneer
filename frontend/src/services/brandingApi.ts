@@ -4,6 +4,8 @@ export type CompanyBranding = {
   logoFileName?: string;
   logoUpdatedAt?: string;
   logoUrl?: string;
+  reportNotificationEmail?: string;
+  emailDeliveryConfigured: boolean;
 };
 
 export async function getCompanyBranding(accessToken: string) {
@@ -27,14 +29,26 @@ export async function deleteCompanyLogo(accessToken: string) {
   await request(accessToken, '/api/company/branding/logo', { method: 'DELETE' });
 }
 
+export async function updateReportNotificationEmail(accessToken: string, email?: string) {
+  const response = await request(accessToken, '/api/company/branding/report-notification-email', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email?.trim() || null })
+  });
+  return response.json() as Promise<{ reportNotificationEmail?: string }>;
+}
+
+export async function retryReportEmails(accessToken: string) {
+  const response = await request(accessToken, '/api/company/branding/email/retry', { method: 'POST' });
+  return response.json() as Promise<{ reset: number; sent: number }>;
+}
+
 async function request(accessToken: string, url: string, init?: RequestInit) {
   let response: Response;
   try { response = await fetch(url, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${accessToken}` } }); }
   catch { throw new Error('Sunucuya bağlanılamadı.'); }
   if (response.status === 401) throw new CompanyBrandingSessionExpiredError();
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { message?: string } | null;
-    throw new Error(payload?.message ?? 'Firma markası güncellenemedi.');
+    const payload = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;
+    throw new Error(payload?.message ?? payload?.detail ?? Object.values(payload?.errors ?? {})[0]?.[0] ?? 'Firma markası güncellenemedi.');
   }
   return response;
 }

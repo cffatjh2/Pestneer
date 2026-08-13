@@ -36,6 +36,7 @@ try {
         companyCode = 'TURA-ANKARA'; email = 'sahip@mail.com'; password = '123456'
     } | ConvertTo-Json)
     $headers = @{ Authorization = "Bearer $($owner.accessToken)" }
+    $catalog = Invoke-RestMethod "$baseUrl/api/service-reports/catalog" -Headers $headers
     $runId = [Guid]::NewGuid().ToString('N').Substring(0, 8)
     $employee = Invoke-RestMethod "$baseUrl/api/company/employees" -Method Post -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{
         firstName = 'Aktivasyon'; lastName = 'Personeli'; phoneNumber = '05000000000'; email = "aktivasyon-$runId@test.local"
@@ -47,7 +48,7 @@ try {
         mapUrl = $null; portalContactName = 'Aktivasyon Yetkilisi'; portalEmail = $customerEmail; portalPassword = '123456'
     } | ConvertTo-Json)
     $branches = @(Invoke-RestMethod "$baseUrl/api/company/customers/$($customer.id)/branches/bulk" -Method Post -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{
-        branches = @(@{ name = 'Üretim Şubesi'; code = $null; address = 'Çankaya Ankara'; city = 'Ankara'; district = 'Çankaya'; contactName = 'Şube Yetkilisi'; phoneNumber = '05000000002'; email = $null; latitude = $null; longitude = $null; mapUrl = $null; portalContactName = $null; portalEmail = $null; portalPassword = $null })
+        branches = @(@{ name = 'Merkez'; code = $null; address = 'Çankaya Ankara'; city = 'Ankara'; district = 'Çankaya'; contactName = 'Şube Yetkilisi'; phoneNumber = '05000000002'; email = $customerEmail; latitude = $null; longitude = $null; mapUrl = $null; portalContactName = $null; portalEmail = $null; portalPassword = $null })
     } | ConvertTo-Json -Depth 5))
     $branch = $branches[0]
 
@@ -100,7 +101,9 @@ try {
     } | ConvertTo-Json)
     $vehicleStock = @($transfer.vehicle.stockItems)[0]
     $report = Invoke-RestMethod "$baseUrl/api/service-reports/work-orders/$($orders[0].id)" -Method Put -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{
-        firmName = 'Tura Çevre Sağlığı'; targetPests = 'Yürüyen haşere'; applicationSummary = 'Test uygulaması'
+        firmName = 'Tura Çevre Sağlığı'; targetPests = $catalog.pestTypes[0]; residenceType = $catalog.residenceTypes[0]; workType = $catalog.workTypes[0]
+        safetyMeasures = $catalog.safetyMeasures[0]; applicationSummary = 'Test uygulaması'
+        additionalEmailRecipients = @("ek-rapor-$runId@test.local")
         managerSignatureData = 'test-manager-signature'; customerSignatureData = 'test-customer-signature'; finalize = $true
         stations = @(); products = @(@{
             vehicleStockItemId = $vehicleStock.id; productName = $vehicleStock.productName; amountUsed = 30; unit = 'Mililitre'
@@ -116,6 +119,7 @@ try {
     $customerLicenses = @(Invoke-RestMethod "$baseUrl/api/quality/documents?category=Licenses" -Headers $customerHeaders)
     [pscustomobject]@{
         login = [bool]$owner.accessToken
+        singleLocationCreated = $branch.name -eq 'Merkez' -and $branch.email -eq $customerEmail
         draft = $draft.status
         final = $final.status
         stations = $final.totalStations
@@ -127,12 +131,18 @@ try {
         inventoryLicenseLinked = $inventoryAfterLicense.licenseDocumentId -eq $license.id -and $inventoryAfterLicense.licenseNumber -eq "RUHSAT-$runId"
         vehicleLicenseLinked = $vehicleStock.licenseDocumentId -eq $license.id
         reportLicensePinned = @($report.products)[0].licenseDocumentId -eq $license.id -and @($report.products)[0].licenseNumber -eq "RUHSAT-$runId"
+        emailRecipientsQueued = $report.emailRecipientCount -ge 3 -and $report.emailDeliveryStatus -eq 'Pending'
         customerLicenseVisible = $customerLicenses.Count -gt 0
     } | ConvertTo-Json
 }
 catch {
+    $responseBody = ''
+    if ($_.Exception.Response) {
+        $reader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+        try { $responseBody = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    }
     $serverLog = ((Get-Content $standardOutput -Tail 120 -ErrorAction SilentlyContinue) + (Get-Content $standardError -Tail 120 -ErrorAction SilentlyContinue)) -join [Environment]::NewLine
-    throw "$($_.Exception.Message)$([Environment]::NewLine)$serverLog"
+    throw "$($_.Exception.Message)$([Environment]::NewLine)$responseBody$([Environment]::NewLine)$serverLog"
 }
 finally {
     if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }
