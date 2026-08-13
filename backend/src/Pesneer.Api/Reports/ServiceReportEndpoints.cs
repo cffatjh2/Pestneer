@@ -7,6 +7,7 @@ using Pesneer.Api.Inventory;
 using Pesneer.Api.Compliance;
 using Pesneer.Api.Email;
 using Pesneer.Api.WorkOrders;
+using Pesneer.Api.StationActivations;
 
 namespace Pesneer.Api.Reports;
 
@@ -136,6 +137,9 @@ public static class ServiceReportEndpoints
         }
         var validation = Validate(request);
         if (validation.Count > 0) return Results.ValidationProblem(validation);
+        var licenseResolution = await ResolveProductLicensesAsync(request.Products, dbContext, cancellationToken);
+        if (licenseResolution.Errors is not null) return Results.ValidationProblem(licenseResolution.Errors);
+        request = request with { Products = licenseResolution.Products };
 
         var now = DateTimeOffset.UtcNow;
         if (report is null)
@@ -213,6 +217,7 @@ public static class ServiceReportEndpoints
         {
             Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, ServiceReportId = report.Id,
             VehicleStockItemId = item.VehicleStockItemId,
+            LicenseDocumentId = item.LicenseDocumentId,
             ProductName = item.ProductName.Trim(), LicenseNumber = NullIfEmpty(item.LicenseNumber),
             ApplicationMethod = NullIfEmpty(item.ApplicationMethod), DilutionRate = NullIfEmpty(item.DilutionRate),
             ActiveIngredient = NullIfEmpty(item.ActiveIngredient), Antidote = NullIfEmpty(item.Antidote),
@@ -326,24 +331,37 @@ public static class ServiceReportEndpoints
         var reports = (await query.ToListAsync(cancellationToken))
             .Where(item => item.WorkOrder.ScheduledAt >= fromOffset && item.WorkOrder.ScheduledAt < toOffset)
             .ToList();
-        var allStations = reports.SelectMany(item => item.Stations).ToArray();
+        var activationQuery = dbContext.StationActivations.AsNoTracking().Include(item => item.WorkOrder).Where(item => item.Status == "Finalized");
+        if (customerId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerId == customerId.Value);
+        if (branchId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerBranchId == branchId.Value);
+        var activations = (await activationQuery.ToListAsync(cancellationToken))
+            .Where(item => item.WorkOrder.ScheduledAt >= fromOffset && item.WorkOrder.ScheduledAt < toOffset)
+            .ToList();
+        var sources = reports.Where(item => item.Stations.Count > 0).Select(item => new AnalyticsSource(item.WorkOrder.ScheduledAt, item.Stations.Select(station => new AnalyticsStation(
+                station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest,
+                station.PestObservations.Select(pest => new AnalyticsPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray()))
+            .Concat(activations.Select(item => new AnalyticsSource(item.WorkOrder.ScheduledAt, StationActivationData.Deserialize(item.StationsJson).Select(station => new AnalyticsStation(
+                station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest,
+                (station.PestObservations ?? []).Select(pest => new AnalyticsPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray())))
+            .ToArray();
+        var allStations = sources.SelectMany(item => item.Stations).ToArray();
         var overall = CalculateRisk(allStations);
-        var periods = reports.GroupBy(item => $"{item.WorkOrder.ScheduledAt:yyyy-MM}").OrderBy(item => item.Key).Select(group =>
+        var periods = sources.GroupBy(item => $"{item.ScheduledAt:yyyy-MM}").OrderBy(item => item.Key).Select(group =>
         {
             var stations = group.SelectMany(item => item.Stations).ToArray();
             var risk = CalculateRisk(stations);
             return new TrendPeriodResponse(group.Key, group.Count(), stations.Length, stations.Count(item => item.HasActivity), stations.Count(item => item.PlateChanged), stations.Sum(item => item.CaughtCount), risk.ActivityRate, risk.Score, risk.Level);
         }).ToArray();
-        var observationPests = allStations.SelectMany(item => item.PestObservations)
-            .Where(item => item.ApprovedCount > 0)
-            .GroupBy(item => item.PestName.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
-            .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.ApprovedCount)));
-        var legacyPests = allStations.Where(item => item.PestObservations.Count == 0 && !string.IsNullOrWhiteSpace(item.TargetPest))
+        var observationPests = allStations.SelectMany(item => item.Pests)
+            .Where(item => item.Count > 0)
+            .GroupBy(item => item.Name.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.Count)));
+        var legacyPests = allStations.Where(item => item.Pests.Count == 0 && !string.IsNullOrWhiteSpace(item.TargetPest))
             .GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
             .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.CaughtCount)));
         var pests = observationPests.Concat(legacyPests).GroupBy(item => item.Pest, StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
             .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.TotalCaught))).OrderByDescending(item => item.TotalCaught).ToArray();
-        return Results.Ok(new ServiceReportAnalyticsResponse(fromDate, toDate, reports.Count, allStations.Length, allStations.Count(item => item.HasActivity), allStations.Sum(item => item.CaughtCount), overall.ActivityRate, overall.Score, overall.Level, periods, pests));
+        return Results.Ok(new ServiceReportAnalyticsResponse(fromDate, toDate, sources.Length, allStations.Length, allStations.Count(item => item.HasActivity), allStations.Sum(item => item.CaughtCount), overall.ActivityRate, overall.Score, overall.Level, periods, pests));
     }
 
     private static IQueryable<ServiceReport> ReportQuery(PesneerDbContext dbContext) => dbContext.ServiceReports.AsNoTracking()
@@ -484,6 +502,35 @@ public static class ServiceReportEndpoints
         return null;
     }
 
+    private static async Task<ProductLicenseResolution> ResolveProductLicensesAsync(
+        IReadOnlyList<ServiceReportProductInput> products,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var stockItemIds = products.Where(item => item.VehicleStockItemId.HasValue)
+            .Select(item => item.VehicleStockItemId!.Value).Distinct().ToArray();
+        if (stockItemIds.Length == 0) return new ProductLicenseResolution(products, null);
+
+        var stockItems = await dbContext.VehicleStockItems.AsNoTracking()
+            .Include(item => item.InventoryItem).ThenInclude(item => item!.LicenseDocuments)
+            .Where(item => stockItemIds.Contains(item.Id) && item.IsActive)
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        if (stockItems.Count != stockItemIds.Length)
+            return new ProductLicenseResolution(products, new Dictionary<string, string[]> { ["products"] = ["Seçilen araç stok ürünlerinden biri artık kullanılamıyor."] });
+
+        var resolved = products.Select(item =>
+        {
+            if (!item.VehicleStockItemId.HasValue || !stockItems.TryGetValue(item.VehicleStockItemId.Value, out var stockItem) || stockItem.InventoryItem is null)
+                return item;
+            var license = stockItem.InventoryItem.LicenseDocuments.Where(document => document.Category == "Licenses")
+                .OrderByDescending(document => document.CreatedAt).FirstOrDefault();
+            return license is null
+                ? item with { LicenseDocumentId = null, LicenseNumber = stockItem.InventoryItem.LicenseNumber ?? item.LicenseNumber }
+                : item with { LicenseDocumentId = license.Id, LicenseNumber = license.LicenseNumber ?? stockItem.InventoryItem.LicenseNumber };
+        }).ToArray();
+        return new ProductLicenseResolution(resolved, null);
+    }
+
     private static IReadOnlyList<ServiceReportStationInput> MergeStations(
         IEnumerable<ServiceReportStation> existingStations,
         IReadOnlyList<ServiceReportStationInput> incomingStations)
@@ -504,7 +551,7 @@ public static class ServiceReportEndpoints
         IReadOnlyList<ServiceReportProductInput> incomingProducts)
     {
         var merged = existingProducts.Select(item => new ServiceReportProductInput(
-                item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate,
+                item.VehicleStockItemId, item.LicenseDocumentId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate,
                 item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit))
             .GroupBy(ProductKey, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
@@ -554,6 +601,11 @@ public static class ServiceReportEndpoints
 
     private static (decimal ActivityRate, int Score, string Level, bool Infestation) CalculateRisk(IEnumerable<ServiceReportStation> source)
     {
+        return CalculateRisk(source.Select(item => new AnalyticsStation(item.HasActivity, item.PlateChanged, item.CaughtCount, item.DeviceStatus, item.TargetPest, [])));
+    }
+
+    private static (decimal ActivityRate, int Score, string Level, bool Infestation) CalculateRisk(IEnumerable<AnalyticsStation> source)
+    {
         var stations = source.ToArray(); var total = stations.Length; var active = stations.Count(item => item.HasActivity || item.CaughtCount > 0); var caught = stations.Sum(item => item.CaughtCount);
         var rate = total == 0 ? 0 : Math.Round(active * 100m / total, 1);
         var score = caught == 0 ? 0 : caught < 20 ? Math.Min(39, 10 + caught) : caught < 30 ? 40 + (caught - 20) * 2 : Math.Min(100, 70 + caught - 30);
@@ -562,6 +614,10 @@ public static class ServiceReportEndpoints
         var infestation = stations.Any(item => item.CaughtCount > 0 && ((item.TargetPest?.Contains("hamam", StringComparison.OrdinalIgnoreCase) ?? false) || (item.TargetPest?.Contains("kemirgen", StringComparison.OrdinalIgnoreCase) ?? false) || ((item.TargetPest?.Contains("sinek", StringComparison.OrdinalIgnoreCase) ?? false) && item.CaughtCount >= 5)));
         return (rate, score, level, infestation);
     }
+
+    private sealed record AnalyticsSource(DateTimeOffset ScheduledAt, IReadOnlyList<AnalyticsStation> Stations);
+    private sealed record AnalyticsStation(bool HasActivity, bool PlateChanged, int CaughtCount, string DeviceStatus, string? TargetPest, IReadOnlyList<AnalyticsPest> Pests);
+    private sealed record AnalyticsPest(string Name, int Count);
 
     private static ServiceReportResponse ToResponse(ServiceReport report, bool includeEmailDetails = true)
     {
@@ -592,7 +648,7 @@ public static class ServiceReportEndpoints
                         observation.DetectedCount, observation.ApprovedCount, observation.MeanConfidence, observation.Source,
                         observation.ModelName, observation.ModelVersion, observation.ReviewStatus, observation.AnalyzedAt,
                         observation.ReviewedAt)).ToArray())).ToArray(),
-            report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.VehicleStockItemId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
+            report.Products.Select(item => new ServiceReportProductResponse(item.Id, item.VehicleStockItemId, item.LicenseDocumentId, item.ProductName, item.LicenseNumber, item.ApplicationMethod, item.DilutionRate, item.ActiveIngredient, item.Antidote, item.PackingQuantity, item.AmountUsed, item.Unit)).ToArray(),
             report.WorkOrder.Photos.OrderBy(item => item.UploadedAt).Select(item => new ServiceReportPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, $"/api/work-orders/photos/{item.Id}", item.Location, item.Status, item.Description)).ToArray());
     }
 
@@ -607,5 +663,6 @@ public static class ServiceReportEndpoints
         return "Pending";
     }
     private sealed record StockUsage(Guid? VehicleStockItemId, string ProductName, decimal Amount, string Unit);
+    private sealed record ProductLicenseResolution(IReadOnlyList<ServiceReportProductInput> Products, Dictionary<string, string[]>? Errors);
     private sealed record ServiceReportPhotoMetadata(string? Location, string? Status, string? Description);
 }

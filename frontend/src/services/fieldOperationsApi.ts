@@ -25,7 +25,7 @@ export type VehicleStockCheck = {
   vehicleId?: string;
   plate?: string;
   vehicleDescription?: string;
-  items: Array<VehicleStockItemInput & { id: string; inventoryItemId?: string }>;
+  items: Array<VehicleStockItemInput & { id: string; inventoryItemId?: string; licenseNumber?: string; licenseDocumentId?: string }>;
 };
 
 export type WorkforceEmployee = {

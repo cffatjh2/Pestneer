@@ -83,6 +83,9 @@ public sealed record QualityDocumentResponse(
     string BranchName,
     string CreatedBy,
     DateTimeOffset CreatedAt,
+    Guid? InventoryItemId,
+    string? ProductName,
+    string? LicenseNumber,
     Guid? AnalysisId,
     string? AnalysisType,
     string DownloadUrl);

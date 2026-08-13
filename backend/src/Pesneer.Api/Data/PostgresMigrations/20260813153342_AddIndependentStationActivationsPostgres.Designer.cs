@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pesneer.Api.Data;
@@ -11,9 +12,11 @@ using Pesneer.Api.Data;
 namespace Pesneer.Api.Data.PostgresMigrations
 {
     [DbContext(typeof(PostgresPesneerDbContext))]
-    partial class PostgresPesneerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260813153342_AddIndependentStationActivationsPostgres")]
+    partial class AddIndependentStationActivationsPostgres
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1316,10 +1319,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Property<DateTimeOffset>("LastMovementAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("LicenseNumber")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
                     b.Property<string>("LotNumber")
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
@@ -1537,13 +1536,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasMaxLength(240)
                         .HasColumnType("character varying(240)");
 
-                    b.Property<Guid?>("InventoryItemId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("LicenseNumber")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
                     b.Property<Guid?>("QualityAnalysisId")
                         .HasColumnType("uuid");
 
@@ -1565,8 +1557,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.HasIndex("CustomerBranchId");
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("InventoryItemId");
 
                     b.HasIndex("QualityAnalysisId");
 
@@ -2071,9 +2061,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
-                    b.Property<Guid?>("LicenseDocumentId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("LicenseNumber")
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
@@ -2099,8 +2086,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("LicenseDocumentId");
 
                     b.HasIndex("ServiceReportId");
 
@@ -3550,11 +3535,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Pesneer.Api.Domain.InventoryItem", "InventoryItem")
-                        .WithMany("LicenseDocuments")
-                        .HasForeignKey("InventoryItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Pesneer.Api.Domain.QualityAnalysis", "QualityAnalysis")
                         .WithMany("Documents")
                         .HasForeignKey("QualityAnalysisId")
@@ -3570,8 +3550,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("Customer");
 
                     b.Navigation("CustomerBranch");
-
-                    b.Navigation("InventoryItem");
 
                     b.Navigation("QualityAnalysis");
 
@@ -3687,11 +3665,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
 
             modelBuilder.Entity("Pesneer.Api.Domain.ServiceReportProduct", b =>
                 {
-                    b.HasOne("Pesneer.Api.Domain.QualityDocument", "LicenseDocument")
-                        .WithMany()
-                        .HasForeignKey("LicenseDocumentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Pesneer.Api.Domain.ServiceReport", "ServiceReport")
                         .WithMany("Products")
                         .HasForeignKey("ServiceReportId")
@@ -3702,8 +3675,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .WithMany()
                         .HasForeignKey("VehicleStockItemId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("LicenseDocument");
 
                     b.Navigation("ServiceReport");
 
@@ -4095,11 +4066,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
             modelBuilder.Entity("Pesneer.Api.Domain.EmergencyRequest", b =>
                 {
                     b.Navigation("History");
-                });
-
-            modelBuilder.Entity("Pesneer.Api.Domain.InventoryItem", b =>
-                {
-                    b.Navigation("LicenseDocuments");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.QualityAnalysis", b =>

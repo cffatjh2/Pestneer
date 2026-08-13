@@ -161,7 +161,7 @@ public static class FieldOperationsEndpoints
         CancellationToken cancellationToken)
     {
         if (!TryGetEmployeeIdentity(companyContext, out var employeeId)) return Results.Forbid();
-        var vehicle = await dbContext.Vehicles.AsNoTracking().Include(item => item.StockItems)
+        var vehicle = await dbContext.Vehicles.AsNoTracking().Include(item => item.StockItems).ThenInclude(item => item.InventoryItem).ThenInclude(item => item!.LicenseDocuments)
             .SingleOrDefaultAsync(item => item.AssignedEmployeeAccountId == employeeId && item.IsActive, cancellationToken);
         if (vehicle is null) return Results.NoContent();
         var checks = await dbContext.VehicleStockChecks.AsNoTracking()
@@ -360,6 +360,8 @@ public static class FieldOperationsEndpoints
             item.ProductName,
             item.Quantity,
             item.Unit,
+            item.VehicleStockItem?.InventoryItem?.LicenseNumber,
+            LatestLicenseId(item.VehicleStockItem?.InventoryItem),
             item.IsManual)).ToList());
 
     private static VehicleStockCheckResponse ToCurrentVehicleStockResponse(Vehicle vehicle, VehicleStockCheck? check) => new(
@@ -369,7 +371,13 @@ public static class FieldOperationsEndpoints
         vehicle.Plate,
         $"{vehicle.Brand} {vehicle.Model}",
         vehicle.StockItems.Where(item => item.IsActive).OrderBy(item => item.ProductName).Select(item => new VehicleStockItemResponse(
-            item.Id, item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit, !item.InventoryItemId.HasValue)).ToArray());
+            item.Id, item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit, item.InventoryItem?.LicenseNumber, LatestLicenseId(item.InventoryItem), !item.InventoryItemId.HasValue)).ToArray());
+
+    private static Guid? LatestLicenseId(InventoryItem? item) => item?.LicenseDocuments
+        .Where(document => document.Category == "Licenses")
+        .OrderByDescending(document => document.CreatedAt)
+        .Select(document => (Guid?)document.Id)
+        .FirstOrDefault();
 
     private static Dictionary<string, string[]> ValidateStockItems(IReadOnlyList<VehicleStockItemRequest>? items)
     {

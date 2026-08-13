@@ -39,6 +39,7 @@ public sealed record ServiceReportStationInput(
 
 public sealed record ServiceReportProductInput(
     Guid? VehicleStockItemId,
+    Guid? LicenseDocumentId,
     string ProductName,
     string? LicenseNumber,
     string? ApplicationMethod,
@@ -119,6 +120,7 @@ public sealed record ServiceReportPestObservationResponse(
 public sealed record ServiceReportProductResponse(
     Guid Id,
     Guid? VehicleStockItemId,
+    Guid? LicenseDocumentId,
     string ProductName,
     string? LicenseNumber,
     string? ApplicationMethod,

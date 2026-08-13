@@ -1,22 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CheckCircle2, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, Gauge, Printer, RefreshCw, ShieldAlert, Users, X } from 'lucide-react';
+import { Activity, BarChart3, CheckCircle2, ClipboardCheck, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, Gauge, Printer, RefreshCw, ShieldAlert, Users, X } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import type { WorkOrder } from '../types';
 import ServiceReportModal from '../components/modals/ServiceReportModal';
+import StationActivationModal from '../components/modals/StationActivationModal';
 import ServiceReportPrintSheet from '../components/report/ServiceReportPrintSheet';
 import { FieldSessionExpiredError, getWorkforceAnalytics, type WorkforceAnalytics } from '../services/fieldOperationsApi';
 import { getCompanyServiceReports, getServiceReportAnalytics, ReportSessionExpiredError, saveServiceReport, uploadServiceReportPhotos, type ReportPhotoUpload, type ServiceReportAnalytics, type ServiceReportRecord, type UpsertServiceReportInput } from '../services/serviceReportApi';
 import { exportServiceReportExcel, exportTrendExcel } from '../utils/serviceReportExcel';
 import { getVehicles, type VehicleRecord } from '../services/inventoryApi';
+import { getStationActivations, type StationActivationRecord } from '../services/stationActivationApi';
 
 type Props = { accessToken: string; companyName: string; userName: string; workOrders: WorkOrder[]; onSessionExpired: () => void };
-type Tab = 'reports' | 'trends' | 'workforce';
+type Tab = 'reports' | 'activations' | 'trends' | 'workforce';
 
 export default function ReportsAnalytics({ accessToken, companyName, userName, workOrders, onSessionExpired }: Props) {
   const [tab, setTab] = useState<Tab>('reports');
   const [reports, setReports] = useState<ServiceReportRecord[]>([]); const [analytics, setAnalytics] = useState<ServiceReportAnalytics | null>(null); const [workforce, setWorkforce] = useState<WorkforceAnalytics | null>(null);
+  const [activations, setActivations] = useState<StationActivationRecord[]>([]);
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [editing, setEditing] = useState<{ order: WorkOrder; report?: ServiceReportRecord } | null>(null); const [preview, setPreview] = useState<ServiceReportRecord | null>(null);
+  const [activationOrder, setActivationOrder] = useState<WorkOrder | null>(null);
   const [customerId, setCustomerId] = useState(''); const [branchId, setBranchId] = useState(''); const [from, setFrom] = useState(defaultFrom()); const [to, setTo] = useState(dateKey(new Date()));
   const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pesneer_Saha_Raporu' });
 
@@ -24,8 +28,8 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
     setLoading(true); setError(null);
     try {
       const query = new URLSearchParams({ from, to }); if (customerId) query.set('customerId', customerId); if (branchId) query.set('branchId', branchId);
-      const [reportItems, reportAnalytics, workforceAnalytics, vehicleItems] = await Promise.all([getCompanyServiceReports(accessToken), getServiceReportAnalytics(accessToken, query.toString()), getWorkforceAnalytics(accessToken), getVehicles(accessToken)]);
-      setReports(reportItems); setAnalytics(reportAnalytics); setWorkforce(workforceAnalytics); setVehicles(vehicleItems);
+      const [reportItems, activationItems, reportAnalytics, workforceAnalytics, vehicleItems] = await Promise.all([getCompanyServiceReports(accessToken), getStationActivations(accessToken), getServiceReportAnalytics(accessToken, query.toString()), getWorkforceAnalytics(accessToken), getVehicles(accessToken)]);
+      setReports(reportItems); setActivations(activationItems); setAnalytics(reportAnalytics); setWorkforce(workforceAnalytics); setVehicles(vehicleItems);
     } catch (loadError) {
       if (loadError instanceof ReportSessionExpiredError || loadError instanceof FieldSessionExpiredError) return onSessionExpired();
       setError(loadError instanceof Error ? loadError.message : 'Rapor verileri yüklenemedi.');
@@ -36,20 +40,27 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
   const customers = useMemo(() => Array.from(new Map(workOrders.map((item) => [item.customerId, { id: item.customerId, name: item.client }])).values()), [workOrders]);
   const branches = useMemo(() => Array.from(new Map(workOrders.filter((item) => !customerId || item.customerId === customerId).filter((item) => item.branchId).map((item) => [item.branchId!, { id: item.branchId!, name: item.branch }])).values()), [workOrders, customerId]);
   const reportByOrder = useMemo(() => new Map(reports.map((item) => [item.workOrderId, item])), [reports]);
+  const activationByOrder = useMemo(() => new Map(activations.map((item) => [item.workOrderId, item])), [activations]);
   const reportableOrders = workOrders.filter((item) => item.technicalStatus === 'InProgress' || item.technicalStatus === 'Completed');
   const save = async (input: UpsertServiceReportInput, photos: ReportPhotoUpload[]) => { if (!editing) return; const saved = await saveServiceReport(accessToken, editing.order.recordId, input); await uploadServiceReportPhotos(accessToken, editing.order.recordId, photos); setReports((current) => [saved, ...current.filter((item) => item.id !== saved.id)]); setEditing(null); await load(); };
 
   return <section className="page analytics-page phase3-reports-page">
     <div className="page-heading"><div><p className="eyebrow">SAHA KALİTE & UYUM</p><h1>Rapor & Analizler</h1><p>Uygulama raporlarını, saha trendlerini ve personel performansını tek merkezden yönetin.</p></div><button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} />Verileri Yenile</button></div>
-    <nav className="report-module-tabs"><button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}><FileText size={17} /> Saha Raporları</button><button className={tab === 'trends' ? 'active' : ''} onClick={() => setTab('trends')}><BarChart3 size={17} /> Trend Analizi</button><button className={tab === 'workforce' ? 'active' : ''} onClick={() => setTab('workforce')}><Users size={17} /> Personel Analizi</button></nav>
+    <nav className="report-module-tabs"><button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}><FileText size={17} /> EK-1 Raporları</button><button className={tab === 'activations' ? 'active' : ''} onClick={() => setTab('activations')}><ClipboardCheck size={17} /> Aktivasyon Listeleri</button><button className={tab === 'trends' ? 'active' : ''} onClick={() => setTab('trends')}><BarChart3 size={17} /> Trend Analizi</button><button className={tab === 'workforce' ? 'active' : ''} onClick={() => setTab('workforce')}><Users size={17} /> Personel Analizi</button></nav>
     {loading ? <div className="surface analytics-loading"><RefreshCw className="spin-icon" size={28} />Analizler hazırlanıyor…</div> : error ? <div className="surface analytics-loading analytics-error">{error}<button className="secondary-button" onClick={() => void load()}>Tekrar Dene</button></div> : <>
       {tab === 'reports' && <ReportsTab orders={reportableOrders} reportByOrder={reportByOrder} onEdit={(order, report) => setEditing({ order, report })} onPreview={setPreview} />}
+      {tab === 'activations' && <ActivationsTab orders={reportableOrders} activationByOrder={activationByOrder} onOpen={setActivationOrder} />}
       {tab === 'trends' && analytics && <TrendsTab analytics={analytics} reports={reports} customers={customers} branches={branches} customerId={customerId} branchId={branchId} from={from} to={to} onCustomer={(value) => { setCustomerId(value); setBranchId(''); }} onBranch={setBranchId} onFrom={setFrom} onTo={setTo} />}
       {tab === 'workforce' && workforce && <WorkforceTab analytics={workforce} />}
     </>}
-    {editing && <ServiceReportModal accessToken={accessToken} order={editing.order} existing={editing.report} companyName={companyName} operatorName={editing.order.technician || userName} vehicleStockItems={(vehicles.find((item) => item.assignedEmployeeAccountId === editing.order.employeeAccountId)?.stockItems ?? []).map((item) => ({ id: item.id, vehicleStockItemId: item.id, inventoryItemId: item.inventoryItemId, productName: item.productName, quantity: item.quantity, unit: item.unit, isManual: item.isManual }))} onClose={() => setEditing(null)} onSave={save} />}
+    {editing && <ServiceReportModal accessToken={accessToken} order={editing.order} existing={editing.report} companyName={companyName} operatorName={editing.order.technician || userName} vehicleStockItems={(vehicles.find((item) => item.assignedEmployeeAccountId === editing.order.employeeAccountId)?.stockItems ?? []).map((item) => ({ id: item.id, vehicleStockItemId: item.id, inventoryItemId: item.inventoryItemId, productName: item.productName, quantity: item.quantity, unit: item.unit, isManual: item.isManual, licenseNumber: item.licenseNumber, licenseDocumentId: item.licenseDocumentId }))} onClose={() => setEditing(null)} onSave={save} />}
+    {activationOrder && <StationActivationModal accessToken={accessToken} order={activationOrder} onClose={() => setActivationOrder(null)} onSaved={(saved) => setActivations((current) => [saved, ...current.filter((item) => item.id !== saved.id)])} />}
     {preview && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>{preview.reportNumber}</strong><span>{preview.customerName} · {preview.branchName}</span></div><button onClick={() => exportServiceReportExcel(preview)}><FileSpreadsheet size={16} /> Excel</button><button onClick={print}><Printer size={16} /> PDF / Yazdır</button><button className="icon-button" onClick={() => setPreview(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={printRef}><ServiceReportPrintSheet report={preview} accessToken={accessToken} /></div></div></div></div>}
   </section>;
+}
+
+function ActivationsTab({ orders, activationByOrder, onOpen }: { orders: WorkOrder[]; activationByOrder: Map<string, StationActivationRecord>; onOpen: (order: WorkOrder) => void }) {
+  return <div className="surface field-report-list"><div className="analytics-section-heading"><div><p className="eyebrow">İSTASYON BAZLI SAHA KONTROLÜ</p><h2>Bağımsız aktivasyon listeleri</h2><p>İstasyon bulunan işlerde kullanılır; EK-1 biyosidal uygulama raporundan tamamen bağımsızdır.</p></div><span>{activationByOrder.size} kayıt</span></div>{orders.length === 0 ? <div className="analytics-empty"><ClipboardCheck size={31} /><strong>Aktivasyon açılabilecek iş bulunmuyor</strong></div> : <div className="field-report-grid">{orders.map((order) => { const activation = activationByOrder.get(order.recordId); return <article key={order.recordId}><div className="field-report-heading"><span className={`report-state ${activation?.status.toLowerCase() ?? 'missing'}`}>{activation?.status === 'Finalized' ? 'Onaylandı' : activation ? 'Taslak' : 'Liste yok'}</span><small>{order.id}</small></div><h3>{order.client}</h3><p>{order.branch}</p><dl><div><dt>Personel</dt><dd>{order.technician}</dd></div><div><dt>Tarih</dt><dd>{order.date}</dd></div>{activation && <><div><dt>Kontrol</dt><dd>{activation.totalStations} istasyon</dd></div><div><dt>Aktivite</dt><dd>{activation.activeStations} istasyon</dd></div></>}</dl><div className="field-report-actions"><button className="primary-button" onClick={() => onOpen(order)}><ClipboardCheck size={15} /> {activation ? 'Listeyi aç' : 'Aktivasyon oluştur'}</button></div></article>; })}</div>}</div>;
 }
 
 function ReportsTab({ orders, reportByOrder, onEdit, onPreview }: { orders: WorkOrder[]; reportByOrder: Map<string, ServiceReportRecord>; onEdit: (order: WorkOrder, report?: ServiceReportRecord) => void; onPreview: (report: ServiceReportRecord) => void }) {

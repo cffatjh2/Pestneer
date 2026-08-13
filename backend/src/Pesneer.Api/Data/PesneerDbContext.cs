@@ -31,6 +31,7 @@ public class PesneerDbContext(
     public DbSet<ServiceReportStation> ServiceReportStations => Set<ServiceReportStation>();
     public DbSet<ServiceReportPestObservation> ServiceReportPestObservations => Set<ServiceReportPestObservation>();
     public DbSet<ServiceReportProduct> ServiceReportProducts => Set<ServiceReportProduct>();
+    public DbSet<StationActivation> StationActivations => Set<StationActivation>();
     public DbSet<ReportEmailDelivery> ReportEmailDeliveries => Set<ReportEmailDelivery>();
     public DbSet<QualityAnalysis> QualityAnalyses => Set<QualityAnalysis>();
     public DbSet<QualityDocument> QualityDocuments => Set<QualityDocument>();
@@ -414,6 +415,7 @@ public class PesneerDbContext(
             entity.Property(item => item.Unit).HasMaxLength(32);
             entity.HasOne(item => item.ServiceReport).WithMany(report => report.Products).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.VehicleStockItem).WithMany().HasForeignKey(item => item.VehicleStockItemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.LicenseDocument).WithMany().HasForeignKey(item => item.LicenseDocumentId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -430,6 +432,18 @@ public class PesneerDbContext(
             entity.Property(item => item.VisionResultJson).HasMaxLength(200000);
             entity.HasOne(item => item.ServiceReportStation).WithMany(station => station.PestObservations).HasForeignKey(item => item.ServiceReportStationId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.ReviewedByAccount).WithMany().HasForeignKey(item => item.ReviewedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<StationActivation>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.Number }).IsUnique();
+            entity.Property(item => item.Number).HasMaxLength(48);
+            entity.Property(item => item.Status).HasMaxLength(20);
+            entity.Property(item => item.Notes).HasMaxLength(3000);
+            entity.HasOne(item => item.WorkOrder).WithMany().HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -460,11 +474,13 @@ public class PesneerDbContext(
             entity.Property(item => item.Description).HasMaxLength(2000);
             entity.Property(item => item.FileName).HasMaxLength(240);
             entity.Property(item => item.ContentType).HasMaxLength(120);
+            entity.Property(item => item.LicenseNumber).HasMaxLength(160);
             entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.QualityAnalysis).WithMany(item => item.Documents).HasForeignKey(item => item.QualityAnalysisId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.SitePlan).WithMany(item => item.Documents).HasForeignKey(item => item.SitePlanId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.InventoryItem).WithMany(item => item.LicenseDocuments).HasForeignKey(item => item.InventoryItemId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -697,6 +713,7 @@ public class PesneerDbContext(
             entity.Property(item => item.Category).HasMaxLength(80);
             entity.Property(item => item.Unit).HasMaxLength(24);
             entity.Property(item => item.LotNumber).HasMaxLength(80);
+            entity.Property(item => item.LicenseNumber).HasMaxLength(160);
             entity.Property(item => item.Quantity).HasPrecision(12, 2);
             entity.Property(item => item.MinimumQuantity).HasPrecision(12, 2);
             entity.Property(item => item.UnitCost).HasPrecision(14, 4);

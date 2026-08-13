@@ -38,6 +38,8 @@ public sealed record InventoryItemResponse(
     decimal MinimumQuantity,
     decimal UnitCost,
     string? LotNumber,
+    string? LicenseNumber,
+    Guid? LicenseDocumentId,
     DateTimeOffset LastMovementAt,
     string Status,
     decimal VehicleQuantity,
@@ -62,6 +64,8 @@ public sealed record VehicleStockItemResponse(
     string ProductName,
     decimal Quantity,
     string Unit,
+    string? LicenseNumber,
+    Guid? LicenseDocumentId,
     DateTimeOffset LastMovementAt,
     bool IsManual);
 

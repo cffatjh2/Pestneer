@@ -165,7 +165,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       case 'stock': return <Stock accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;
       case 'team': return <Team accessToken={session.accessToken} companyCode={session.company.code} onNotify={showToast} onSessionExpired={onLogout} />;
       case 'reports': return <ReportsAnalytics accessToken={session.accessToken} companyName={session.company.name} userName={session.user.name} workOrders={workOrders} onSessionExpired={onLogout} />;
-      case 'documents': return <QualityCenter accessToken={session.accessToken} mode="staff" onSessionExpired={onLogout} standalone />;
+      case 'documents': return <QualityCenter accessToken={session.accessToken} mode="staff" onSessionExpired={onLogout} standalone canManageLicenses />;
       case 'requests': return <RequestCenter accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;
       case 'commercial': return <CommercialManagement accessToken={session.accessToken} customers={customers} employees={employees} workOrders={workOrders} onSessionExpired={onLogout} />;
       case 'compliance': return <QualityComplianceHub accessToken={session.accessToken} employees={employees} onSessionExpired={onLogout} />;

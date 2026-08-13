@@ -20,12 +20,13 @@ export type QualityAnalysis = {
 export type QualityDocument = {
   id: string; category: string; title: string; description?: string; fileName: string; contentType: string; sizeBytes: number;
   customerId?: string; customerName: string; branchId?: string; branchName: string; createdBy: string; createdAt: string;
+  inventoryItemId?: string; productName?: string; licenseNumber?: string;
   analysisId?: string; analysisType?: 'Trend' | 'Risk'; downloadUrl: string;
 };
 
 export type CreateTrendAnalysisInput = { customerId: string; branchId?: string; periodStart: string; periodEnd: string; title?: string; findings?: string; recommendations?: string };
 export type CreateRiskAnalysisInput = { customerId: string; branchId?: string; assessmentDate: string; title?: string; findings?: string; correctiveActions?: string; recommendations?: string; sectorType?: string; currentFrequency?: string; riskMatrix: RiskMatrixRow[]; answers: RiskAnswer[] };
-export type UploadQualityDocumentInput = { file: File; category: string; title?: string; description?: string; customerId?: string; branchId?: string };
+export type UploadQualityDocumentInput = { file: File; category: string; title?: string; description?: string; customerId?: string; branchId?: string; inventoryItemId?: string; licenseNumber?: string };
 
 export class QualitySessionExpiredError extends Error {
   constructor(message = 'Oturumunuz güncel değil. Lütfen yeniden giriş yapın.') { super(message); this.name = 'QualitySessionExpiredError'; }
@@ -40,6 +41,7 @@ export async function uploadQualityDocument(token: string, input: UploadQualityD
   const form = new FormData(); form.append('file', input.file); form.append('category', input.category);
   if (input.title) form.append('title', input.title); if (input.description) form.append('description', input.description);
   if (input.customerId) form.append('customerId', input.customerId); if (input.branchId) form.append('branchId', input.branchId);
+  if (input.inventoryItemId) form.append('inventoryItemId', input.inventoryItemId); if (input.licenseNumber) form.append('licenseNumber', input.licenseNumber);
   return request<QualityDocument>('/api/quality/documents/upload', token, { method: 'POST', body: form }, false);
 }
 

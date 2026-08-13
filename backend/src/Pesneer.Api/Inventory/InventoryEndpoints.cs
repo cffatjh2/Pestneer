@@ -23,7 +23,7 @@ public static class InventoryEndpoints
 
     private static async Task<IResult> GetInventoryAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
     {
-        var items = await dbContext.InventoryItems.AsNoTracking()
+        var items = await dbContext.InventoryItems.AsNoTracking().Include(item => item.LicenseDocuments)
             .Where(item => item.IsActive)
             .OrderBy(item => item.Name)
             .ToListAsync(cancellationToken);
@@ -84,7 +84,7 @@ public static class InventoryEndpoints
 
         var normalizedName = request.Name.Trim().ToUpperInvariant();
         var lotNumber = string.IsNullOrWhiteSpace(request.LotNumber) ? null : request.LotNumber.Trim();
-        var item = await dbContext.InventoryItems.SingleOrDefaultAsync(existing =>
+        var item = await dbContext.InventoryItems.Include(existing => existing.LicenseDocuments).SingleOrDefaultAsync(existing =>
             existing.NormalizedName == normalizedName &&
             existing.Unit == request.Unit.Trim() &&
             existing.LotNumber == lotNumber,
@@ -156,7 +156,7 @@ public static class InventoryEndpoints
             });
         }
 
-        var item = await dbContext.InventoryItems.SingleOrDefaultAsync(existing =>
+        var item = await dbContext.InventoryItems.Include(existing => existing.LicenseDocuments).SingleOrDefaultAsync(existing =>
             existing.Id == request.InventoryItemId && existing.IsActive,
             cancellationToken);
         if (item is null) return Results.NotFound(new { message = "Stok kalemi bulunamadı." });
@@ -186,7 +186,7 @@ public static class InventoryEndpoints
 
     private static async Task<IResult> GetVehiclesAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
     {
-        var vehicles = await dbContext.Vehicles.AsNoTracking().Include(item => item.AssignedEmployeeAccount).Include(item => item.StockItems)
+        var vehicles = await dbContext.Vehicles.AsNoTracking().Include(item => item.AssignedEmployeeAccount).Include(item => item.StockItems).ThenInclude(item => item.InventoryItem).ThenInclude(item => item!.LicenseDocuments)
             .Where(item => item.IsActive).AsSplitQuery().OrderBy(item => item.Plate).ToListAsync(cancellationToken);
         return Results.Ok(vehicles.Select(ToVehicleResponse));
     }
@@ -222,7 +222,7 @@ public static class InventoryEndpoints
     {
         if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
         if (request.Quantity <= 0) return ValidationResult("quantity", "Transfer miktarı sıfırdan büyük olmalıdır.");
-        var inventory = await dbContext.InventoryItems.SingleOrDefaultAsync(item => item.Id == request.InventoryItemId && item.IsActive, cancellationToken);
+        var inventory = await dbContext.InventoryItems.Include(item => item.LicenseDocuments).SingleOrDefaultAsync(item => item.Id == request.InventoryItemId && item.IsActive, cancellationToken);
         var vehicle = await dbContext.Vehicles.SingleOrDefaultAsync(item => item.Id == request.VehicleId && item.IsActive, cancellationToken);
         if (inventory is null || vehicle is null) return Results.NotFound(new { message = "Depo ürünü veya araç bulunamadı." });
         if (request.Quantity > inventory.Quantity) return Results.Conflict(new { message = $"Araç transferi mevcut {inventory.Quantity:0.###} {inventory.Unit} depo stokunu aşamaz." });
@@ -265,11 +265,11 @@ public static class InventoryEndpoints
     }
 
     private static async Task<VehicleResponse> VehicleResponseAsync(PesneerDbContext dbContext, Guid vehicleId, CancellationToken cancellationToken) =>
-        ToVehicleResponse(await dbContext.Vehicles.AsNoTracking().Include(item => item.AssignedEmployeeAccount).Include(item => item.StockItems).SingleAsync(item => item.Id == vehicleId, cancellationToken));
+        ToVehicleResponse(await dbContext.Vehicles.AsNoTracking().Include(item => item.AssignedEmployeeAccount).Include(item => item.StockItems).ThenInclude(item => item.InventoryItem).ThenInclude(item => item!.LicenseDocuments).SingleAsync(item => item.Id == vehicleId, cancellationToken));
 
     private static VehicleResponse ToVehicleResponse(Vehicle vehicle) => new(vehicle.Id, vehicle.Plate, vehicle.Brand, vehicle.Model, vehicle.ModelYear,
         vehicle.AssignedEmployeeAccountId, vehicle.AssignedEmployeeAccount?.DisplayName ?? "Atanmamış", vehicle.IsActive,
-        vehicle.StockItems.Where(item => item.IsActive).OrderBy(item => item.ProductName).Select(item => new VehicleStockItemResponse(item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit, item.LastMovementAt, !item.InventoryItemId.HasValue)).ToArray());
+        vehicle.StockItems.Where(item => item.IsActive).OrderBy(item => item.ProductName).Select(item => new VehicleStockItemResponse(item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit, item.InventoryItem?.LicenseNumber, LatestLicenseId(item.InventoryItem), item.LastMovementAt, !item.InventoryItemId.HasValue)).ToArray());
 
     private static async Task<decimal> VehicleQuantityAsync(PesneerDbContext dbContext, Guid inventoryItemId, CancellationToken cancellationToken) =>
         (await dbContext.VehicleStockItems.AsNoTracking().Where(item => item.InventoryItemId == inventoryItemId && item.IsActive)
@@ -303,8 +303,16 @@ public static class InventoryEndpoints
         item.MinimumQuantity,
         item.UnitCost,
         item.LotNumber,
+        item.LicenseNumber,
+        LatestLicenseId(item),
         item.LastMovementAt,
         item.Quantity <= item.MinimumQuantity ? "Kritik" : item.Quantity <= item.MinimumQuantity * 1.5m ? "Düşük" : "Yeterli",
         vehicleQuantity,
         item.Quantity + vehicleQuantity);
+
+    private static Guid? LatestLicenseId(InventoryItem? item) => item?.LicenseDocuments
+        .Where(document => document.Category == "Licenses")
+        .OrderByDescending(document => document.CreatedAt)
+        .Select(document => (Guid?)document.Id)
+        .FirstOrDefault();
 }

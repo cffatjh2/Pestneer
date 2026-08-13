@@ -15,6 +15,8 @@ public sealed record VehicleStockItemRequest(
     string ProductName,
     decimal Quantity,
     string Unit,
+    string? LicenseNumber,
+    Guid? LicenseDocumentId,
     bool IsManual);
 
 public sealed record CreateVehicleStockCheckRequest(IReadOnlyList<VehicleStockItemRequest> Items);
@@ -26,6 +28,8 @@ public sealed record VehicleStockItemResponse(
     string ProductName,
     decimal Quantity,
     string Unit,
+    string? LicenseNumber,
+    Guid? LicenseDocumentId,
     bool IsManual);
 
 public sealed record VehicleStockCheckResponse(

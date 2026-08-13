@@ -4,6 +4,7 @@ using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.Compliance;
+using Pesneer.Api.StationActivations;
 
 namespace Pesneer.Api.Quality;
 
@@ -18,7 +19,7 @@ public static class QualityEndpoints
     };
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     {
-        "General", "CommercialProposals", "Contracts", "ServiceReports", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "AuditPackages", "Photos", "FieldInspections", "SalesForms", "Other"
+        "General", "CommercialProposals", "Contracts", "ServiceReports", "StationActivations", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Licenses", "AuditPackages", "Photos", "FieldInspections", "SalesForms", "Other"
     };
 
     public static IEndpointRouteBuilder MapQualityEndpoints(this IEndpointRouteBuilder app)
@@ -84,7 +85,7 @@ public static class QualityEndpoints
     private static async Task<IResult> GetDocumentsAsync(string? category, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
         var query = AccessibleDocuments(dbContext, context).AsNoTracking()
-            .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).AsQueryable();
+            .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem).AsQueryable();
         if (!string.IsNullOrWhiteSpace(category)) query = query.Where(item => item.Category == category);
         return Results.Ok((await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).Select(ToDocumentResponse).ToArray());
     }
@@ -119,28 +120,42 @@ public static class QualityEndpoints
             .Where(item => item.WorkOrder.ScheduledAt >= start && item.WorkOrder.ScheduledAt < end)
             .OrderBy(item => item.WorkOrder.ScheduledAt)
             .ToList();
-        if (reports.Count == 0) return Validation("periodStart", "Seçilen dönemde onaylanmış saha raporu bulunmuyor.");
+        var activationQuery = dbContext.StationActivations.AsNoTracking().Include(item => item.WorkOrder)
+            .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == request.CustomerId);
+        if (request.BranchId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerBranchId == request.BranchId.Value);
+        var activations = (await activationQuery.ToListAsync(cancellationToken))
+            .Where(item => item.WorkOrder.ScheduledAt >= start && item.WorkOrder.ScheduledAt < end)
+            .OrderBy(item => item.WorkOrder.ScheduledAt)
+            .ToList();
+        if (reports.Count == 0 && activations.Count == 0) return Validation("periodStart", "Seçilen dönemde onaylanmış saha raporu veya aktivasyon listesi bulunmuyor.");
 
         var customer = await dbContext.Customers.AsNoTracking().SingleAsync(item => item.Id == request.CustomerId, cancellationToken);
         var branch = request.BranchId.HasValue ? await dbContext.CustomerBranches.AsNoTracking().SingleOrDefaultAsync(item => item.Id == request.BranchId, cancellationToken) : null;
-        var allStations = reports.SelectMany(item => item.Stations).ToArray();
-        var periods = reports.GroupBy(item => item.WorkOrder.ScheduledAt.ToString("yyyy-MM")).Select(group =>
+        var sources = reports.Where(item => item.Stations.Count > 0).Select(item => new TrendSource(item.WorkOrder.ScheduledAt, item.Stations.Select(station => new TrendStation(
+                station.HasActivity, station.PlateChanged, station.CaughtCount, station.TargetPest,
+                station.PestObservations.Select(pest => new TrendPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray()))
+            .Concat(activations.Select(item => new TrendSource(item.WorkOrder.ScheduledAt, StationActivationData.Deserialize(item.StationsJson).Select(station => new TrendStation(
+                station.HasActivity, station.PlateChanged, station.CaughtCount, station.TargetPest,
+                (station.PestObservations ?? []).Select(pest => new TrendPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray())))
+            .OrderBy(item => item.ScheduledAt).ToArray();
+        var allStations = sources.SelectMany(item => item.Stations).ToArray();
+        var periods = sources.GroupBy(item => item.ScheduledAt.ToString("yyyy-MM")).Select(group =>
         {
             var stations = group.SelectMany(item => item.Stations).ToArray();
             return new TrendPeriodPayload(group.Key, group.Count(), stations.Length, stations.Count(item => item.HasActivity), stations.Count(item => item.PlateChanged), stations.Sum(item => item.CaughtCount), Percentage(stations.Count(item => item.HasActivity), stations.Length));
         }).OrderBy(item => item.Period).ToArray();
-        var visionPests = allStations.SelectMany(item => item.PestObservations).Where(item => item.ApprovedCount > 0)
-            .GroupBy(item => item.PestName.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
-            .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.ApprovedCount)));
-        var legacyPests = allStations.Where(item => item.PestObservations.Count == 0 && !string.IsNullOrWhiteSpace(item.TargetPest))
+        var visionPests = allStations.SelectMany(item => item.Pests).Where(item => item.Count > 0)
+            .GroupBy(item => item.Name.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.Count)));
+        var legacyPests = allStations.Where(item => item.Pests.Count == 0 && !string.IsNullOrWhiteSpace(item.TargetPest))
             .GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
             .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.CaughtCount)));
         var pests = visionPests.Concat(legacyPests).GroupBy(item => item.Pest, StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
             .Select(group => new PestTotalPayload(group.Key, group.Sum(item => item.TotalCaught))).OrderByDescending(item => item.TotalCaught).ToArray();
         var activityRate = Percentage(allStations.Count(item => item.HasActivity), allStations.Length);
         var trendDirection = TrendDirection(periods);
-        var summary = $"{reports.Count} saha raporunda {allStations.Length} istasyon değerlendirildi. {allStations.Count(item => item.HasActivity)} istasyonda aktivite görüldü; aktivite oranı %{activityRate:0.#}. Dönemsel eğilim: {trendDirection}.";
-        var payload = new TrendAnalysisPayload(reports.Count, allStations.Length, allStations.Count(item => item.HasActivity), allStations.Count(item => item.PlateChanged), allStations.Sum(item => item.CaughtCount), activityRate, trendDirection, periods, pests);
+        var summary = $"{sources.Length} saha kaydında {allStations.Length} istasyon değerlendirildi. {allStations.Count(item => item.HasActivity)} istasyonda aktivite görüldü; aktivite oranı %{activityRate:0.#}. Dönemsel eğilim: {trendDirection}.";
+        var payload = new TrendAnalysisPayload(sources.Length, allStations.Length, allStations.Count(item => item.HasActivity), allStations.Count(item => item.PlateChanged), allStations.Sum(item => item.CaughtCount), activityRate, trendDirection, periods, pests);
         var analysis = NewAnalysis(context, request.CustomerId, request.BranchId, "Trend", "LIVE-CAPTURE-TREND-v1", request.Title, $"{customer.LegalName} - {branch?.Name ?? "Genel"} Trend Analizi", request.PeriodStart, request.PeriodEnd, (int)Math.Round(activityRate), trendDirection, summary, request.Findings, request.Recommendations, payload);
         dbContext.QualityAnalyses.Add(analysis);
         var document = NewGeneratedDocument(analysis, "TrendAnalyses");
@@ -204,20 +219,34 @@ public static class QualityEndpoints
         var category = Categories.Contains(form["category"].ToString()) ? form["category"].ToString() : "Other";
         var customerId = Guid.TryParse(form["customerId"], out var parsedCustomerId) ? parsedCustomerId : (Guid?)null;
         var branchId = Guid.TryParse(form["branchId"], out var parsedBranchId) ? parsedBranchId : (Guid?)null;
+        var inventoryItemId = Guid.TryParse(form["inventoryItemId"], out var parsedInventoryItemId) ? parsedInventoryItemId : (Guid?)null;
+        var licenseNumber = Clean(form["licenseNumber"].ToString(), 160);
+        InventoryItem? inventoryItem = null;
+        if (category == "Licenses")
+        {
+            if (context.Portal != PortalType.Owner) return Results.Forbid();
+            if (!inventoryItemId.HasValue) return Validation("inventoryItemId", "Ruhsatın bağlı olduğu stok ürününü seçin.");
+            if (licenseNumber is null) return Validation("licenseNumber", "Ürün ruhsat numarasını girin.");
+            inventoryItem = await dbContext.InventoryItems.SingleOrDefaultAsync(item => item.Id == inventoryItemId && item.IsActive, cancellationToken);
+            if (inventoryItem is null) return Validation("inventoryItemId", "Bağlanacak aktif stok ürünü bulunamadı.");
+            customerId = null;
+            branchId = null;
+        }
         if (customerId.HasValue && !await CanUseLocationAsync(customerId.Value, branchId, dbContext, context, cancellationToken)) return Results.Forbid();
         await using var stream = new MemoryStream();
         await file.CopyToAsync(stream, cancellationToken);
         var document = new QualityDocument
         {
-            Id = Guid.NewGuid(), CompanyId = context.CompanyId!.Value, CustomerId = customerId, CustomerBranchId = branchId,
+            Id = Guid.NewGuid(), CompanyId = context.CompanyId!.Value, CustomerId = customerId, CustomerBranchId = branchId, InventoryItemId = inventoryItemId,
             CreatedByAccountId = context.AccountId!.Value, Category = category, Title = Clean(form["title"].ToString(), 240) ?? Path.GetFileNameWithoutExtension(file.FileName),
-            Description = Clean(form["description"].ToString(), 2000), FileName = Path.GetFileName(file.FileName),
+            Description = Clean(form["description"].ToString(), 2000), LicenseNumber = licenseNumber, FileName = Path.GetFileName(file.FileName),
             ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
             SizeBytes = file.Length, FileData = stream.ToArray(), CreatedAt = DateTimeOffset.UtcNow
         };
         dbContext.QualityDocuments.Add(document);
+        if (inventoryItem is not null) inventoryItem.LicenseNumber = licenseNumber;
         await dbContext.SaveChangesAsync(cancellationToken);
-        var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis)
+        var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
             .SingleAsync(item => item.Id == document.Id, cancellationToken);
         return Results.Created($"/api/quality/documents/{document.Id}", ToDocumentResponse(loaded));
     }
@@ -241,11 +270,18 @@ public static class QualityEndpoints
         var query = dbContext.QualityDocuments.AsQueryable();
         if (context.Portal == PortalType.Customer)
         {
-            query = query.Where(item => item.CustomerId == context.CustomerId && (!context.CustomerBranchId.HasValue || !item.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId));
+            query = query.Where(item =>
+                (item.CustomerId == context.CustomerId && (!context.CustomerBranchId.HasValue || !item.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId)) ||
+                (item.Category == "Licenses" && dbContext.ServiceReportProducts.Any(product => product.LicenseDocumentId == item.Id && product.ServiceReport.Status == "Finalized" && product.ServiceReport.WorkOrder.CustomerId == context.CustomerId && (!context.CustomerBranchId.HasValue || product.ServiceReport.WorkOrder.CustomerBranchId == context.CustomerBranchId))));
         }
         else if (context.Portal == PortalType.Employee)
         {
-            query = query.Where(item => item.CreatedByAccountId == context.AccountId || (item.CustomerId.HasValue && dbContext.WorkOrders.Any(workOrder => workOrder.AssignedEmployeeAccountId == context.AccountId && workOrder.CustomerId == item.CustomerId && (!item.CustomerBranchId.HasValue || workOrder.CustomerBranchId == item.CustomerBranchId))));
+            query = query.Where(item => item.CreatedByAccountId == context.AccountId ||
+                (item.CustomerId.HasValue && dbContext.WorkOrders.Any(workOrder =>
+                    (workOrder.AssignedEmployeeAccountId == context.AccountId || workOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == context.AccountId)) &&
+                    workOrder.CustomerId == item.CustomerId && (!item.CustomerBranchId.HasValue || workOrder.CustomerBranchId == item.CustomerBranchId))) ||
+                (item.Category == "Licenses" && item.InventoryItemId.HasValue && dbContext.VehicleStockItems.Any(stock =>
+                    stock.InventoryItemId == item.InventoryItemId && stock.IsActive && stock.Vehicle.IsActive && stock.Vehicle.AssignedEmployeeAccountId == context.AccountId)));
         }
         return query;
     }
@@ -286,7 +322,8 @@ public static class QualityEndpoints
         item.QualityAnalysisId.HasValue ? Path.ChangeExtension(item.FileName, ".pdf") : item.FileName,
         item.QualityAnalysisId.HasValue ? "application/pdf" : item.ContentType, item.SizeBytes, item.CustomerId,
         item.Customer?.LegalName ?? "Firma içi", item.CustomerBranchId, item.CustomerBranch?.Name ?? (item.CustomerId.HasValue ? "Genel" : "Firma içi"),
-        item.CreatedByAccount.DisplayName, item.CreatedAt, item.QualityAnalysisId, item.QualityAnalysis?.AnalysisType, $"/api/quality/documents/{item.Id}/download");
+        item.CreatedByAccount.DisplayName, item.CreatedAt, item.InventoryItemId, item.InventoryItem?.Name, item.LicenseNumber,
+        item.QualityAnalysisId, item.QualityAnalysis?.AnalysisType, $"/api/quality/documents/{item.Id}/download");
 
     private static IReadOnlyList<QualityLocationResponse> ToLocationResponses(IEnumerable<Customer> customers) => customers.SelectMany(customer =>
         new[] { new QualityLocationResponse(customer.Id, customer.LegalName, null, "Genel / Merkez", customer.Address ?? string.Empty) }
@@ -320,6 +357,9 @@ public static class QualityEndpoints
     }
     private static IResult Validation(string key, string message) => Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });
 
+    private sealed record TrendSource(DateTimeOffset ScheduledAt, IReadOnlyList<TrendStation> Stations);
+    private sealed record TrendStation(bool HasActivity, bool PlateChanged, int CaughtCount, string? TargetPest, IReadOnlyList<TrendPest> Pests);
+    private sealed record TrendPest(string Name, int Count);
     private sealed record TrendPeriodPayload(string Period, int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate);
     private sealed record PestTotalPayload(string Pest, int TotalCaught);
     private sealed record TrendAnalysisPayload(int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate, string TrendDirection, IReadOnlyList<TrendPeriodPayload> Periods, IReadOnlyList<PestTotalPayload> PestTotals);

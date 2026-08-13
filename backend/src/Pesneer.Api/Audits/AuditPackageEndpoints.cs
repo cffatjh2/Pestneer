@@ -253,7 +253,7 @@ public static class AuditPackageEndpoints
         foreach (var document in documents.Where(item => item.Category == "Contracts"))
             AddDocument(evidence, includedDocuments, "contracts", document, company);
 
-        foreach (var document in documents.Where(item => !item.CustomerId.HasValue && item.Category is "Certificates" or "General"))
+        foreach (var document in documents.Where(item => !item.CustomerId.HasValue && item.Category is "Certificates" or "Licenses" or "General"))
             AddDocument(evidence, includedDocuments, "qualifications", document, company);
 
         foreach (var plan in plans)
@@ -369,7 +369,7 @@ public static class AuditPackageEndpoints
         var productNames = reports.SelectMany(item => item.Products).Select(item => item.ProductName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (productNames.Length > 0 && !documents.Any(item => IsSafetyDocument(item, productNames)))
             Blocking(issues, "SDS_MISSING", "GBF / SDS belgesi eksik", $"{productNames.Length} kullanılan ürün için eşleşen güvenlik bilgi formu bulunamadı.", "Ürünlerin güncel GBF/SDS belgelerini Belge Arşivi'ne yükleyin.");
-        if (!documents.Any(item => !item.CustomerId.HasValue && item.Category == "Certificates"))
+        if (!documents.Any(item => !item.CustomerId.HasValue && item.Category is "Certificates" or "Licenses"))
             Warning(issues, "QUALIFICATION_MISSING", "Yetkinlik belgesi bulunmuyor", "Firma veya personel için eğitim, izin ya da yetkinlik belgesi bulunamadı.", "Geçerli sertifika ve eğitim kayıtlarını yükleyin.");
         if (!analyses.Any(item => item.AnalysisType == "Trend")) Warning(issues, "TREND_MISSING", "Trend analizi bulunmuyor", "Seçilen döneme ait trend analizi yok.", "Yayımlanmış saha raporlarından trend analizi oluşturun.");
         if (!analyses.Any(item => item.AnalysisType == "Risk")) Warning(issues, "RISK_MISSING", "Risk analizi bulunmuyor", "Seçilen dönem veya lokasyona ait risk analizi yok.", "Lokasyon bazlı risk değerlendirmesi oluşturun.");
@@ -433,7 +433,7 @@ public static class AuditPackageEndpoints
 
     private static bool IsSafetyDocument(QualityDocument document, IReadOnlyCollection<string> productNames)
     {
-        if (document.Category is not ("Certificates" or "General" or "Other")) return false;
+        if (document.Category is not ("Certificates" or "Licenses" or "General" or "Other")) return false;
         var haystack = $"{document.Title} {document.Description} {document.FileName}";
         if (ContainsAny(haystack, "gbf", "sds", "msds", "güvenlik bilgi", "safety data")) return true;
         return productNames.Any(product => product.Length >= 4 && haystack.Contains(product, StringComparison.OrdinalIgnoreCase));

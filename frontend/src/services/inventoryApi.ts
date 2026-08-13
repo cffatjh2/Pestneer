@@ -9,6 +9,8 @@ export type InventoryItem = {
   minimumQuantity: number;
   unitCost: number;
   lotNumber?: string;
+  licenseNumber?: string;
+  licenseDocumentId?: string;
   lastMovementAt: string;
   vehicleQuantity: number;
   totalQuantity: number;
@@ -54,6 +56,8 @@ export type VehicleStockItem = {
   productName: string;
   quantity: number;
   unit: string;
+  licenseNumber?: string;
+  licenseDocumentId?: string;
   lastMovementAt: string;
   isManual: boolean;
 };

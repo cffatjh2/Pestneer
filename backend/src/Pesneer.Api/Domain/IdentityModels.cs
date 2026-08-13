@@ -532,6 +532,7 @@ public sealed class ServiceReportProduct : ICompanyScoped
     public Guid CompanyId { get; set; }
     public Guid ServiceReportId { get; set; }
     public Guid? VehicleStockItemId { get; set; }
+    public Guid? LicenseDocumentId { get; set; }
     public required string ProductName { get; set; }
     public string? LicenseNumber { get; set; }
     public string? ApplicationMethod { get; set; }
@@ -543,6 +544,29 @@ public sealed class ServiceReportProduct : ICompanyScoped
     public required string Unit { get; set; }
     public ServiceReport ServiceReport { get; set; } = null!;
     public VehicleStockItem? VehicleStockItem { get; set; }
+    public QualityDocument? LicenseDocument { get; set; }
+}
+
+public sealed class StationActivation : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid WorkOrderId { get; set; }
+    public Guid CreatedByAccountId { get; set; }
+    public required string Number { get; set; }
+    public required string Status { get; set; } = "Draft";
+    public required string StationsJson { get; set; } = "[]";
+    public string? Notes { get; set; }
+    public int TotalStations { get; set; }
+    public int ActiveStations { get; set; }
+    public int DamagedStations { get; set; }
+    public int InaccessibleStations { get; set; }
+    public int TotalCaught { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? FinalizedAt { get; set; }
+    public WorkOrder WorkOrder { get; set; } = null!;
+    public Account CreatedByAccount { get; set; } = null!;
 }
 
 public sealed class QualityAnalysis : ICompanyScoped
@@ -582,9 +606,11 @@ public sealed class QualityDocument : ICompanyScoped
     public Guid CreatedByAccountId { get; set; }
     public Guid? QualityAnalysisId { get; set; }
     public Guid? SitePlanId { get; set; }
+    public Guid? InventoryItemId { get; set; }
     public required string Category { get; set; }
     public required string Title { get; set; }
     public string? Description { get; set; }
+    public string? LicenseNumber { get; set; }
     public required string FileName { get; set; }
     public required string ContentType { get; set; }
     public long SizeBytes { get; set; }
@@ -595,6 +621,7 @@ public sealed class QualityDocument : ICompanyScoped
     public Account CreatedByAccount { get; set; } = null!;
     public QualityAnalysis? QualityAnalysis { get; set; }
     public SitePlan? SitePlan { get; set; }
+    public InventoryItem? InventoryItem { get; set; }
 }
 
 public sealed class AuditPackage : ICompanyScoped
@@ -927,8 +954,10 @@ public sealed class InventoryItem : ICompanyScoped
     public decimal MinimumQuantity { get; set; }
     public decimal UnitCost { get; set; }
     public string? LotNumber { get; set; }
+    public string? LicenseNumber { get; set; }
     public DateTimeOffset LastMovementAt { get; set; }
     public bool IsActive { get; set; } = true;
+    public ICollection<QualityDocument> LicenseDocuments { get; set; } = [];
 }
 
 public sealed class InventoryMovement : ICompanyScoped

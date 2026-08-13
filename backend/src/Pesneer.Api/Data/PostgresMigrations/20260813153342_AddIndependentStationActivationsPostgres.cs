@@ -1,0 +1,82 @@
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Pesneer.Api.Data.PostgresMigrations
+{
+    /// <inheritdoc />
+    public partial class AddIndependentStationActivationsPostgres : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.CreateTable(
+                name: "StationActivations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CompanyId = table.Column<Guid>(type: "uuid", nullable: false),
+                    WorkOrderId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedByAccountId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<string>(type: "character varying(48)", maxLength: 48, nullable: false),
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    StationsJson = table.Column<string>(type: "text", nullable: false),
+                    Notes = table.Column<string>(type: "character varying(3000)", maxLength: 3000, nullable: true),
+                    TotalStations = table.Column<int>(type: "integer", nullable: false),
+                    ActiveStations = table.Column<int>(type: "integer", nullable: false),
+                    DamagedStations = table.Column<int>(type: "integer", nullable: false),
+                    InaccessibleStations = table.Column<int>(type: "integer", nullable: false),
+                    TotalCaught = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    FinalizedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StationActivations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_StationActivations_Accounts_CreatedByAccountId",
+                        column: x => x.CreatedByAccountId,
+                        principalTable: "Accounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_StationActivations_WorkOrders_WorkOrderId",
+                        column: x => x.WorkOrderId,
+                        principalTable: "WorkOrders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StationActivations_CompanyId_Number",
+                table: "StationActivations",
+                columns: new[] { "CompanyId", "Number" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StationActivations_CompanyId_WorkOrderId",
+                table: "StationActivations",
+                columns: new[] { "CompanyId", "WorkOrderId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StationActivations_CreatedByAccountId",
+                table: "StationActivations",
+                column: "CreatedByAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StationActivations_WorkOrderId",
+                table: "StationActivations",
+                column: "WorkOrderId");
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropTable(
+                name: "StationActivations");
+        }
+    }
+}
