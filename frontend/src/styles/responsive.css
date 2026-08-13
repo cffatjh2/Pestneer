@@ -381,7 +381,7 @@
   .quality-card-metrics { grid-template-columns: repeat(2,1fr); }
   .quality-card-footer { align-items: flex-start; flex-direction: column; }
   .quality-card-footer > div,.quality-card-footer button { width: 100%; }.quality-card-footer button { justify-content: center; }
-  .document-filter-row { align-items: stretch; flex-direction: column; gap: 10px; }.document-filter-row select { width: 100%; min-width: 0; }
+  .document-filter-panel { grid-template-columns: 1fr; padding: 12px; }.document-search,.document-filter-summary { grid-column: auto; }.document-filter-summary { align-items: stretch; flex-direction: column; }.document-filter-summary button { justify-content: center; }
   .risk-score-guide { align-items: flex-start; flex-direction: column; }
   .risk-question-list article { grid-template-columns: 34px minmax(0,1fr); }.risk-question-list select { grid-column: 1 / -1; width: 100%; }
   .period-presets { align-items: stretch; flex-wrap: wrap; }.period-presets span { width: 100%; }.period-presets button { flex: 1; }

@@ -27,13 +27,17 @@ export type QualityDocument = {
 export type CreateTrendAnalysisInput = { customerId: string; branchId?: string; periodStart: string; periodEnd: string; title?: string; findings?: string; recommendations?: string };
 export type CreateRiskAnalysisInput = { customerId: string; branchId?: string; assessmentDate: string; title?: string; findings?: string; correctiveActions?: string; recommendations?: string; sectorType?: string; currentFrequency?: string; riskMatrix: RiskMatrixRow[]; answers: RiskAnswer[] };
 export type UploadQualityDocumentInput = { file: File; category: string; title?: string; description?: string; customerId?: string; branchId?: string; inventoryItemId?: string; licenseNumber?: string };
+export type QualityDocumentFilters = { category?: string; search?: string; customerId?: string; branchId?: string; inventoryItemId?: string; contentType?: 'pdf' | 'office' | 'image' | 'text'; dateFrom?: string; dateTo?: string };
 
 export class QualitySessionExpiredError extends Error {
   constructor(message = 'Oturumunuz güncel değil. Lütfen yeniden giriş yapın.') { super(message); this.name = 'QualitySessionExpiredError'; }
 }
 export const getQualityLocations = (token: string) => request<QualityLocation[]>('/api/quality/locations', token);
 export const getQualityAnalyses = (token: string, type?: 'Trend' | 'Risk') => request<QualityAnalysis[]>(`/api/quality/analyses${type ? `?type=${type}` : ''}`, token);
-export const getQualityDocuments = (token: string, category?: string) => request<QualityDocument[]>(`/api/quality/documents${category ? `?category=${category}` : ''}`, token);
+export const getQualityDocuments = (token: string, filters: QualityDocumentFilters = {}) => {
+  const parameters = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value) parameters.set(key, value); });
+  return request<QualityDocument[]>(`/api/quality/documents${parameters.size ? `?${parameters}` : ''}`, token);
+};
 export const createTrendAnalysis = (token: string, input: CreateTrendAnalysisInput) => request<QualityAnalysis>('/api/quality/trend-analyses', token, { method: 'POST', body: JSON.stringify(input) });
 export const createRiskAnalysis = (token: string, input: CreateRiskAnalysisInput) => request<QualityAnalysis>('/api/quality/risk-analyses', token, { method: 'POST', body: JSON.stringify(input) });
 

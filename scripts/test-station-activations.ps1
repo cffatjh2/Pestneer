@@ -17,8 +17,10 @@ $assemblyPath = Join-Path $apiDirectory 'bin\Debug\net8.0\Pesneer.Api.dll'
 $standardOutput = Join-Path $env:TEMP "pestneer-station-test-$PID.out.log"
 $standardError = Join-Path $env:TEMP "pestneer-station-test-$PID.err.log"
 $licensePath = Join-Path $env:TEMP "pestneer-license-test-$PID.txt"
+$safetyDataSheetPath = Join-Path $env:TEMP "pestneer-msds-test-$PID.txt"
 $customerEmail = "aktivasyon-musteri-$PID@test.local"
 Set-Content -LiteralPath $licensePath -Value 'Test biyosidal ürün ruhsatı' -Encoding utf8
+Set-Content -LiteralPath $safetyDataSheetPath -Value 'Test biyosidal ürün güvenlik bilgi formu' -Encoding utf8
 $process = Start-Process dotnet -ArgumentList @($assemblyPath) -WorkingDirectory $apiDirectory -WindowStyle Hidden -RedirectStandardOutput $standardOutput -RedirectStandardError $standardError -PassThru
 
 try {
@@ -90,6 +92,17 @@ try {
         $uploadResponse = $client.PostAsync("$baseUrl/api/quality/documents/upload", $multipart).GetAwaiter().GetResult()
         if (-not $uploadResponse.IsSuccessStatusCode) { throw "Ruhsat yüklenemedi: $($uploadResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult())" }
         $license = $uploadResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+
+        $safetyMultipart = [System.Net.Http.MultipartFormDataContent]::new()
+        $safetyFileContent = [System.Net.Http.ByteArrayContent]::new([System.IO.File]::ReadAllBytes($safetyDataSheetPath))
+        $safetyFileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new('text/plain')
+        $safetyMultipart.Add($safetyFileContent, 'file', [System.IO.Path]::GetFileName($safetyDataSheetPath))
+        $safetyMultipart.Add([System.Net.Http.StringContent]::new('SafetyDataSheets'), 'category')
+        $safetyMultipart.Add([System.Net.Http.StringContent]::new("Test MSDS $runId"), 'title')
+        $safetyMultipart.Add([System.Net.Http.StringContent]::new($inventory.id), 'inventoryItemId')
+        $safetyUploadResponse = $client.PostAsync("$baseUrl/api/quality/documents/upload", $safetyMultipart).GetAwaiter().GetResult()
+        if (-not $safetyUploadResponse.IsSuccessStatusCode) { throw "MSDS yüklenemedi: $($safetyUploadResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult())" }
+        $safetyDataSheet = $safetyUploadResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
     }
     finally { $client.Dispose() }
 
@@ -117,6 +130,8 @@ try {
     $customerHeaders = @{ Authorization = "Bearer $($customerSession.accessToken)" }
     $customerActivations = @(Invoke-RestMethod "$baseUrl/api/quality/documents?category=StationActivations" -Headers $customerHeaders)
     $customerLicenses = @(Invoke-RestMethod "$baseUrl/api/quality/documents?category=Licenses" -Headers $customerHeaders)
+    $customerSafetyDataSheets = @(Invoke-RestMethod "$baseUrl/api/quality/documents?category=SafetyDataSheets" -Headers $customerHeaders)
+    $filteredSafetyDataSheets = @(Invoke-RestMethod "$baseUrl/api/quality/documents?category=SafetyDataSheets&inventoryItemId=$($inventory.id)&contentType=text&search=MSDS" -Headers $headers)
     [pscustomobject]@{
         login = [bool]$owner.accessToken
         singleLocationCreated = $branch.name -eq 'Merkez' -and $branch.email -eq $customerEmail
@@ -128,11 +143,14 @@ try {
         documentArchived = $documents.Count -gt 0
         customerActivationVisible = $customerActivations.Count -gt 0
         licenseUploaded = [bool]$license.id
+        safetyDataSheetUploaded = [bool]$safetyDataSheet.id
+        safetyDataSheetFilterWorks = $filteredSafetyDataSheets.Count -eq 1 -and $filteredSafetyDataSheets[0].id -eq $safetyDataSheet.id
         inventoryLicenseLinked = $inventoryAfterLicense.licenseDocumentId -eq $license.id -and $inventoryAfterLicense.licenseNumber -eq "RUHSAT-$runId"
         vehicleLicenseLinked = $vehicleStock.licenseDocumentId -eq $license.id
         reportLicensePinned = @($report.products)[0].licenseDocumentId -eq $license.id -and @($report.products)[0].licenseNumber -eq "RUHSAT-$runId"
         emailRecipientsQueued = $report.emailRecipientCount -ge 3 -and $report.emailDeliveryStatus -eq 'Pending'
         customerLicenseVisible = $customerLicenses.Count -gt 0
+        customerSafetyDataSheetVisible = $customerSafetyDataSheets.Count -gt 0 -and $customerSafetyDataSheets[0].inventoryItemId -eq $inventory.id
     } | ConvertTo-Json
 }
 catch {
@@ -151,5 +169,5 @@ finally {
     $env:ConnectionStrings__Pesneer = $previousConnection
     $env:DatabaseProvider = $previousProvider
     if (Test-Path -LiteralPath $databasePath) { Remove-Item -LiteralPath $databasePath -Force -ErrorAction SilentlyContinue }
-    Remove-Item -LiteralPath $standardOutput, $standardError, $licensePath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $standardOutput, $standardError, $licensePath, $safetyDataSheetPath -Force -ErrorAction SilentlyContinue
 }

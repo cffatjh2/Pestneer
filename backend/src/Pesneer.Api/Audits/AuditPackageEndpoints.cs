@@ -217,6 +217,7 @@ public static class AuditPackageEndpoints
         }
 
         var documentQuery = dbContext.QualityDocuments.AsNoTracking()
+            .Include(item => item.InventoryItem)
             .Include(item => item.QualityAnalysis).ThenInclude(item => item!.Customer)
             .Include(item => item.QualityAnalysis).ThenInclude(item => item!.CustomerBranch)
             .Include(item => item.QualityAnalysis).ThenInclude(item => item!.CreatedByAccount)
@@ -433,6 +434,8 @@ public static class AuditPackageEndpoints
 
     private static bool IsSafetyDocument(QualityDocument document, IReadOnlyCollection<string> productNames)
     {
+        if (document.Category == "SafetyDataSheets")
+            return !document.InventoryItemId.HasValue || productNames.Any(product => string.Equals(product, document.InventoryItem?.Name, StringComparison.OrdinalIgnoreCase));
         if (document.Category is not ("Certificates" or "Licenses" or "General" or "Other")) return false;
         var haystack = $"{document.Title} {document.Description} {document.FileName}";
         if (ContainsAny(haystack, "gbf", "sds", "msds", "güvenlik bilgi", "safety data")) return true;

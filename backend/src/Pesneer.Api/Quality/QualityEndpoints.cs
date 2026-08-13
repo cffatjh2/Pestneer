@@ -19,7 +19,7 @@ public static class QualityEndpoints
     };
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     {
-        "General", "CommercialProposals", "Contracts", "ServiceReports", "StationActivations", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Licenses", "AuditPackages", "Photos", "FieldInspections", "SalesForms", "Other"
+        "General", "CommercialProposals", "Contracts", "ServiceReports", "StationActivations", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Licenses", "SafetyDataSheets", "AuditPackages", "Photos", "FieldInspections", "SalesForms", "Other"
     };
 
     public static IEndpointRouteBuilder MapQualityEndpoints(this IEndpointRouteBuilder app)
@@ -82,12 +82,62 @@ public static class QualityEndpoints
         return Results.Ok(ToAnalysisResponse(analysis, documentId));
     }
 
-    private static async Task<IResult> GetDocumentsAsync(string? category, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    private static async Task<IResult> GetDocumentsAsync(
+        string? category,
+        string? search,
+        Guid? customerId,
+        Guid? branchId,
+        Guid? inventoryItemId,
+        string? contentType,
+        DateOnly? dateFrom,
+        DateOnly? dateTo,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
     {
+        if (dateFrom.HasValue && dateTo.HasValue && dateTo < dateFrom)
+            return Validation("dateTo", "Bitiş tarihi başlangıç tarihinden önce olamaz.");
+        if (!string.IsNullOrWhiteSpace(category) && !Categories.Contains(category))
+            return Validation("category", "Geçerli bir belge kategorisi seçin.");
+        var normalizedContentType = Clean(contentType, 20)?.ToLowerInvariant();
+        if (normalizedContentType is not null && normalizedContentType is not ("pdf" or "office" or "image" or "text"))
+            return Validation("contentType", "Geçerli bir dosya türü filtresi seçin.");
         var query = AccessibleDocuments(dbContext, context).AsNoTracking()
             .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem).AsQueryable();
         if (!string.IsNullOrWhiteSpace(category)) query = query.Where(item => item.Category == category);
-        return Results.Ok((await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).Select(ToDocumentResponse).ToArray());
+        if (customerId.HasValue) query = query.Where(item => item.CustomerId == customerId.Value);
+        if (branchId.HasValue) query = query.Where(item => item.CustomerBranchId == branchId.Value);
+        if (inventoryItemId.HasValue) query = query.Where(item => item.InventoryItemId == inventoryItemId.Value);
+        if (normalizedContentType is not null)
+        {
+            query = normalizedContentType switch
+            {
+                "pdf" => query.Where(item => item.ContentType == "application/pdf" || item.FileName.EndsWith(".pdf")),
+                "office" => query.Where(item => item.FileName.EndsWith(".doc") || item.FileName.EndsWith(".docx") || item.FileName.EndsWith(".xls") || item.FileName.EndsWith(".xlsx") || item.FileName.EndsWith(".csv")),
+                "image" => query.Where(item => item.ContentType.StartsWith("image/")),
+                "text" => query.Where(item => item.ContentType.StartsWith("text/") || item.FileName.EndsWith(".txt")),
+                _ => query
+            };
+        }
+        if (dateFrom.HasValue)
+        {
+            var from = new DateTimeOffset(dateFrom.Value.ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
+            query = query.Where(item => item.CreatedAt >= from);
+        }
+        if (dateTo.HasValue)
+        {
+            var to = new DateTimeOffset(dateTo.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
+            query = query.Where(item => item.CreatedAt < to);
+        }
+        var normalizedSearch = Clean(search, 120)?.ToUpper();
+        if (normalizedSearch is not null)
+            query = query.Where(item => item.Title.ToUpper().Contains(normalizedSearch) || item.FileName.ToUpper().Contains(normalizedSearch) ||
+                (item.Description != null && item.Description.ToUpper().Contains(normalizedSearch)) ||
+                (item.LicenseNumber != null && item.LicenseNumber.ToUpper().Contains(normalizedSearch)) ||
+                (item.Customer != null && item.Customer.LegalName.ToUpper().Contains(normalizedSearch)) ||
+                (item.CustomerBranch != null && item.CustomerBranch.Name.ToUpper().Contains(normalizedSearch)) ||
+                (item.InventoryItem != null && item.InventoryItem.Name.ToUpper().Contains(normalizedSearch)));
+        return Results.Ok((await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).Take(1000).Select(ToDocumentResponse).ToArray());
     }
 
     private static async Task<IResult> DownloadDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -222,11 +272,11 @@ public static class QualityEndpoints
         var inventoryItemId = Guid.TryParse(form["inventoryItemId"], out var parsedInventoryItemId) ? parsedInventoryItemId : (Guid?)null;
         var licenseNumber = Clean(form["licenseNumber"].ToString(), 160);
         InventoryItem? inventoryItem = null;
-        if (category == "Licenses")
+        if (category is "Licenses" or "SafetyDataSheets")
         {
             if (context.Portal != PortalType.Owner) return Results.Forbid();
-            if (!inventoryItemId.HasValue) return Validation("inventoryItemId", "Ruhsatın bağlı olduğu stok ürününü seçin.");
-            if (licenseNumber is null) return Validation("licenseNumber", "Ürün ruhsat numarasını girin.");
+            if (!inventoryItemId.HasValue) return Validation("inventoryItemId", category == "Licenses" ? "Ruhsatın bağlı olduğu stok ürününü seçin." : "MSDS / GBF belgesinin bağlı olduğu stok ürününü seçin.");
+            if (category == "Licenses" && licenseNumber is null) return Validation("licenseNumber", "Ürün ruhsat numarasını girin.");
             inventoryItem = await dbContext.InventoryItems.SingleOrDefaultAsync(item => item.Id == inventoryItemId && item.IsActive, cancellationToken);
             if (inventoryItem is null) return Validation("inventoryItemId", "Bağlanacak aktif stok ürünü bulunamadı.");
             customerId = null;
@@ -244,7 +294,7 @@ public static class QualityEndpoints
             SizeBytes = file.Length, FileData = stream.ToArray(), CreatedAt = DateTimeOffset.UtcNow
         };
         dbContext.QualityDocuments.Add(document);
-        if (inventoryItem is not null) inventoryItem.LicenseNumber = licenseNumber;
+        if (inventoryItem is not null && category == "Licenses") inventoryItem.LicenseNumber = licenseNumber;
         await dbContext.SaveChangesAsync(cancellationToken);
         var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
             .SingleAsync(item => item.Id == document.Id, cancellationToken);
@@ -272,7 +322,8 @@ public static class QualityEndpoints
         {
             query = query.Where(item =>
                 (item.CustomerId == context.CustomerId && (!context.CustomerBranchId.HasValue || !item.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId)) ||
-                (item.Category == "Licenses" && dbContext.ServiceReportProducts.Any(product => product.LicenseDocumentId == item.Id && product.ServiceReport.Status == "Finalized" && product.ServiceReport.WorkOrder.CustomerId == context.CustomerId && (!context.CustomerBranchId.HasValue || product.ServiceReport.WorkOrder.CustomerBranchId == context.CustomerBranchId))));
+                (item.Category == "Licenses" && dbContext.ServiceReportProducts.Any(product => product.LicenseDocumentId == item.Id && product.ServiceReport.Status == "Finalized" && product.ServiceReport.WorkOrder.CustomerId == context.CustomerId && (!context.CustomerBranchId.HasValue || product.ServiceReport.WorkOrder.CustomerBranchId == context.CustomerBranchId))) ||
+                (item.Category == "SafetyDataSheets" && item.InventoryItemId.HasValue && dbContext.ServiceReportProducts.Any(product => product.VehicleStockItem != null && product.VehicleStockItem.InventoryItemId == item.InventoryItemId && product.ServiceReport.Status == "Finalized" && product.ServiceReport.WorkOrder.CustomerId == context.CustomerId && (!context.CustomerBranchId.HasValue || product.ServiceReport.WorkOrder.CustomerBranchId == context.CustomerBranchId))));
         }
         else if (context.Portal == PortalType.Employee)
         {
@@ -280,7 +331,7 @@ public static class QualityEndpoints
                 (item.CustomerId.HasValue && dbContext.WorkOrders.Any(workOrder =>
                     (workOrder.AssignedEmployeeAccountId == context.AccountId || workOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == context.AccountId)) &&
                     workOrder.CustomerId == item.CustomerId && (!item.CustomerBranchId.HasValue || workOrder.CustomerBranchId == item.CustomerBranchId))) ||
-                (item.Category == "Licenses" && item.InventoryItemId.HasValue && dbContext.VehicleStockItems.Any(stock =>
+                ((item.Category == "Licenses" || item.Category == "SafetyDataSheets") && item.InventoryItemId.HasValue && dbContext.VehicleStockItems.Any(stock =>
                     stock.InventoryItemId == item.InventoryItemId && stock.IsActive && stock.Vehicle.IsActive && stock.Vehicle.AssignedEmployeeAccountId == context.AccountId)));
         }
         return query;
