@@ -86,6 +86,8 @@ export async function getSitePlans(token: string) {
 export const createSitePlan = (token: string, input: SaveSitePlanInput) => request<SitePlanRecord>('/api/site-plans/', token, { method: 'POST', body: JSON.stringify(input) });
 export const updateSitePlan = (token: string, id: string, input: SaveSitePlanInput) => request<SitePlanRecord>(`/api/site-plans/${id}`, token, { method: 'PUT', body: JSON.stringify(input) });
 
+import { shareOrDownloadFile } from '../utils/shareUtils';
+
 export async function downloadSitePlan(token: string, plan: SitePlanRecord, open = false) {
   const response = await fetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new SitePlanSessionExpiredError();
@@ -103,6 +105,20 @@ export async function downloadSitePlan(token: string, plan: SitePlanRecord, open
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
 }
+
+export async function shareSitePlan(token: string, plan: SitePlanRecord) {
+  const response = await fetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  if (response.status === 401 || response.status === 403) throw new SitePlanSessionExpiredError();
+  if (!response.ok) throw new Error('Yerleşim planı PDF dosyası indirilemedi.');
+  const blob = await response.blob();
+  return await shareOrDownloadFile({
+    title: `${plan.number} - ${plan.title}`,
+    fileName: plan.document.fileName,
+    blob,
+    text: `${plan.title} (${plan.customerName} · ${plan.branchName}) - Pestneer Yerleşim Planı`,
+  });
+}
+
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;

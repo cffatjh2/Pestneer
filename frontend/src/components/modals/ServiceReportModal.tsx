@@ -262,7 +262,7 @@ function ReportDetails({ catalog, form, setField, products, updateProduct, setPr
             <CatalogSelectField label="Kullanım yeri / yöntemi" options={catalog.applicationMethods} value={product.applicationMethod ?? ''} disabled={readOnly} onChange={(value) => updateProduct(index, { applicationMethod: value })} />
             <Field label="Etken madde / sarf türü" value={product.activeIngredient ?? ''} onChange={(value) => updateProduct(index, { activeIngredient: value })} disabled={readOnly} placeholder="Etken madde" />
             <Field label="Kullanılan miktar" value={String(product.amountUsed || '')} onChange={(value) => updateProduct(index, { amountUsed: Number(value) })} disabled={readOnly} type="number" placeholder="0" />
-            <label>Birim<select value={product.unit} disabled={readOnly || !product.vehicleStockItemId} onChange={(event) => updateProduct(index, { unit: event.target.value })}>{usageUnits(vehicleStockItems.find((item) => item.vehicleStockItemId === product.vehicleStockItemId)?.unit).map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+            <label className="report-control">Birim<select value={product.unit} disabled={readOnly || !product.vehicleStockItemId} onChange={(event) => updateProduct(index, { unit: event.target.value })}>{usageUnits(vehicleStockItems.find((item) => item.vehicleStockItemId === product.vehicleStockItemId)?.unit).map((unit) => <option key={unit}>{unit}</option>)}</select></label>
           </div>
           {product.licenseDocumentId && <small className="report-license-linked"><FileCheck2 size={14} /> Ürüne bağlı güncel ruhsat EK-1 formuna otomatik eklendi.</small>}
           {!readOnly && products.length > 1 && <button type="button" className="report-product-remove" onClick={() => setProducts((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={14} /> Kalemi kaldır</button>}
@@ -278,11 +278,11 @@ function ReportDetails({ catalog, form, setField, products, updateProduct, setPr
           <small>Saha bulguları, yapılan uygulama ve düzeltici faaliyetler</small>
         </div>
       </header>
-      <div className="report-form-grid">
+      <div className="report-form-grid report-results-grid">
         <TextField label="Yapılan uygulama özeti" value={form.applicationSummary ?? ''} onChange={(value) => setField('applicationSummary', value)} disabled={readOnly} wide />
         <TextField label="Saha bulguları" value={form.findings ?? ''} onChange={(value) => setField('findings', value)} disabled={readOnly} />
         <TextField label="Düzeltici faaliyetler" value={form.correctiveActions ?? ''} onChange={(value) => setField('correctiveActions', value)} disabled={readOnly} />
-        <TextField label="Öneriler" value={form.recommendations ?? ''} onChange={(value) => setField('recommendations', value)} disabled={readOnly} wide />
+        <TextField label="Öneriler" value={form.recommendations ?? ''} onChange={(value) => setField('recommendations', value)} disabled={readOnly} full />
       </div>
     </section>
 
@@ -574,7 +574,7 @@ function DropdownMultiSelect({
 
 function CatalogSelectField({ label, options, value, disabled, onChange }: { label: string; options: string[]; value: string; disabled: boolean; onChange: (value: string) => void }) {
   const known = options.includes(value); const isOther = value.startsWith('Diğer: '); const other = isOther ? value.slice(7) : (!known ? value : '');
-  return <label>{label}<select value={known ? value : other ? '__other__' : ''} disabled={disabled} onChange={(event) => onChange(event.target.value === '__other__' ? 'Diğer: ' : event.target.value)}><option value="">Seçiniz</option>{options.map((item) => <option key={item}>{item}</option>)}<option value="__other__">Diğer</option></select>{(isOther || other) && <input value={other} disabled={disabled} onChange={(event) => onChange(`Diğer: ${event.target.value}`)} placeholder="Manuel değer" />}</label>;
+  return <label className="report-control">{label}<select value={known ? value : other ? '__other__' : ''} disabled={disabled} onChange={(event) => onChange(event.target.value === '__other__' ? 'Diğer: ' : event.target.value)}><option value="">Seçiniz</option>{options.map((item) => <option key={item}>{item}</option>)}<option value="__other__">Diğer</option></select>{(isOther || other) && <input value={other} disabled={disabled} onChange={(event) => onChange(`Diğer: ${event.target.value}`)} placeholder="Manuel değer" />}</label>;
 }
 
 function PhotoCapture({ photos, existingPhotos, readOnly, onChange }: { photos: ReportPhotoUpload[]; existingPhotos: ServiceReportRecord['photos']; readOnly: boolean; onChange: Dispatch<SetStateAction<ReportPhotoUpload[]>> }) {
@@ -589,11 +589,11 @@ function ManualStockModal({ onClose, onSave }: { onClose: () => void; onSave: (i
 }
 
 function StockSelect({ label, value, stockItems, disabled, onChange }: { label: string; value?: string; stockItems: VehicleStockCheck['items']; disabled: boolean; onChange: (item?: VehicleStockCheck['items'][number]) => void }) {
-  return <label className="form-field-wide">{label}<select value={value ?? ''} disabled={disabled} onChange={(event) => onChange(stockItems.find((item) => item.vehicleStockItemId === event.target.value))}><option value="">Araç ürünü seçin</option>{stockItems.filter((item) => item.vehicleStockItemId && (item.quantity > 0 || item.vehicleStockItemId === value)).map((item) => <option value={item.vehicleStockItemId} key={item.vehicleStockItemId}>{item.productName} · {item.quantity} {item.unit}</option>)}</select></label>;
+  return <label className="report-control form-field-wide">{label}<select value={value ?? ''} disabled={disabled} onChange={(event) => onChange(stockItems.find((item) => item.vehicleStockItemId === event.target.value))}><option value="">Araç ürünü seçin</option>{stockItems.filter((item) => item.vehicleStockItemId && (item.quantity > 0 || item.vehicleStockItemId === value)).map((item) => <option value={item.vehicleStockItemId} key={item.vehicleStockItemId}>{item.productName} · {item.quantity} {item.unit}</option>)}</select></label>;
 }
 
-function Field({ label, value, onChange, disabled, wide = false, type = 'text', placeholder }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean; type?: string; placeholder?: string }) { return <label className={wide ? 'form-field-wide' : ''}>{label}<input type={type} min={type === 'number' ? '0' : undefined} value={value} disabled={disabled} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>; }
-function TextField({ label, value, onChange, disabled, wide = false, placeholder }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean; placeholder?: string }) { return <label className={wide ? 'form-field-wide' : ''}>{label}<textarea value={value} disabled={disabled} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>; }
+function Field({ label, value, onChange, disabled, wide = false, type = 'text', placeholder }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean; type?: string; placeholder?: string }) { return <label className={`report-control${wide ? ' form-field-wide' : ''}`}>{label}<input type={type} min={type === 'number' ? '0' : undefined} value={value} disabled={disabled} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>; }
+function TextField({ label, value, onChange, disabled, wide = false, full = false, placeholder }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean; full?: boolean; placeholder?: string }) { return <label className={`report-control${wide ? ' form-field-wide' : ''}${full ? ' form-field-full' : ''}`}>{label}<textarea value={value} disabled={disabled} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>; }
 function SignatureCard({ label, value, disabled, onClick }: { label: string; value?: string; disabled?: boolean; onClick: () => void }) { return <button className={`report-signature-card ${value ? 'signed' : ''}`} disabled={disabled} onClick={onClick}>{value ? <img src={value} alt={`${label} imzası`} /> : <Plus size={21} />}<span>{value ? 'İmza kaydedildi' : label}</span></button>; }
 
 function createInitialForm(order: WorkOrder, report: ServiceReportRecord | undefined, companyName: string): FormState {

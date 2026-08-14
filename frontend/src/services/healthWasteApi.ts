@@ -61,12 +61,34 @@ export async function uploadWasteEvidence(token: string, id: string, file: File,
   return request<WasteDisposalRecord>(`/api/company/waste-disposals/${id}/evidence`, token, { method: 'POST', body: form }, false);
 }
 
+import { shareOrDownloadFile } from '../utils/shareUtils';
+
 export async function downloadWasteEvidence(token: string, evidence: WasteDisposalEvidence) {
   const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new HealthWasteSessionExpiredError('Oturum süresi doldu.');
   if (!response.ok) throw new Error('Kanıt dosyası indirilemedi.');
-  const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = evidence.fileName; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = evidence.fileName;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+export async function shareWasteEvidence(token: string, evidence: WasteDisposalEvidence, title?: string) {
+  const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  if (response.status === 401 || response.status === 403) throw new HealthWasteSessionExpiredError('Oturum süresi doldu.');
+  if (!response.ok) throw new Error('Kanıt dosyası indirilemedi.');
+  const blob = await response.blob();
+  return await shareOrDownloadFile({
+    title: title || evidence.fileName,
+    fileName: evidence.fileName,
+    blob,
+    text: `${evidence.fileName} - Pestneer Atık / Bertaraf Kanıtı`,
+  });
+}
+
 
 async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   const headers: HeadersInit = { Authorization: `Bearer ${token}`, ...(json ? { 'Content-Type': 'application/json' } : {}), ...(init?.headers ?? {}) };

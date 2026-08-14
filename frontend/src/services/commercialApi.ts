@@ -27,5 +27,33 @@ export const getProfitability = (token: string, start?: string, end?: string) =>
   const suffix = query.size ? `?${query.toString()}` : '';
   return request<ProfitabilitySummary>(`/api/company/commercial/profitability${suffix}`, token);
 };
-export const saveWorkOrderEconomics = (token: string, workOrderId: string, input: { revenue: number; personnelHourlyCost: number; distanceKm: number; fuelCost: number; repeatVisitCost: number; emergencyCallCost: number; otherCost: number }) => request<void>(`/api/company/commercial/work-orders/${workOrderId}/economics`, token, { method: 'PUT', body: JSON.stringify(input) });
+
+export type WorkOrderEconomicsInput = {
+  revenue: number;
+  personnelHourlyCost: number;
+  distanceKm: number;
+  fuelCost: number;
+  repeatVisitCost: number;
+  emergencyCallCost: number;
+  otherCost: number;
+};
+export const saveWorkOrderEconomics = (token: string, id: string, input: WorkOrderEconomicsInput) => request<void>(`/api/company/commercial/work-orders/${id}/economics`, token, { method: 'PUT', body: JSON.stringify(input) });
+
+import { shareOrDownloadFile } from '../utils/shareUtils';
+
+
 export async function downloadCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string) { const response = await fetch(`/api/company/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); if (response.status === 401) throw new CommercialSessionExpiredError(); if (!response.ok) throw new Error('PDF oluşturulamadı.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `${number}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+
+export async function shareCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string, title?: string) {
+  const response = await fetch(`/api/company/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
+  if (response.status === 401) throw new CommercialSessionExpiredError();
+  if (!response.ok) throw new Error('PDF oluşturulamadı.');
+  const blob = await response.blob();
+  return await shareOrDownloadFile({
+    title: title || `${number} - ${kind === 'proposals' ? 'Teklif' : 'Sözleşme'}`,
+    fileName: `${number}.pdf`,
+    blob,
+    text: `${title || number} - Pestneer Ticari Belge`,
+  });
+}
+

@@ -28,12 +28,34 @@ export async function uploadCorrectiveActionEvidence(token: string, id: string, 
   return request<CorrectiveActionEvidence>(customer ? `/api/customer/portal/corrective-actions/${id}/evidence` : `/api/corrective-actions/${id}/evidence`, token, { method: 'POST', body: form }, false);
 }
 
+import { shareOrDownloadFile } from '../utils/shareUtils';
+
 export async function downloadCorrectiveActionEvidence(token: string, evidence: CorrectiveActionEvidence) {
   const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new CorrectiveActionSessionExpiredError();
   if (!response.ok) throw new Error('Kanıt dosyası açılamadı.');
-  const url = URL.createObjectURL(await response.blob()); window.open(url, '_blank', 'noopener,noreferrer'); window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = evidence.fileName;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+export async function shareCorrectiveActionEvidence(token: string, evidence: CorrectiveActionEvidence, title?: string) {
+  const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  if (response.status === 401 || response.status === 403) throw new CorrectiveActionSessionExpiredError();
+  if (!response.ok) throw new Error('Kanıt dosyası açılamadı.');
+  const blob = await response.blob();
+  return await shareOrDownloadFile({
+    title: title || evidence.fileName,
+    fileName: evidence.fileName,
+    blob,
+    text: `${evidence.fileName} - Pestneer Düzeltici Faaliyet Kanıtı`,
+  });
+}
+
 
 async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   let response: Response;

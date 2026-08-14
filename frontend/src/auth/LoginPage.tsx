@@ -84,28 +84,77 @@ function createDemoSession(option: RoleOption): AuthenticatedSession {
   };
 }
 
-export default function LoginPage({ onAuthenticated, onBack }: { onAuthenticated: (session: AuthenticatedSession) => void; onBack?: () => void }) {
-  const [portal, setPortal] = useState<PortalType>('owner');
-  const [companyCode, setCompanyCode] = useState('TURA-ANKARA');
-  const [email, setEmail] = useState('');
+const REMEMBER_LOGIN_KEY = 'pesneer.remember_login';
+
+type SavedLogin = {
+  portal?: PortalType;
+  companyCode?: string;
+  email?: string;
+  rememberMe?: boolean;
+};
+
+function getSavedLogin(): SavedLogin | null {
+  try {
+    const raw = localStorage.getItem(REMEMBER_LOGIN_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SavedLogin;
+  } catch {
+    return null;
+  }
+}
+
+export default function LoginPage({ onAuthenticated, onBack }: { onAuthenticated: (session: AuthenticatedSession, rememberMe?: boolean) => void; onBack?: () => void }) {
+  const saved = useMemo(() => getSavedLogin(), []);
+  const [portal, setPortal] = useState<PortalType>(saved?.portal ?? 'owner');
+  const [companyCode, setCompanyCode] = useState(saved?.companyCode ?? 'TURA-ANKARA');
+  const [email, setEmail] = useState(saved?.email ?? '');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(saved?.rememberMe ?? true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const selectedRole = useMemo(() => roleOptions.find((option) => option.id === portal)!, [portal]);
   const SelectedRoleIcon = selectedRole.icon;
+
+  const saveRememberChoice = () => {
+    if (rememberMe) {
+      try {
+        localStorage.setItem(
+          REMEMBER_LOGIN_KEY,
+          JSON.stringify({ portal, companyCode, email, rememberMe: true })
+        );
+      } catch {
+        // ignore
+      }
+    } else {
+      try {
+        localStorage.removeItem(REMEMBER_LOGIN_KEY);
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setInfoMessage(null);
     setIsLoading(true);
     try {
-      onAuthenticated(await login(portal, { companyCode, email, password }));
+      const session = await login(portal, { companyCode, email, password });
+      saveRememberChoice();
+      onAuthenticated(session, rememberMe);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Giriş sırasında bir hata oluştu.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDemoLogin = () => {
+    saveRememberChoice();
+    onAuthenticated(createDemoSession(selectedRole), rememberMe);
   };
 
   return (
@@ -136,14 +185,35 @@ export default function LoginPage({ onAuthenticated, onBack }: { onAuthenticated
           <form className="login-form" onSubmit={submit}>
             <label>{portal === 'customer' ? 'Hizmet sağlayıcı firma kodu' : 'Firma kodu'}<span className="login-input"><Building2 size={18} /><input value={companyCode} onChange={(event) => setCompanyCode(event.target.value)} autoComplete="organization" required /></span></label>
             <label>E-posta adresi<span className="login-input"><UserRoundCheck size={18} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={selectedRole.email} autoComplete="email" required /></span></label>
-            <label><span className="password-label"><span>Şifre</span><button type="button">Şifremi unuttum</button></span><span className="login-input"><LockKeyhole size={18} /><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Şifrenizi girin" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+            <label><span className="password-label"><span>Şifre</span></span><span className="login-input"><LockKeyhole size={18} /><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Şifrenizi girin" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+
+            <div className="login-form-options">
+              <label className="remember-me-label">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                />
+                <span>Beni hatırla</span>
+              </label>
+              <button
+                type="button"
+                className="forgot-password-link"
+                onClick={() => setInfoMessage('Şifre sıfırlama için lütfen sistem yöneticiniz veya firma yetkiliniz ile iletişime geçin.')}
+              >
+                Şifremi unuttum
+              </button>
+            </div>
+
+            {infoMessage && <div className="toast" style={{ position: 'static', margin: '4px 0', padding: '10px 12px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px' }}><CheckCircle2 size={15} /><span>{infoMessage}</span></div>}
             {error && <div className="login-error" role="alert">{error}</div>}
             <button className="login-submit" type="submit" disabled={isLoading}>{isLoading ? 'Kontrol ediliyor…' : selectedRole.label}<ArrowRight size={18} /></button>
           </form>
-          <div className="demo-access"><span><i /> veya hızlı önizleme <i /></span><button type="button" onClick={() => onAuthenticated(createDemoSession(selectedRole))}><SelectedRoleIcon size={17} />{selectedRole.shortLabel} demosunu aç</button><small>Demo, gerçek hesap verisi içermez.</small></div>
+          <div className="demo-access"><span><i /> veya hızlı önizleme <i /></span><button type="button" onClick={handleDemoLogin}><SelectedRoleIcon size={17} />{selectedRole.shortLabel} demosunu aç</button><small>Demo, gerçek hesap verisi içermez.</small></div>
         </div>
         <footer>© 2026 Pesneer <span>Gizlilik</span><span>Kullanım koşulları</span><span>Destek</span></footer>
       </section>
     </main>
   );
 }
+

@@ -16,8 +16,10 @@ PestneerVision/**/__pycache__/
 PestneerVision/**/*.pyc
 .env.*
 !.env.example
+.tmp/
 tmp/
 .vs/
+
 .idea/
 .vscode/
 coverage/

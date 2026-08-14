@@ -18,7 +18,25 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
 export const getCustomerPortalSummary = (token: string) => request<CustomerPortalSummary>('/api/customer/portal/summary', token);
 export const getCustomerCommercialSummary = (token: string) => request<CustomerCommercialSummary>('/api/customer/portal/commercial', token);
 export const decideCustomerProposal = (token: string, id: string, accepted: boolean, note?: string) => request<CustomerCommercialProposal>(`/api/customer/portal/commercial/proposals/${id}/decision`, token, { method: 'POST', body: JSON.stringify({ accepted, note }) });
+
+import { shareOrDownloadFile } from '../utils/shareUtils';
+
+
 export async function downloadCustomerCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string) { const response = await fetch(`/api/customer/portal/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); if (response.status === 401) throw new CustomerPortalSessionExpiredError(); if (!response.ok) throw new Error('PDF indirilemedi.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `${number}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+
+export async function shareCustomerCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string, title?: string) {
+  const response = await fetch(`/api/customer/portal/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
+  if (response.status === 401) throw new CustomerPortalSessionExpiredError();
+  if (!response.ok) throw new Error('PDF indirilemedi.');
+  const blob = await response.blob();
+  return await shareOrDownloadFile({
+    title: title || `${number} - ${kind === 'proposals' ? 'Teklif' : 'Sözleşme'}`,
+    fileName: `${number}.pdf`,
+    blob,
+    text: `${title || number} - Pestneer Ticari Belge`,
+  });
+}
+
 export const createEmergencyRequest = (token: string, input: CreateEmergencyRequestInput) => request<EmergencyRequestRecord>('/api/customer/portal/requests', token, { method: 'POST', body: JSON.stringify(input) });
 export const addCustomerRequestMessage = (token: string, id: string, message: string) => request<EmergencyRequestRecord>(`/api/customer/portal/requests/${id}/messages`, token, { method: 'POST', body: JSON.stringify({ message }) });
 export const approveCustomerRequestClosure = (token: string, id: string, approved: boolean, note?: string) => request<EmergencyRequestRecord>(`/api/customer/portal/requests/${id}/closure-approval`, token, { method: 'POST', body: JSON.stringify({ approved, note }) });

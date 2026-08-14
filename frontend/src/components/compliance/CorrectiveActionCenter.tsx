@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, Camera, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Eye, FileWarning, Plus, RefreshCw, ShieldCheck, Upload, X } from 'lucide-react';
+import { AlertTriangle, Camera, ChevronDown, ChevronUp, ClipboardCheck, Clock3, Eye, FileWarning, Plus, RefreshCw, Share2, ShieldCheck, Upload, X } from 'lucide-react';
 import type { EmployeeRecord } from '../../services/employeeApi';
 import { getQualityLocations, type QualityLocation } from '../../services/qualityApi';
-import { approveCorrectiveAction, createCorrectiveAction, downloadCorrectiveActionEvidence, getCorrectiveActions, updateCorrectiveAction, uploadCorrectiveActionEvidence, CorrectiveActionSessionExpiredError, type CorrectiveAction, type CreateCorrectiveActionInput, type UpdateCorrectiveActionInput } from '../../services/correctiveActionApi';
+import { approveCorrectiveAction, createCorrectiveAction, downloadCorrectiveActionEvidence, getCorrectiveActions, shareCorrectiveActionEvidence, updateCorrectiveAction, uploadCorrectiveActionEvidence, CorrectiveActionSessionExpiredError, type CorrectiveAction, type CreateCorrectiveActionInput, type UpdateCorrectiveActionInput } from '../../services/correctiveActionApi';
 
 type Props = { accessToken: string; mode: 'staff' | 'customer'; employees?: EmployeeRecord[]; onSessionExpired: () => void; standalone?: boolean };
 type StatusFilter = 'All' | CorrectiveAction['status'];
@@ -13,35 +13,46 @@ const priorityLabels = { Low: 'Düşük', Normal: 'Normal', High: 'Yüksek', Cri
 export default function CorrectiveActionCenter({ accessToken, mode, employees = [], onSessionExpired, standalone = false }: Props) {
   const [items, setItems] = useState<CorrectiveAction[]>([]); const [locations, setLocations] = useState<QualityLocation[]>([]);
   const [filter, setFilter] = useState<StatusFilter>('All'); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<CorrectiveAction | 'new' | null>(null); const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null); const [editing, setEditing] = useState<CorrectiveAction | 'new' | null>(null);
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const [actions, locationItems] = await Promise.all([getCorrectiveActions(accessToken), mode === 'staff' ? getQualityLocations(accessToken) : Promise.resolve([])]);
-      setItems(actions); setLocations(locationItems);
+      const [list, locs] = await Promise.all([getCorrectiveActions(accessToken), mode === 'staff' ? getQualityLocations(accessToken) : Promise.resolve([])]);
+      setItems(list); setLocations(locs);
     } catch (loadError) {
       if (loadError instanceof CorrectiveActionSessionExpiredError) return onSessionExpired();
       setError(loadError instanceof Error ? loadError.message : 'Düzeltici faaliyetler yüklenemedi.');
     } finally { setLoading(false); }
   };
-  useEffect(() => { void load(); }, [accessToken]);
-  const visible = useMemo(() => filter === 'All' ? items : items.filter((item) => item.status === filter), [items, filter]);
-  const openCount = items.filter((item) => !['Verified', 'Cancelled'].includes(item.status)).length;
-  const overdueCount = items.filter((item) => item.isOverdue).length; const recurringCount = items.filter((item) => item.recurrenceCount > 1).length;
+  useEffect(() => { void load(); }, [accessToken, mode]);
+
+  const openCount = items.filter((item) => item.status === 'Open' || item.status === 'InProgress').length;
+  const overdueCount = items.filter((item) => item.isOverdue).length;
+  const recurringCount = items.filter((item) => item.recurrenceCount > 1).length;
   const approvedCount = items.filter((item) => item.customerApprovalStatus === 'Approved').length;
-  const replace = (updated: CorrectiveAction) => setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+  const visible = items.filter((item) => filter === 'All' ? true : item.status === filter);
+
   const upload = async (item: CorrectiveAction, file: File, stage: 'Before' | 'After') => {
-    try { await uploadCorrectiveActionEvidence(accessToken, item.id, file, stage, undefined, mode === 'customer'); await load(); }
-    catch (uploadError) { if (uploadError instanceof CorrectiveActionSessionExpiredError) return onSessionExpired(); setError(uploadError instanceof Error ? uploadError.message : 'Kanıt yüklenemedi.'); }
+    try {
+      const evidence = await uploadCorrectiveActionEvidence(accessToken, item.id, file, stage, undefined, mode === 'customer');
+      setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, evidence: [...entry.evidence, evidence] } : entry));
+    } catch (uploadError) {
+      if (uploadError instanceof CorrectiveActionSessionExpiredError) return onSessionExpired();
+      setError(uploadError instanceof Error ? uploadError.message : 'Kanıt yüklenemedi.');
+    }
   };
   const approve = async (item: CorrectiveAction, approved: boolean) => {
-    try { replace(await approveCorrectiveAction(accessToken, item.id, approved)); }
-    catch (approvalError) { if (approvalError instanceof CorrectiveActionSessionExpiredError) return onSessionExpired(); setError(approvalError instanceof Error ? approvalError.message : 'Onay kaydedilemedi.'); }
+    try {
+      const updated = await approveCorrectiveAction(accessToken, item.id, approved);
+      setItems((current) => current.map((entry) => entry.id === item.id ? updated : entry));
+    } catch (approveError) {
+      if (approveError instanceof CorrectiveActionSessionExpiredError) return onSessionExpired();
+      setError(approveError instanceof Error ? approveError.message : 'Onay işlemi tamamlanamadı.');
+    }
   };
 
-  return <section className={standalone ? 'page compliance-page' : 'compliance-embedded'}>
-    {standalone && <div className="page-header"><div><p className="eyebrow">KALİTE & UYUM</p><h1>Düzeltici Faaliyetler</h1><span>Saha bulgularını kök neden, kanıt, termin ve müşteri onayıyla kapatın.</span></div><div className="page-actions"><button className="btn btn-outline" onClick={() => void load()}><RefreshCw size={17} />Yenile</button><button className="btn btn-primary" onClick={() => setEditing('new')}><Plus size={18} />Yeni faaliyet</button></div></div>}
-    {!standalone && <div className="compliance-embedded-heading"><div><p className="eyebrow">DÜZELTİCİ FAALİYETLER</p><h2>Uygunsuzluk ve aksiyon takibi</h2><span>Tamamlanan faaliyetleri inceleyin, kanıt ekleyin ve kapanışı onaylayın.</span></div></div>}
+  return <section className={`compliance-center ${standalone ? 'page' : 'embedded'}`}>
+    <div className="compliance-heading"><div><p className="eyebrow">DÜZELTİCİ VE ÖNLEYİCİ FAALİYET (DÖF / CAPA)</p><h2>Bulgu ve uygunsuzluk takibi</h2><p>Saha raporu, denetim veya müşteri talebinden otomatik ya da manuel açılan aksiyonları kapatın ve doğrulayın.</p></div><button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} />Yenile</button></div>
     <div className="compliance-kpis"><article><span className="blue"><ClipboardCheck /></span><div><small>Açık faaliyet</small><strong>{openCount}</strong></div></article><article><span className="red"><Clock3 /></span><div><small>Geciken</small><strong>{overdueCount}</strong></div></article><article><span className="orange"><FileWarning /></span><div><small>Tekrarlayan</small><strong>{recurringCount}</strong></div></article><article><span className="green"><ShieldCheck /></span><div><small>Müşteri onaylı</small><strong>{approvedCount}</strong></div></article></div>
     <div className="compliance-toolbar"><div>{(['All', 'Open', 'InProgress', 'AwaitingCustomer', 'Completed', 'Verified'] as StatusFilter[]).map((value) => <button key={value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value === 'All' ? 'Tümü' : statusLabels[value]}</button>)}</div>{mode === 'staff' && !standalone && <button className="btn btn-primary" onClick={() => setEditing('new')}><Plus size={17} />Yeni faaliyet</button>}</div>
     {error && <div className="quality-error"><AlertTriangle size={17} />{error}<button onClick={() => void load()}>Tekrar dene</button></div>}
@@ -52,7 +63,7 @@ export default function CorrectiveActionCenter({ accessToken, mode, employees = 
         <h3>{item.title}</h3><p className="compliance-location">{item.customerName} · {item.branchName}</p>
         <div className="compliance-meta"><span><Clock3 />Termin {formatDate(item.dueDate)}</span><span>{partyLabels[item.responsibleParty]}</span>{item.recurrenceCount > 1 && <b>{item.recurrenceCount}. tekrar</b>}</div><p className="compliance-problem">{item.problem}</p>
         <div className="compliance-progress"><span>Önce {item.evidence.filter((e) => e.stage === 'Before').length}</span><i /><span>Sonra {item.evidence.filter((e) => e.stage === 'After').length}</span><i /><span className={'approval-' + item.customerApprovalStatus.toLowerCase()}>{approvalLabel(item.customerApprovalStatus)}</span></div>
-        {expanded === item.id && <div className="compliance-details"><Detail label="Kök neden" value={item.rootCause} /><Detail label="Önerilen faaliyet" value={item.proposedAction} /><Detail label="Atanan personel" value={item.assignedAccountName} />{item.evidence.length > 0 && <div className="evidence-list">{item.evidence.map((evidence) => <button key={evidence.id} onClick={() => void downloadCorrectiveActionEvidence(accessToken, evidence)}><Eye size={14} />{evidence.stage === 'Before' ? 'Öncesi' : evidence.stage === 'After' ? 'Sonrası' : 'Ek'} · {evidence.fileName}</button>)}</div>}{item.history.length > 0 && <div className="compliance-history">{item.history.slice(0, 4).map((history) => <div key={history.id}><i /><span><strong>{statusLabels[history.toStatus as CorrectiveAction['status']] ?? history.toStatus}</strong><small>{history.changedBy} · {formatDateTime(history.occurredAt)}</small>{history.note && <em>{history.note}</em>}</span></div>)}</div>}</div>}
+        {expanded === item.id && <div className="compliance-details"><Detail label="Kök neden" value={item.rootCause} /><Detail label="Önerilen faaliyet" value={item.proposedAction} /><Detail label="Atanan personel" value={item.assignedAccountName} />{item.evidence.length > 0 && <div className="evidence-list">{item.evidence.map((evidence) => <div key={evidence.id} style={{ display: 'inline-flex', gap: '4px' }}><button onClick={() => void downloadCorrectiveActionEvidence(accessToken, evidence)} title="Görüntüle / İndir"><Eye size={14} />{evidence.stage === 'Before' ? 'Öncesi' : evidence.stage === 'After' ? 'Sonrası' : 'Ek'} · {evidence.fileName}</button><button onClick={() => void shareCorrectiveActionEvidence(accessToken, evidence)} title="Paylaş"><Share2 size={14} /></button></div>)}</div>}{item.history.length > 0 && <div className="compliance-history">{item.history.slice(0, 4).map((history) => <div key={history.id}><i /><span><strong>{statusLabels[history.toStatus as CorrectiveAction['status']] ?? history.toStatus}</strong><small>{history.changedBy} · {formatDateTime(history.occurredAt)}</small>{history.note && <em>{history.note}</em>}</span></div>)}</div>}</div>}
         <footer><button onClick={() => setExpanded(expanded === item.id ? null : item.id)}>{expanded === item.id ? <ChevronUp /> : <ChevronDown />}{expanded === item.id ? 'Daralt' : 'Detay'}</button><EvidenceInput icon={<Camera />} label="Öncesi" onFile={(file) => void upload(item, file, 'Before')} /><EvidenceInput icon={<Upload />} label="Sonrası" onFile={(file) => void upload(item, file, 'After')} />{mode === 'staff' ? <button className="edit-action" onClick={() => setEditing(item)}>Yönet</button> : item.status === 'Completed' && item.customerApprovalStatus === 'Pending' ? <><button className="approve-action" onClick={() => void approve(item, true)}>Onayla</button><button className="reject-action" onClick={() => void approve(item, false)}>İade et</button></> : null}</footer>
       </article>)}</div>}
     {editing && mode === 'staff' && <CorrectiveActionModal item={editing === 'new' ? undefined : editing} locations={locations} employees={employees} onClose={() => setEditing(null)} onSave={async (input) => {

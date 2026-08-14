@@ -930,6 +930,66 @@
 .report-form-grid .form-field-full {
   grid-column: 1 / -1 !important;
 }
+.report-control {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.report-control input,
+.report-control select,
+.report-control textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  color: #172033;
+  background: #f8fafc;
+  font: inherit;
+  font-weight: 600;
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.report-control input,
+.report-control select {
+  min-height: 44px;
+  padding: 0 12px;
+}
+.report-control textarea {
+  min-height: 92px;
+  padding: 11px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.report-control input:hover:not(:disabled),
+.report-control select:hover:not(:disabled),
+.report-control textarea:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #fff;
+}
+.report-control input:focus,
+.report-control select:focus,
+.report-control textarea:focus {
+  border-color: #2780df;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(39,128,223,.12);
+}
+.report-control input:disabled,
+.report-control select:disabled,
+.report-control textarea:disabled {
+  color: #64748b;
+  background: #eef2f6;
+  cursor: not-allowed;
+}
+.report-control input + input,
+.report-control select + input {
+  margin-top: 2px;
+}
 .report-product-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -938,6 +998,9 @@
 }
 .report-product-grid .form-field-wide {
   grid-column: span 2;
+}
+.report-results-grid textarea {
+  min-height: 104px;
 }
 .report-product-list article {
   padding: 16px !important;
@@ -1002,5 +1065,4 @@
     height: 20px;
   }
 }
-
 

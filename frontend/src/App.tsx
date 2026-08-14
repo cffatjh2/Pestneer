@@ -192,14 +192,23 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
 export default function App() {
   const [session, setSession] = useState<AuthenticatedSession | null>(loadStoredSession);
   const [isLoginVisible, setIsLoginVisible] = useState(false);
-  const handleAuthenticated = (authenticatedSession: AuthenticatedSession) => {
+
+  const handleAuthenticated = (authenticatedSession: AuthenticatedSession, rememberMe = true) => {
     window.sessionStorage.setItem('pesneer.session', JSON.stringify(authenticatedSession));
+    if (rememberMe) {
+      window.localStorage.setItem('pesneer.session', JSON.stringify(authenticatedSession));
+    } else {
+      window.localStorage.removeItem('pesneer.session');
+    }
     setSession(authenticatedSession);
   };
+
   const handleLogout = () => {
     window.sessionStorage.removeItem('pesneer.session');
+    window.localStorage.removeItem('pesneer.session');
     setSession(null);
   };
+
   if (!session && !isLoginVisible) return <LandingPage onLogin={() => setIsLoginVisible(true)} />;
   if (!session) return <LoginPage onAuthenticated={handleAuthenticated} onBack={() => setIsLoginVisible(false)} />;
   if (session.portal === 'employee') return <EmployeePortal session={session} onLogout={handleLogout} />;
@@ -209,16 +218,19 @@ export default function App() {
 
 function loadStoredSession(): AuthenticatedSession | null {
   try {
-    const stored = window.sessionStorage.getItem('pesneer.session');
+    const stored = window.sessionStorage.getItem('pesneer.session') || window.localStorage.getItem('pesneer.session');
     if (!stored) return null;
     const session = JSON.parse(stored) as AuthenticatedSession;
     if (!session.accessToken || new Date(session.expiresAt).getTime() <= Date.now()) {
       window.sessionStorage.removeItem('pesneer.session');
+      window.localStorage.removeItem('pesneer.session');
       return null;
     }
     return session;
   } catch {
     window.sessionStorage.removeItem('pesneer.session');
+    window.localStorage.removeItem('pesneer.session');
     return null;
   }
 }
+

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, Archive, CheckCircle2, Download, Eye, FileCheck2, FileSearch, PackageCheck, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Archive, CheckCircle2, Download, Eye, FileCheck2, FileSearch, PackageCheck, RefreshCw, Share2, ShieldCheck } from 'lucide-react';
 import type { QualityLocation } from '../../services/qualityApi';
+import { shareProtectedDocument } from '../../utils/shareUtils';
 import {
   AuditPackageSessionExpiredError, createAuditPackage, downloadAuditPackage, getAuditPackages, previewAuditPackage,
   type AuditPackage, type AuditPackageFilter, type AuditPreflight,
@@ -70,6 +71,11 @@ export default function AuditPackageCenter({ accessToken, mode, locations, onSes
       await downloadAuditPackage(accessToken, type === 'pdf' ? item.pdfDownloadUrl : item.zipDownloadUrl, `${item.number}.${type}`, open);
     } catch (downloadError) { handleError(downloadError, onSessionExpired, setError); }
   };
+  const share = async (item: AuditPackage) => {
+    try {
+      await shareProtectedDocument(accessToken, item.pdfDownloadUrl, `${item.number}.pdf`, item.title);
+    } catch (shareError) { handleError(shareError, onSessionExpired, setError); }
+  };
 
   return <div className="audit-center">
     <div className="quality-module-heading"><div><p className="eyebrow">TEK TIK DENETİM DOSYASI</p><h2>Denetim kanıt paketleri</h2><p>Müşteri, şube, dönem ve standardı seçin; eksikleri önceden görün, firma logolu PDF ve kaynak kanıtları içeren ZIP paketini arşivleyin.</p></div>{mode === 'customer' && <button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} /> Yenile</button>}</div>
@@ -90,7 +96,7 @@ export default function AuditPackageCenter({ accessToken, mode, locations, onSes
       {loading ? <div className="surface quality-loading"><RefreshCw className="spin-icon" /><strong>Denetim paketleri yükleniyor…</strong></div> : packages.length === 0 ? <div className="surface quality-empty"><PackageCheck /><strong>Henüz denetim dosyası yok</strong><span>{mode === 'staff' ? 'İlk ön kontrolü çalıştırarak profesyonel kanıt paketini oluşturun.' : 'Firmanız tarafından yayımlanan denetim paketleri burada görünür.'}</span></div> : <div className="audit-package-grid">{packages.map((item) => <article className="surface audit-package-card" key={item.id}>
         <header><span className={item.readinessScore >= 85 ? 'ready' : 'finding'}><ShieldCheck /></span><div><small>{item.number}</small><strong>{item.title}</strong><p>{item.auditProfile} · {formatRange(item.periodStart, item.periodEnd)}</p></div><b>%{item.readinessScore}<small>hazırlık</small></b></header>
         <dl><div><dt>Konum</dt><dd>{item.customerName}<small>{item.branchName}</small></dd></div><div><dt>Kanıt</dt><dd>{item.itemCount} dosya</dd></div><div><dt>Oluşturan</dt><dd>{item.createdBy}<small>{formatDate(item.createdAt)}</small></dd></div></dl>
-        <footer><span title={item.zipSha256}>SHA-256 · {item.zipSha256.slice(0, 12)}…</span><div><button onClick={() => void download(item, 'pdf', true)}><Eye size={15} /> PDF</button><button onClick={() => void download(item, 'zip')}><Download size={15} /> ZIP</button></div></footer>
+        <footer><span title={item.zipSha256}>SHA-256 · {item.zipSha256.slice(0, 12)}…</span><div><button onClick={() => void download(item, 'pdf', true)} title="Görüntüle"><Eye size={15} /> PDF</button><button onClick={() => void download(item, 'zip')} title="İndir"><Download size={15} /> ZIP</button><button onClick={() => void share(item)} title="Paylaş"><Share2 size={15} /> Paylaş</button></div></footer>
       </article>)}</div>}
     </section>
   </div>;

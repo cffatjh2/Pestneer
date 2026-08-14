@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Copy, Download, DoorOpen, Eye, Grid3X3, LayoutTemplate, Map, Minus, MousePointer2, Plus, QrCode, Redo2, RotateCcw, Save, Shapes, Square, Trash2, Type, Undo2, X } from 'lucide-react';
+import { Copy, Download, DoorOpen, Eye, Grid3X3, LayoutTemplate, Map, Minus, MousePointer2, Plus, QrCode, Redo2, RotateCcw, Save, Shapes, Share2, Square, Trash2, Type, Undo2, X } from 'lucide-react';
 import type { QualityLocation } from '../../services/qualityApi';
 import {
-  createSitePlan, downloadSitePlan, getSitePlans, SitePlanSessionExpiredError, updateSitePlan,
+  createSitePlan, downloadSitePlan, getSitePlans, shareSitePlan, SitePlanSessionExpiredError, updateSitePlan,
   type SaveSitePlanInput, type SitePlanCanvas, type SitePlanElement, type SitePlanEquipmentShape,
   type SitePlanEquipmentType, type SitePlanRecord,
 } from '../../services/sitePlanApi';
@@ -55,6 +55,14 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
     }
   };
 
+  const share = async (plan: SitePlanRecord) => {
+    try { await shareSitePlan(accessToken, plan); }
+    catch (shareError) {
+      if (shareError instanceof SitePlanSessionExpiredError) return onSessionExpired();
+      setError(messageOf(shareError));
+    }
+  };
+
   const save = async (input: SaveSitePlanInput) => {
     try {
       const saved = editing === 'new' ? await createSitePlan(accessToken, input) : await updateSitePlan(accessToken, editing!.id, input);
@@ -71,7 +79,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
   return <div className="site-plan-module">
     <div className="quality-module-heading site-plan-heading"><div><p className="eyebrow">DENETİME HAZIR DİJİTAL KROKİ</p><h2>Ekipman yerleşim planları</h2><p>Numaralı izleme noktalarını A4 yatay planda çizin, revizyonlayın ve müşterinizle PDF olarak paylaşın.</p></div>{mode === 'staff' && <button className="primary-button" onClick={() => setEditing('new')}><Plus size={17} /> Yeni Kroki Oluştur</button>}</div>
     {error && <div className="site-plan-error">{error}<button onClick={() => setError(null)}>Kapat</button></div>}
-    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : plans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>Henüz yerleşim planı yok</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturarak istasyonları numaralandırın.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{plans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><MiniPlan canvas={plan.canvas} /></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{stationCount(plan.canvas)} ekipman noktası</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button>{mode === 'staff' && <button title="Planı düzenle" onClick={() => setEditing(plan)}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
+    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : plans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>Henüz yerleşim planı yok</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturarak istasyonları numaralandırın.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{plans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><MiniPlan canvas={plan.canvas} /></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{stationCount(plan.canvas)} ekipman noktası</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button><button title="Paylaş" onClick={() => void share(plan)}><Share2 size={16} /></button>{mode === 'staff' && <button title="Planı düzenle" onClick={() => setEditing(plan)}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
     {editing && <SitePlanEditor locations={locations} plan={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSave={save} />}
   </div>;
 }

@@ -5,6 +5,8 @@ import PrintSheet from '../components/report/PrintSheet';
 import SignaturePad from '../components/modals/SignaturePad';
 import type { ServiceReport } from '../types';
 
+import { shareOrDownloadFile } from '../utils/shareUtils';
+
 interface ReportViewProps {
   report: ServiceReport;
   onBack: () => void;
@@ -18,6 +20,15 @@ export default function ReportView({ report, onBack }: ReportViewProps) {
     contentRef: componentRef,
     documentTitle: `EK1_Rapor_${report.reportId}`,
   });
+
+  const handleShare = async () => {
+    await shareOrDownloadFile({
+      title: `${report.reportId} - Servis Raporu`,
+      text: `${report.applicationAddress} - ${report.reportId} nolu Pestneer EK-1 Servis Raporu`,
+      url: window.location.href,
+    });
+  };
+
 
   const [activeStep, setActiveStep] = useState(3);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
@@ -41,7 +52,7 @@ export default function ReportView({ report, onBack }: ReportViewProps) {
             <Printer size={17} />
             Yazdır
           </button>
-          <button className="secondary-button">
+          <button className="secondary-button" onClick={() => void handleShare()}>
             <Share2 size={17} />
             Paylaş
           </button>
@@ -51,6 +62,7 @@ export default function ReportView({ report, onBack }: ReportViewProps) {
           </button>
         </div>
       </div>
+
 
       <div className="report-workspace" style={{ padding: '0 32px 32px' }}>
 
