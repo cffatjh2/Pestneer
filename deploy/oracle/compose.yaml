@@ -1,0 +1,79 @@
+name: pestneer
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pestneer}
+      POSTGRES_USER: ${POSTGRES_USER:-pestneer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pestneer} -d ${POSTGRES_DB:-pestneer}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      DatabaseProvider: Postgres
+      ConnectionStrings__Pesneer: Host=postgres;Port=5432;Database=${POSTGRES_DB:-pestneer};Username=${POSTGRES_USER:-pestneer};Password=${POSTGRES_PASSWORD};Pooling=true
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      BootstrapOwner__Email: ${BOOTSTRAP_OWNER_EMAIL}
+      BootstrapOwner__Password: ${BOOTSTRAP_OWNER_PASSWORD}
+      BootstrapOwner__CompanyCode: ${BOOTSTRAP_OWNER_COMPANY_CODE}
+      BootstrapOwner__CompanyName: ${BOOTSTRAP_OWNER_COMPANY_NAME}
+      Email__Enabled: ${EMAIL_ENABLED:-false}
+      Email__Host: ${EMAIL_HOST:-}
+      Email__Port: ${EMAIL_PORT:-587}
+      Email__Username: ${EMAIL_USERNAME:-}
+      Email__Password: ${EMAIL_PASSWORD:-}
+      Email__FromAddress: ${EMAIL_FROM_ADDRESS:-}
+      Email__FromName: ${EMAIL_FROM_NAME:-Pestneer Raporlama}
+      Email__EnableSsl: ${EMAIL_ENABLE_SSL:-true}
+      Email__PublicBaseUrl: ${PUBLIC_WEB_URL}
+      Cors__AllowedOrigins__0: ${PUBLIC_WEB_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+    networks:
+      - private
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      API_HOST: ${API_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    networks:
+      - private
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  private:
+    driver: bridge

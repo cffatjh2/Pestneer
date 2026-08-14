@@ -1,0 +1,15 @@
+{$API_HOST} {
+    encode zstd gzip
+
+    @health path /api/health
+    header @health Cache-Control "no-store"
+
+    reverse_proxy api:8080
+
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        -Server
+    }
+}
