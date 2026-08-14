@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "pestneer",
-  "compatibility_date": "2026-08-15",
+  "compatibility_date": "2024-09-23",
   "pages_build_output_dir": "./dist",
   "vars": {
     "API_ORIGIN": "https://pesneer.onrender.com"
