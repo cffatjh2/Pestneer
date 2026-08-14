@@ -6,7 +6,7 @@ import { getSitePlans, type SitePlanElement, type SitePlanRecord } from '../../s
 import type { VehicleStockCheck } from '../../services/fieldOperationsApi';
 import { getLocalReportDraft, removeLocalReportDraft, saveLocalReportDraft, toOfflinePhotos } from '../../services/offlineFieldStore';
 import { downloadStationLabelPdf, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
-import { getStoredCompanyEk1Defaults, saveStoredCompanyEk1Defaults } from '../../services/companySettingsStorage';
+import { getStoredCompanyEk1Defaults } from '../../services/companySettingsStorage';
 import SignaturePad from './SignaturePad';
 import QrScannerModal from './QrScannerModal';
 import PestneerVisionAnalyzer from '../vision/PestneerVisionAnalyzer';
@@ -119,16 +119,6 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
     }
     setSaving(true); setError(null);
     try {
-      saveStoredCompanyEk1Defaults({
-        firmName: form.firmName,
-        firmAddress: form.firmAddress,
-        firmPhone: form.firmPhone,
-        firmWeb: form.firmWeb,
-        responsibleManager: form.responsibleManager,
-        teamManager: form.teamManager,
-        permissionNumber: form.permissionNumber,
-      }, companyName);
-
       await onSave(buildInput(finalize, forceOverwrite), photos);
       await removeLocalReportDraft(order.recordId);
     } catch (saveError) {
@@ -372,7 +362,7 @@ function DropdownMultiSelect({
   };
 
   const selectAll = () => {
-    emit(filteredOptions, otherValue, otherSelected);
+    emit(Array.from(new Set([...selected, ...filteredOptions])), otherValue, otherSelected);
   };
 
   const clearAll = (e?: React.MouseEvent) => {

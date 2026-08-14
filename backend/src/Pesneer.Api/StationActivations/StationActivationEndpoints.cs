@@ -26,7 +26,8 @@ public static class StationActivationEndpoints
         var query = Query(db);
         if (context.Portal == PortalType.Employee && context.AccountId.HasValue)
             query = query.Where(item => item.WorkOrder.AssignedEmployeeAccountId == context.AccountId || item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == context.AccountId));
-        return Results.Ok((await query.OrderByDescending(item => item.UpdatedAt).ToListAsync(cancellationToken)).Select(ToResponse));
+        var activations = await query.ToListAsync(cancellationToken);
+        return Results.Ok(activations.OrderByDescending(item => item.UpdatedAt).Select(ToResponse));
     }
 
     private static async Task<IResult> ListCustomerAsync(PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
@@ -34,7 +35,8 @@ public static class StationActivationEndpoints
         if (!context.CustomerId.HasValue) return Results.Forbid();
         var query = Query(db).Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == context.CustomerId.Value);
         if (context.CustomerBranchId.HasValue) query = query.Where(item => item.WorkOrder.CustomerBranchId == context.CustomerBranchId.Value);
-        return Results.Ok((await query.OrderByDescending(item => item.FinalizedAt).ToListAsync(cancellationToken)).Select(ToResponse));
+        var activations = await query.ToListAsync(cancellationToken);
+        return Results.Ok(activations.OrderByDescending(item => item.FinalizedAt).Select(ToResponse));
     }
 
     private static async Task<IResult> GetByWorkOrderAsync(Guid workOrderId, PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)

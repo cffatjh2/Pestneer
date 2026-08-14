@@ -51,11 +51,11 @@ public static class ServiceReportEndpoints
     {
         var workOrder = await WorkOrderQuery(dbContext).AsNoTracking().SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
         if (workOrder is null || !CanAccess(workOrder, companyContext)) return Results.NotFound(new { message = "İş emri bulunamadı." });
-        var report = await ReportQuery(dbContext)
+        var reports = await ReportQuery(dbContext)
             .Where(item => item.WorkOrderId != workOrderId && item.Status == "Finalized")
             .Where(item => item.WorkOrder.CustomerId == workOrder.CustomerId && item.WorkOrder.CustomerBranchId == workOrder.CustomerBranchId)
-            .OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+        var report = reports.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).FirstOrDefault();
         return Results.Ok(report is null ? null : ToResponse(report));
     }
 

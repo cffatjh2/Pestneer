@@ -106,23 +106,19 @@ export async function shareProtectedDocument(
   fileName: string,
   title?: string
 ): Promise<ShareResult> {
-  try {
-    const response = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error('Belge indirilemedi.');
-    const blob = await response.blob();
-    return await shareOrDownloadFile({
-      title: title || fileName,
-      fileName,
-      blob,
-      text: `${title || fileName} - Pestneer Kalite & Operasyon Belgesi`,
-    });
-  } catch (error) {
-    return {
-      shared: false,
-      method: 'error',
-      message: error instanceof Error ? error.message : 'Belge paylaşılamadı.',
-    };
+  const response = await fetch(downloadUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Belge indirilemedi.');
+  const blob = await response.blob();
+  const result = await shareOrDownloadFile({
+    title: title || fileName,
+    fileName,
+    blob,
+    text: `${title || fileName} - Pestneer Kalite & Operasyon Belgesi`,
+  });
+  if (!result.shared && result.method === 'error') {
+    throw new Error(result.message || 'Belge paylaşılamadı.');
   }
+  return result;
 }

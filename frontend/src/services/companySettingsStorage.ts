@@ -13,7 +13,7 @@ const STORAGE_KEY = 'pesneer_ek1_company_defaults';
 export function getStoredCompanyEk1Defaults(companyName?: string): CompanyEk1Defaults {
   try {
     const key = companyName ? `${STORAGE_KEY}_${companyName.trim().toLowerCase().replace(/\s+/g, '_')}` : STORAGE_KEY;
-    const raw = localStorage.getItem(key) || localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return {};
     return JSON.parse(raw) as CompanyEk1Defaults;
   } catch {
@@ -27,8 +27,9 @@ export function saveStoredCompanyEk1Defaults(defaults: CompanyEk1Defaults, compa
     if (companyName) {
       const key = `${STORAGE_KEY}_${companyName.trim().toLowerCase().replace(/\s+/g, '_')}`;
       localStorage.setItem(key, serialized);
+    } else {
+      localStorage.setItem(STORAGE_KEY, serialized);
     }
-    localStorage.setItem(STORAGE_KEY, serialized);
   } catch {
     // Ignore localStorage write quota errors
   }

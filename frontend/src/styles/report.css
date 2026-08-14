@@ -1044,8 +1044,15 @@
   .report-product-grid .form-field-wide{grid-column:auto;}
   .field-photo-details article>div{grid-template-columns:1fr}
   .field-photo-details .photo-description{grid-column:auto}
-  .service-report-actions{display:grid;grid-template-columns:1fr 1fr}
+  .service-report-actions{
+    bottom: 0;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    padding:10px 0 calc(10px + env(safe-area-inset-bottom));
+  }
   .service-report-actions button{justify-content:center;min-width:0}
+  .service-report-actions button:last-child{grid-column:1/-1}
   .manual-stock-modal form>div:not(.modal-form-error){grid-template-columns:1fr}
 
   /* Popover positioning on narrow screens */
@@ -1065,4 +1072,3 @@
     height: 20px;
   }
 }
-
