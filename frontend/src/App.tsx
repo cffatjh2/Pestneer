@@ -24,6 +24,7 @@ import CustomerPortal from './portals/CustomerPortal';
 import QualityComplianceHub from './components/compliance/QualityComplianceHub';
 import EmployeePortal from './portals/EmployeePortal';
 import LandingPage from './marketing/LandingPage';
+import SystemAdminPage from './pages/SystemAdminPage';
 import { getEmployees, SessionExpiredError, type EmployeeRecord } from './services/employeeApi';
 import {
   addCustomerBranches,
@@ -190,6 +191,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
 }
 
 export default function App() {
+  if (window.location.pathname === '/pestneer-system-control-9f4c2') return <SystemAdminPage />;
   const [session, setSession] = useState<AuthenticatedSession | null>(loadStoredSession);
   const [isLoginVisible, setIsLoginVisible] = useState(false);
 
@@ -233,4 +235,3 @@ function loadStoredSession(): AuthenticatedSession | null {
     return null;
   }
 }
-

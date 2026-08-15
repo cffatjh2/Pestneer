@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using System.Net.Mail;
+using System.Net;
 using Pesneer.Api.Data;
 using Pesneer.Api.Email;
 
@@ -24,6 +25,7 @@ public static class CompanyBrandingEndpoints
         owner.MapDelete("/logo", DeleteLogoAsync);
         owner.MapPut("/report-notification-email", UpdateReportNotificationEmailAsync);
         owner.MapPost("/email/retry", RetryEmailDeliveriesAsync);
+        owner.MapPost("/email/test", SendTestEmailAsync);
         return app;
     }
 
@@ -40,6 +42,8 @@ public static class CompanyBrandingEndpoints
                 logoUpdatedAt = company.LogoUpdatedAt,
                 reportNotificationEmail = company.ReportNotificationEmail,
                 emailDeliveryConfigured = emailSender.IsConfigured,
+                emailDeliveryProvider = emailSender.ProviderName,
+                emailDeliveryConfigurationError = emailSender.ConfigurationError,
                 logoUrl = company.LogoData == null ? null : $"/api/company/branding/logo?v={company.LogoUpdatedAt?.ToUnixTimeSeconds()}"
             });
     }
@@ -115,7 +119,7 @@ public static class CompanyBrandingEndpoints
     {
         if (!context.CompanyId.HasValue) return Results.NotFound(new { message = "Firma bulunamadı." });
         if (!emailSender.IsConfigured)
-            return Results.Problem("Sunucunun e-posta gönderici ayarları eksik. SMTP bilgileri tamamlandıktan sonra yeniden deneyin.", statusCode: 503);
+            return Results.Problem(emailSender.ConfigurationError ?? "Sunucunun e-posta gönderici ayarları eksik.", statusCode: 503);
 
         var failed = await dbContext.ReportEmailDeliveries
             .Where(item => item.CompanyId == context.CompanyId.Value && item.Status == "Failed")
@@ -131,6 +135,27 @@ public static class CompanyBrandingEndpoints
         if (failed.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
         var sent = await dispatcher.DispatchPendingAsync(cancellationToken, context.CompanyId.Value);
         return Results.Ok(new { reset = failed.Count, sent });
+    }
+
+    private static async Task<IResult> SendTestEmailAsync(
+        TestEmailRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        IEmailSender emailSender,
+        CancellationToken cancellationToken)
+    {
+        if (!emailSender.IsConfigured)
+            return Results.Problem(emailSender.ConfigurationError ?? "E-posta servisi yapılandırılmadı.", statusCode: 503);
+        var company = await CompanyQuery(dbContext, context).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+        if (company is null) return Results.NotFound(new { message = "Firma bulunamadı." });
+        var recipient = string.IsNullOrWhiteSpace(request.Email) ? company.ReportNotificationEmail : request.Email.Trim();
+        if (string.IsNullOrWhiteSpace(recipient) || !MailAddress.TryCreate(recipient, out _))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["email"] = ["Test için geçerli bir e-posta adresi girin."] });
+        var attachment = System.Text.Encoding.UTF8.GetBytes($"Pestneer e-posta teslimat testi\nFirma: {company.LegalName}\nTarih: {DateTimeOffset.UtcNow:O}");
+        await emailSender.SendAsync(new OutboundEmail(recipient, "Pestneer e-posta teslimat testi",
+            $"<p><strong>{WebUtility.HtmlEncode(company.LegalName)}</strong> için e-posta otomasyonu çalışıyor.</p>",
+            "pestneer-email-test.txt", "text/plain", attachment), cancellationToken);
+        return Results.Ok(new { sent = true, recipient, provider = emailSender.ProviderName });
     }
 
     private static IQueryable<Domain.Company> CompanyQuery(PesneerDbContext dbContext, ICompanyContext context)
@@ -149,3 +174,4 @@ public static class CompanyBrandingEndpoints
 }
 
 public sealed record UpdateReportNotificationEmailRequest(string? Email);
+public sealed record TestEmailRequest(string? Email);

@@ -4,7 +4,8 @@ public enum PortalType
 {
     Owner = 1,
     Employee = 2,
-    Customer = 3
+    Customer = 3,
+    SystemAdmin = 4
 }
 
 public enum CompanyRole

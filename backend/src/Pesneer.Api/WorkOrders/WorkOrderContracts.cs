@@ -134,6 +134,8 @@ public sealed record WorkOrderResponse(
     string BranchName,
     string BranchAddress,
     string? BranchMapUrl,
+    decimal? BranchLatitude,
+    decimal? BranchLongitude,
     string ServiceType,
     string VisitType,
     string RecurrenceType,

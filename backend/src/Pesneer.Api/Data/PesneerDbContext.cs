@@ -750,12 +750,33 @@ public class PesneerDbContext(
         return base.SaveChangesAsync(cancellationToken);
     }
 
-    private void EnforceCompanyBoundary()
+    public Task<int> SaveSystemAdministrationChangesAsync(Guid targetCompanyId, CancellationToken cancellationToken = default)
+    {
+        if (companyContext.Portal != PortalType.SystemAdmin)
+            throw new SecurityException("Sistem yönetimi kayıt yetkisi doğrulanamadı.");
+
+        EnforceCompanyBoundary(targetCompanyId);
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<int> SaveReportEmailDeliveryChangesAsync(Guid targetCompanyId, CancellationToken cancellationToken = default)
+    {
+        var changedCompanyEntries = ChangeTracker.Entries<ICompanyScoped>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToArray();
+        if (changedCompanyEntries.Any(entry => entry.Entity is not ReportEmailDelivery))
+            throw new SecurityException("E-posta teslimat işlemi başka operasyon verisini değiştiremez.");
+
+        EnforceCompanyBoundary(targetCompanyId);
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void EnforceCompanyBoundary(Guid? explicitCompanyId = null)
     {
         var scopedEntries = ChangeTracker.Entries<ICompanyScoped>().ToArray();
         if (scopedEntries.Length == 0) return;
 
-        var currentCompanyId = companyContext.CompanyId
+        var currentCompanyId = explicitCompanyId ?? companyContext.CompanyId
             ?? throw new SecurityException("Firma bağlamı olmadan operasyon verisi değiştirilemez.");
 
         foreach (var entry in scopedEntries)

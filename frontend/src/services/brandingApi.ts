@@ -6,6 +6,8 @@ export type CompanyBranding = {
   logoUrl?: string;
   reportNotificationEmail?: string;
   emailDeliveryConfigured: boolean;
+  emailDeliveryProvider?: string;
+  emailDeliveryConfigurationError?: string;
 };
 
 export async function getCompanyBranding(accessToken: string) {
@@ -39,6 +41,15 @@ export async function updateReportNotificationEmail(accessToken: string, email?:
 export async function retryReportEmails(accessToken: string) {
   const response = await request(accessToken, '/api/company/branding/email/retry', { method: 'POST' });
   return response.json() as Promise<{ reset: number; sent: number }>;
+}
+
+export async function testReportEmail(accessToken: string, email?: string) {
+  const response = await request(accessToken, '/api/company/branding/email/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email?.trim() || null })
+  });
+  return response.json() as Promise<{ sent: boolean; recipient: string; provider: string }>;
 }
 
 async function request(accessToken: string, url: string, init?: RequestInit) {

@@ -29,8 +29,16 @@ services:
         value: TURA-ANKARA
       - key: BootstrapOwner__CompanyName
         value: Tura Çevre Sağlığı
+      - key: SystemAdmin__Email
+        value: sahip@mail.com
       - key: Email__Enabled
         value: "true"
+      - key: Email__Provider
+        value: Auto
+      - key: Email__ApiBaseUrl
+        value: https://api.resend.com
+      - key: Email__ApiKey
+        sync: false
       - key: Email__Host
         sync: false
       - key: Email__Port

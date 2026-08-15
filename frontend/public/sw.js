@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pestneer-field-v3';
+const CACHE_NAME = 'pestneer-field-v4';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pesneer-mark.jpeg'];
 
 self.addEventListener('install', (event) => {
@@ -56,4 +56,11 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+self.addEventListener('sync', (event) => {
+  if (event.tag !== 'pestneer-field-sync') return;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    clients.forEach((client) => client.postMessage('PESTNEER_SYNC'));
+  }));
 });

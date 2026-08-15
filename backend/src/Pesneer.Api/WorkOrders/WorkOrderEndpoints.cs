@@ -704,6 +704,7 @@ public static class WorkOrderEndpoints
     private static WorkOrderResponse ToResponse(WorkOrder workOrder, Customer customer, CustomerBranch? branch, Account? employee) => new(
         workOrder.Id, workOrder.Number, workOrder.CustomerId, customer.LegalName, workOrder.CustomerBranchId,
         branch?.Name ?? "Merkez", branch?.Address ?? customer.Address ?? string.Empty, branch?.MapUrl ?? customer.MapUrl,
+        branch?.Latitude ?? customer.Latitude, branch?.Longitude ?? customer.Longitude,
         workOrder.ServiceType, workOrder.VisitType, workOrder.RecurrenceType, workOrder.RecurrenceGroupId,
         workOrder.ScheduledAt, workOrder.DurationMinutes, workOrder.AssignedEmployeeAccountId, employee?.DisplayName ?? "Atama bekliyor",
         workOrder.Status, workOrder.Notes, workOrder.StartedAt, workOrder.CompletedAt, workOrder.CustomerDurationMinutes, workOrder.TotalLaborMinutes, workOrder.CompletionNote, workOrder.Recommendation,

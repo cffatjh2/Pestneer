@@ -99,26 +99,36 @@ public sealed class ReportEmailDispatcher(
 
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken, Guid? companyId = null)
     {
-        if (!emailSender.IsConfigured) return 0;
+        if (!emailSender.IsConfigured)
+        {
+            logger.LogWarning("Email delivery is waiting for configuration: {Error}", emailSender.ConfigurationError);
+            return 0;
+        }
         var now = DateTimeOffset.UtcNow;
         var staleQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters()
-            .Where(item => item.Status == "Sending" && item.LastAttemptAt < now.AddMinutes(-10));
+            .Where(item => item.Status == "Sending");
         if (companyId.HasValue) staleQuery = staleQuery.Where(item => item.CompanyId == companyId.Value);
-        var stale = await staleQuery.ToListAsync(cancellationToken);
-        foreach (var item in stale) item.Status = "Pending";
-        if (stale.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
+        var stale = (await staleQuery.OrderBy(item => item.CreatedAt).Take(500).ToListAsync(cancellationToken))
+            .Where(item => item.LastAttemptAt < now.AddMinutes(-10)).ToList();
+        foreach (var companyGroup in stale.GroupBy(item => item.CompanyId))
+        {
+            foreach (var item in companyGroup) item.Status = "Pending";
+            await dbContext.SaveReportEmailDeliveryChangesAsync(companyGroup.Key, cancellationToken);
+        }
 
         var deliveryQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters()
-            .Where(item => item.Status == "Pending" && (!item.NextAttemptAt.HasValue || item.NextAttemptAt <= now));
+            .Where(item => item.Status == "Pending");
         if (companyId.HasValue) deliveryQuery = deliveryQuery.Where(item => item.CompanyId == companyId.Value);
-        var deliveries = await deliveryQuery.OrderBy(item => item.CreatedAt).Take(10).ToListAsync(cancellationToken);
+        var deliveries = (await deliveryQuery.OrderBy(item => item.CreatedAt).Take(500).ToListAsync(cancellationToken))
+            .Where(item => !item.NextAttemptAt.HasValue || item.NextAttemptAt <= now)
+            .OrderBy(item => item.CreatedAt).Take(10).ToList();
         var sent = 0;
         foreach (var delivery in deliveries)
         {
             delivery.Status = "Sending";
             delivery.AttemptCount++;
             delivery.LastAttemptAt = now;
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveReportEmailDeliveryChangesAsync(delivery.CompanyId, cancellationToken);
             try
             {
                 var report = await dbContext.ServiceReports.IgnoreQueryFilters().AsNoTracking()
@@ -146,7 +156,7 @@ public sealed class ReportEmailDispatcher(
                 delivery.NextAttemptAt = delivery.Status == "Failed" ? null : DateTimeOffset.UtcNow.AddMinutes(RetryMinutes(delivery.AttemptCount));
                 delivery.LastError = exception.Message.Length > 2000 ? exception.Message[..2000] : exception.Message;
             }
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveReportEmailDeliveryChangesAsync(delivery.CompanyId, cancellationToken);
         }
         return sent;
     }

@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CalendarPlus, CheckCircle2, Clock3, Cloud, CloudOff, FileCheck2, FilePlus2, MapPin, Play, RefreshCw, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { AlertCircle, CalendarPlus, CheckCircle2, Clock3, Cloud, CloudOff, FileCheck2, FilePlus2, MapPin, Play, RefreshCw, Route, SlidersHorizontal, Sparkles } from 'lucide-react';
 import type { WorkOrder } from '../types';
 import WorkOrderModal from '../components/modals/WorkOrderModal';
 import WorkOrderCompletionModal from '../components/modals/WorkOrderCompletionModal';
 import ServiceReportModal from '../components/modals/ServiceReportModal';
 import StationActivationModal from '../components/modals/StationActivationModal';
 import VisitActionModal, { type VisitAction } from '../components/modals/VisitActionModal';
+import RouteOptimizer from '../components/workorders/RouteOptimizer';
 import { changeEmployeeVisitState, completeEmployeeWorkOrder, getEmployeePlanningOptions, getEmployeeWorkOrders, selfScheduleWorkOrders, startEmployeeWorkOrder, WorkOrderSessionExpiredError, type CreateWorkOrdersInput, type EmployeePlanningOptions } from '../services/workOrderApi';
 import { getEmployeeServiceReports, ReportConflictError, ReportNetworkError, ReportSessionExpiredError, saveServiceReport, uploadServiceReportPhotos, type ReportPhotoUpload, type ServiceReportRecord, type UpsertServiceReportInput } from '../services/serviceReportApi';
 import { CustomerPortalSessionExpiredError, getEmployeeEmergencyRequests, updateEmployeeEmergencyRequest, type EmergencyRequestRecord } from '../services/customerPortalApi';
 import { createVehicleStockCheck, FieldSessionExpiredError, getLatestVehicleStock, type VehicleStockCheck } from '../services/fieldOperationsApi';
-import { cacheFieldWorkspace, getCachedFieldWorkspace, listQueuedReports, onFieldSyncChange, queueReportSubmission, removeLocalReportDraft, removeQueuedReport, toFiles, updateQueuedReport, type QueuedReportSubmission } from '../services/offlineFieldStore';
+import { cacheFieldWorkspace, getCachedFieldWorkspace, listQueuedFieldActions, listQueuedReports, onFieldSyncChange, queueFieldAction, queueReportSubmission, removeLocalReportDraft, removeQueuedFieldAction, removeQueuedReport, toFiles, updateQueuedFieldAction, updateQueuedReport, type QueuedFieldAction, type QueuedReportSubmission } from '../services/offlineFieldStore';
 
 type Props = { accessToken: string; accountId: string; companyName: string; operatorName: string; onSessionExpired: () => void };
 
@@ -19,17 +20,37 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
   const [emergencyRequests, setEmergencyRequests] = useState<EmergencyRequestRecord[]>([]);
   const [vehicleStock, setVehicleStock] = useState<VehicleStockCheck | null>(null);
   const [queuedReports, setQueuedReports] = useState<QueuedReportSubmission[]>([]);
+  const [queuedActions, setQueuedActions] = useState<QueuedFieldAction[]>([]);
   const [offlineMode, setOfflineMode] = useState(!navigator.onLine);
   const syncingRef = useRef(false);
-  const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [selfModal, setSelfModal] = useState(false); const [completing, setCompleting] = useState<WorkOrder | null>(null); const [reporting, setReporting] = useState<WorkOrder | null>(null); const [activationOrder, setActivationOrder] = useState<WorkOrder | null>(null); const [visitActionOrder, setVisitActionOrder] = useState<WorkOrder | null>(null);
+  const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [selfModal, setSelfModal] = useState(false); const [routeOpen, setRouteOpen] = useState(false); const [completing, setCompleting] = useState<WorkOrder | null>(null); const [reporting, setReporting] = useState<WorkOrder | null>(null); const [activationOrder, setActivationOrder] = useState<WorkOrder | null>(null); const [visitActionOrder, setVisitActionOrder] = useState<WorkOrder | null>(null);
   const reportByOrder = useMemo(() => new Map(reports.map((item) => [item.workOrderId, item])), [reports]);
 
   const load = async () => { setLoading(true); setError(null); try { const [items, planning, reportItems, emergencyItems, stock] = await Promise.all([getEmployeeWorkOrders(accessToken), getEmployeePlanningOptions(accessToken), getEmployeeServiceReports(accessToken), getEmployeeEmergencyRequests(accessToken), getLatestVehicleStock(accessToken)]); setOrders(items); setOptions(planning); setReports(reportItems); setEmergencyRequests(emergencyItems); setVehicleStock(stock); await cacheFieldWorkspace(accountId, { orders: items, planning, reports: reportItems, vehicleStock: stock }); setOfflineMode(false); } catch (loadError) { if (loadError instanceof WorkOrderSessionExpiredError || loadError instanceof ReportSessionExpiredError || loadError instanceof CustomerPortalSessionExpiredError || loadError instanceof FieldSessionExpiredError) return onSessionExpired(); const cached = await getCachedFieldWorkspace(accountId); if (cached) { setOrders(cached.orders); setOptions(cached.planning); setReports(cached.reports); setVehicleStock(cached.vehicleStock); setOfflineMode(true); setError('İnternet bağlantısı yok. Son eşitlenen saha programı açıldı.'); } else setError(loadError instanceof Error ? loadError.message : 'İş emirleri yüklenemedi.'); } finally { setLoading(false); } };
-  const refreshQueue = useCallback(async () => setQueuedReports((await listQueuedReports()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))), []);
+  const refreshQueue = useCallback(async () => {
+    const [reportsQueue, actionsQueue] = await Promise.all([listQueuedReports(), listQueuedFieldActions()]);
+    setQueuedReports(reportsQueue.sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+    setQueuedActions(actionsQueue.sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+  }, []);
   const syncQueue = useCallback(async () => {
     if (!navigator.onLine || syncingRef.current) return;
     syncingRef.current = true;
     try {
+      const actions = await listQueuedFieldActions();
+      for (const item of actions) {
+        await updateQueuedFieldAction({ ...item, status: 'syncing', attempts: item.attempts + 1, error: undefined });
+        try {
+          const updated = item.kind === 'Start'
+            ? await startEmployeeWorkOrder(accessToken, item.workOrderId)
+            : await changeEmployeeVisitState(accessToken, item.workOrderId, item.action!, item.reason);
+          replace(updated);
+          await removeQueuedFieldAction(item.id);
+        } catch (syncError) {
+          if (syncError instanceof WorkOrderSessionExpiredError) return onSessionExpired();
+          await updateQueuedFieldAction({ ...item, status: 'failed', attempts: item.attempts + 1, error: syncError instanceof Error ? syncError.message : 'İşlem gönderilemedi.' });
+          break;
+        }
+      }
       const queue = await listQueuedReports();
       for (const item of queue.filter((value) => value.status !== 'conflict')) {
         await updateQueuedReport({ ...item, status: 'syncing', attempts: item.attempts + 1, error: undefined });
@@ -47,11 +68,11 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
       }
     } finally { syncingRef.current = false; await refreshQueue(); }
   }, [accessToken, onSessionExpired, refreshQueue]);
-  useEffect(() => { void load(); void refreshQueue(); const syncChanged = onFieldSyncChange(() => void refreshQueue()); const online = () => { setOfflineMode(false); void syncQueue(); }; const offline = () => setOfflineMode(true); window.addEventListener('online', online); window.addEventListener('offline', offline); const timer = window.setInterval(() => void syncQueue(), 30_000); return () => { syncChanged(); window.removeEventListener('online', online); window.removeEventListener('offline', offline); window.clearInterval(timer); }; }, [accessToken, syncQueue, refreshQueue]);
+  useEffect(() => { void load(); void refreshQueue(); const syncChanged = onFieldSyncChange(() => void refreshQueue()); const online = () => { setOfflineMode(false); void syncQueue(); }; const offline = () => setOfflineMode(true); const serviceWorkerMessage = (event: MessageEvent) => { if (event.data === 'PESTNEER_SYNC') void syncQueue(); }; window.addEventListener('online', online); window.addEventListener('offline', offline); navigator.serviceWorker?.addEventListener('message', serviceWorkerMessage); const timer = window.setInterval(() => void syncQueue(), 30_000); return () => { syncChanged(); window.removeEventListener('online', online); window.removeEventListener('offline', offline); navigator.serviceWorker?.removeEventListener('message', serviceWorkerMessage); window.clearInterval(timer); }; }, [accessToken, syncQueue, refreshQueue]);
   const replace = (updated: WorkOrder) => setOrders((current) => current.map((item) => item.recordId === updated.recordId ? updated : item));
-  const start = async (order: WorkOrder) => { try { const updated = await startEmployeeWorkOrder(accessToken, order.recordId); replace(updated); } catch (actionError) { if (actionError instanceof WorkOrderSessionExpiredError) return onSessionExpired(); if (!navigator.onLine) { const local = { ...order, technicalStatus: 'InProgress', status: 'Sahada' as const, startedAt: new Date().toISOString() }; replace(local); setOfflineMode(true); return; } setError(actionError instanceof Error ? actionError.message : 'İş başlatılamadı.'); } };
+  const start = async (order: WorkOrder) => { try { const updated = await startEmployeeWorkOrder(accessToken, order.recordId); replace(updated); } catch (actionError) { if (actionError instanceof WorkOrderSessionExpiredError) return onSessionExpired(); if (!navigator.onLine || actionError instanceof TypeError) { await queueFieldAction({ workOrderId: order.recordId, kind: 'Start' }); const local = { ...order, technicalStatus: 'InProgress', status: 'Sahada' as const, startedAt: new Date().toISOString() }; replace(local); setOfflineMode(true); await refreshQueue(); return; } setError(actionError instanceof Error ? actionError.message : 'İş başlatılamadı.'); } };
   const complete = async (note: string, recommendation: string, photos: File[]) => { if (!completing) return; replace(await completeEmployeeWorkOrder(accessToken, completing.recordId, note, recommendation, photos)); setCompleting(null); };
-  const changeVisit = async (action: VisitAction, reason?: string) => { if (!visitActionOrder) return; replace(await changeEmployeeVisitState(accessToken, visitActionOrder.recordId, action, reason)); setVisitActionOrder(null); };
+  const changeVisit = async (action: VisitAction, reason?: string) => { if (!visitActionOrder) return; const order = visitActionOrder; try { replace(await changeEmployeeVisitState(accessToken, order.recordId, action, reason)); } catch (actionError) { if (actionError instanceof WorkOrderSessionExpiredError) return onSessionExpired(); if (!navigator.onLine || actionError instanceof TypeError) { await queueFieldAction({ workOrderId: order.recordId, kind: 'VisitState', action, reason }); replace(applyLocalVisitState(order, action)); setOfflineMode(true); await refreshQueue(); } else throw actionError; } finally { setVisitActionOrder(null); } };
   const selfSchedule = async (input: CreateWorkOrdersInput) => { const created = await selfScheduleWorkOrders(accessToken, input); setOrders((current) => [...current, ...created].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))); setSelfModal(false); };
   const saveReport = async (input: UpsertServiceReportInput, photos: ReportPhotoUpload[]) => { if (!reporting) return; try { const saved = await saveServiceReport(accessToken, reporting.recordId, input); try { await uploadServiceReportPhotos(accessToken, reporting.recordId, photos); } catch (photoError) { if (photoError instanceof ReportNetworkError) await queueReportSubmission(reporting.recordId, { ...input, baseUpdatedAt: saved.updatedAt }, photos, saved); else throw photoError; } setReports((current) => [saved, ...current.filter((item) => item.id !== saved.id)]); setVehicleStock(await getLatestVehicleStock(accessToken)); setReporting(null); if (input.finalize) await load(); } catch (saveError) { if (saveError instanceof ReportNetworkError || !navigator.onLine) { await queueReportSubmission(reporting.recordId, input, photos); setOfflineMode(true); setReporting(null); await refreshQueue(); return; } throw saveError; } };
   const addManualStock = async (input: { productName: string; quantity: number; unit: string }) => {
@@ -83,8 +104,8 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
     .filter((item) => item.workOrderId !== reporting.recordId && item.customerId === reporting.customerId && (item.branchId ?? '') === (reporting.branchId ?? ''))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] : undefined;
 
-  return <section className="role-surface employee-work-orders-page"><div className="role-section-title"><div><p>SAHA PROGRAMI</p><h2>İş Emirlerim</h2></div><div className="employee-work-actions">{options.canSelfSchedule && <button onClick={() => setSelfModal(true)}><CalendarPlus size={16} /> Kendime İş Planla</button>}<button className="icon-button" onClick={() => void load()}><RefreshCw size={16} /></button></div></div>
-    {(offlineMode || queuedReports.length > 0) && <section className={`field-sync-banner ${offlineMode ? 'offline' : 'online'}`}><div>{offlineMode ? <CloudOff size={20} /> : <Cloud size={20} />}<span><strong>{offlineMode ? 'Çevrimdışı saha modu' : 'Senkronizasyon bekliyor'}</strong><small>{offlineMode ? 'Kayıtlar bu cihazda korunur; internet geldiğinde otomatik gönderilir.' : `${queuedReports.length} kayıt sunucuya gönderilecek.`}</small></span></div><button disabled={offlineMode} onClick={() => void syncQueue()}><RefreshCw size={15} /> Şimdi eşitle</button></section>}
+  return <section className="role-surface employee-work-orders-page"><div className="role-section-title"><div><p>SAHA PROGRAMI</p><h2>İş Emirlerim</h2></div><div className="employee-work-actions"><button onClick={() => setRouteOpen(true)}><Route size={16} /> Günün Rotası</button>{options.canSelfSchedule && <button onClick={() => setSelfModal(true)}><CalendarPlus size={16} /> Kendime İş Planla</button>}<button className="icon-button" onClick={() => void load()}><RefreshCw size={16} /></button></div></div>
+    {(offlineMode || queuedReports.length > 0 || queuedActions.length > 0) && <section className={`field-sync-banner ${offlineMode ? 'offline' : 'online'}`}><div>{offlineMode ? <CloudOff size={20} /> : <Cloud size={20} />}<span><strong>{offlineMode ? 'Çevrimdışı saha modu · Cihaza kaydoldu' : 'Senkronizasyon bekliyor'}</strong><small>{offlineMode ? `${queuedReports.length + queuedActions.length} işlem bu cihazda güvende; internet geldiğinde otomatik gönderilir.` : `${queuedReports.length + queuedActions.length} kayıt sunucuya gönderilecek.`}</small></span></div><button disabled={offlineMode} onClick={() => void syncQueue()}><RefreshCw size={15} /> Şimdi eşitle</button></section>}
     {queuedReports.filter((item) => item.status === 'conflict').map((item) => <section className="field-sync-conflict" key={item.id}><AlertCircle size={19} /><div><strong>Aynı rapor başka bir cihazda değiştirildi</strong><span>Sunucudaki kayıt ile bu cihazdaki taslak farklı. Hangi sürümün korunacağını seçin.</span></div><button onClick={() => void resolveConflict(item, false)}>Sunucudakini kullan</button><button className="danger" onClick={() => void resolveConflict(item, true)}>Bu cihazdakini koru</button></section>)}
     {options.canSelfSchedule && <div className="self-schedule-permission"><Sparkles size={17} /><span>Firma sahibi, kendi iş programınızı oluşturma yetkisini etkinleştirdi.</span></div>}{error && <div className="field-operation-error"><AlertCircle size={16} /><span>{error}</span></div>}
     {emergencyRequests.some((item) => !['Completed','Cancelled'].includes(item.status)) && <div className="employee-emergency-strip"><AlertCircle size={19} /><div><strong>Size atanan acil müşteri çağrıları</strong>{emergencyRequests.filter((item) => !['Completed','Cancelled'].includes(item.status)).map((item) => <article key={item.id}><span>{item.number} · {item.customerName} / {item.branchName}</span><p>{item.description}</p>{item.status === 'New' ? <button onClick={() => void acknowledgeEmergency(item)}>Çağrıyı kabul et</button> : <em>Çağrı kabul edildi</em>}</article>)}</div></div>}
@@ -102,8 +123,15 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
     {reporting && <ServiceReportModal accessToken={accessToken} order={reporting} existing={reportByOrder.get(reporting.recordId)} previousReport={previousReport} companyName={companyName} operatorName={operatorName} vehicleStockItems={vehicleStock?.items} readOnly={reportByOrder.get(reporting.recordId)?.status === 'Finalized'} onClose={() => setReporting(null)} onSave={saveReport} onAddManualStock={addManualStock} />}
     {activationOrder && <StationActivationModal accessToken={accessToken} order={activationOrder} onClose={() => setActivationOrder(null)} />}
     {visitActionOrder && <VisitActionModal onClose={() => setVisitActionOrder(null)} onSubmit={changeVisit} />}
+    {routeOpen && <RouteOptimizer orders={orders} onClose={() => setRouteOpen(false)} />}
   </section>;
 }
 function visitLabel(value: string) { return ({ Routine: 'Rutin hizmet', Extra: 'Ekstra hizmet', EmergencyPaid: 'Ücretli acil çağrı', EmergencyFree: 'Ücretsiz acil çağrı' } as Record<string, string>)[value] ?? value; }
 function riskLabel(value: string) { return ({ Low: 'Düşük', Medium: 'Orta', High: 'Yüksek' } as Record<string, string>)[value] ?? value; }
 function formatDuration(minutes: number) { const hours = Math.floor(minutes / 60); const rest = minutes % 60; return hours ? `${hours} sa ${rest} dk` : `${rest} dk`; }
+function applyLocalVisitState(order: WorkOrder, action: VisitAction): WorkOrder {
+  if (action === 'Pause') return { ...order, technicalStatus: 'Paused', status: 'Planlandı' };
+  if (action === 'Skip') return { ...order, technicalStatus: 'Skipped', status: 'İptal' };
+  if (action === 'Cancel') return { ...order, technicalStatus: 'Cancelled', status: 'İptal' };
+  return order;
+}

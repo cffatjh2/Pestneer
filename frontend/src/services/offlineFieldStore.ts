@@ -5,10 +5,24 @@ import type { SitePlanRecord } from './sitePlanApi';
 import type { EmployeePlanningOptions } from './workOrderApi';
 
 const DATABASE_NAME = 'pestneer-field';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const CACHE_STORE = 'cache';
 const DRAFT_STORE = 'drafts';
 const QUEUE_STORE = 'queue';
+const ACTION_STORE = 'actions';
+
+export type QueuedFieldAction = {
+  id: string;
+  workOrderId: string;
+  kind: 'Start' | 'VisitState';
+  action?: 'Stop' | 'Pause' | 'FinishPart' | 'Skip' | 'Cancel';
+  reason?: string;
+  createdAt: string;
+  updatedAt: string;
+  status: 'pending' | 'syncing' | 'failed';
+  attempts: number;
+  error?: string;
+};
 
 export type OfflinePhoto = {
   id: string;
@@ -113,6 +127,7 @@ export async function queueReportSubmission(workOrderId: string, input: UpsertSe
   };
   await put(QUEUE_STORE, item);
   await removeLocalReportDraft(workOrderId);
+  await requestBackgroundSync();
   dispatchSyncEvent();
   return item;
 }
@@ -128,6 +143,29 @@ export async function updateQueuedReport(item: QueuedReportSubmission) {
 
 export async function removeQueuedReport(id: string) {
   await remove(QUEUE_STORE, id);
+  dispatchSyncEvent();
+}
+
+export async function queueFieldAction(input: Pick<QueuedFieldAction, 'workOrderId' | 'kind' | 'action' | 'reason'>) {
+  const now = new Date().toISOString();
+  const item: QueuedFieldAction = { id: crypto.randomUUID(), ...input, createdAt: now, updatedAt: now, status: 'pending', attempts: 0 };
+  await put(ACTION_STORE, item);
+  await requestBackgroundSync();
+  dispatchSyncEvent();
+  return item;
+}
+
+export async function listQueuedFieldActions() {
+  return getAll<QueuedFieldAction>(ACTION_STORE);
+}
+
+export async function updateQueuedFieldAction(item: QueuedFieldAction) {
+  await put(ACTION_STORE, { ...item, updatedAt: new Date().toISOString() });
+  dispatchSyncEvent();
+}
+
+export async function removeQueuedFieldAction(id: string) {
+  await remove(ACTION_STORE, id);
   dispatchSyncEvent();
 }
 
@@ -149,6 +187,15 @@ function dispatchSyncEvent() {
   window.dispatchEvent(new CustomEvent('pestneer-field-sync'));
 }
 
+async function requestBackgroundSync() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const syncRegistration = registration as ServiceWorkerRegistration & { sync?: { register: (tag: string) => Promise<void> } };
+    await syncRegistration.sync?.register('pestneer-field-sync');
+  } catch { /* Periodic foreground synchronization remains active. */ }
+}
+
 function openDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
@@ -157,6 +204,7 @@ function openDatabase() {
       if (!database.objectStoreNames.contains(CACHE_STORE)) database.createObjectStore(CACHE_STORE, { keyPath: 'key' });
       if (!database.objectStoreNames.contains(DRAFT_STORE)) database.createObjectStore(DRAFT_STORE, { keyPath: 'workOrderId' });
       if (!database.objectStoreNames.contains(QUEUE_STORE)) database.createObjectStore(QUEUE_STORE, { keyPath: 'id' });
+      if (!database.objectStoreNames.contains(ACTION_STORE)) database.createObjectStore(ACTION_STORE, { keyPath: 'id' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('Yerel saha veritabanı açılamadı.'));

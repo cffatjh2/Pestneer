@@ -12,6 +12,7 @@ public sealed record TokenResult(string Value, DateTimeOffset ExpiresAt);
 public interface IJwtTokenService
 {
     TokenResult Create(Account account, Company company, CompanyRole role, Guid? customerId, Guid? customerBranchId);
+    TokenResult CreateSystemAdmin(Account account);
 }
 
 public sealed class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
@@ -49,6 +50,23 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenSer
             expires: expiresAt.UtcDateTime,
             signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256));
 
+        return new TokenResult(new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+    }
+
+    public TokenResult CreateSystemAdmin(Account account)
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(Math.Min(_options.AccessTokenMinutes, 30));
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, account.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, account.Email),
+            new(ClaimTypes.Name, account.DisplayName),
+            new(ClaimTypes.Role, "SystemAdmin"),
+            new("portal", PortalType.SystemAdmin.ToString())
+        };
+        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
+        var token = new JwtSecurityToken(_options.Issuer, _options.Audience, claims, expires: expiresAt.UtcDateTime,
+            signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256));
         return new TokenResult(new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
 }

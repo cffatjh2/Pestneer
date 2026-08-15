@@ -28,6 +28,7 @@ using Pesneer.Api.SitePlans;
 using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.Vision;
 using Pesneer.Api.WorkOrders;
+using Pesneer.Api.SystemAdministration;
 
 var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
@@ -70,7 +71,13 @@ else
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<ILoginService, LoginService>();
-builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddHttpClient("Resend", (services, client) =>
+{
+    var emailOptions = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailDeliveryOptions>>().Value;
+    client.BaseAddress = new Uri(emailOptions.ApiBaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddSingleton<IEmailSender, ReliableEmailSender>();
 builder.Services.AddScoped<IReportEmailDispatcher, ReportEmailDispatcher>();
 builder.Services.AddHostedService<ReportEmailDeliveryWorker>();
 builder.Services.AddMemoryCache();
@@ -164,6 +171,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CustomerPortal", policy => policy
         .RequireAuthenticatedUser()
         .RequireClaim("portal", PortalType.Customer.ToString()));
+
+    options.AddPolicy("SystemAdmin", policy => policy
+        .RequireAuthenticatedUser()
+        .RequireClaim("portal", PortalType.SystemAdmin.ToString()));
 });
 
 var app = builder.Build();
@@ -227,6 +238,7 @@ app.MapQualityInspectionEndpoints();
 app.MapHealthWasteEndpoints();
 app.MapAuditPackageEndpoints();
 app.MapVisionSettingsEndpoints();
+app.MapSystemAdministrationEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();

@@ -25,3 +25,4 @@ tmp/
 coverage/
 .build-check/
 deploy/oracle/backups/
+frontend/.cf-upload/

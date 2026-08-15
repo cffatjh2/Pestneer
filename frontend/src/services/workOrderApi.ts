@@ -19,7 +19,7 @@ export type UpdateWorkOrderInput = {
 };
 
 type WorkOrderResponse = {
-  id: string; number: string; customerId: string; customerName: string; branchId?: string; branchName: string; branchAddress: string; branchMapUrl?: string;
+  id: string; number: string; customerId: string; customerName: string; branchId?: string; branchName: string; branchAddress: string; branchMapUrl?: string; branchLatitude?: number; branchLongitude?: number;
   serviceType: string; visitType: string; recurrenceType: string; recurrenceGroupId?: string; scheduledAt: string; durationMinutes: number;
   employeeAccountId?: string; employeeName: string; status: string; notes?: string; startedAt?: string; completedAt?: string;
   customerDurationMinutes?: number; totalLaborMinutes: number; completionNote?: string; recommendation?: string;
@@ -54,7 +54,7 @@ function mapWorkOrder(item: WorkOrderResponse): WorkOrder {
   const start = new Date(item.scheduledAt); const end = new Date(start.getTime() + item.durationMinutes * 60_000);
   return {
     recordId: item.id, id: item.number, customerId: item.customerId, branchId: item.branchId, client: item.customerName, branch: item.branchName,
-    branchAddress: item.branchAddress, branchMapUrl: item.branchMapUrl, employeeAccountId: item.employeeAccountId, scheduledAt: item.scheduledAt,
+    branchAddress: item.branchAddress, branchMapUrl: item.branchMapUrl, branchLatitude: item.branchLatitude, branchLongitude: item.branchLongitude, employeeAccountId: item.employeeAccountId, scheduledAt: item.scheduledAt,
     durationMinutes: item.durationMinutes, date: new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(start),
     time: `${formatTime(start)} - ${formatTime(end)}`, service: item.serviceType, visitType: item.visitType, recurrenceType: item.recurrenceType,
     recurrenceGroupId: item.recurrenceGroupId, technician: item.employeeName, technicalStatus: item.status, status: mapStatus(item.status), area: '-', notes: item.notes,
