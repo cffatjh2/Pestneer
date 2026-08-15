@@ -14,6 +14,7 @@ import CorrectiveActionCenter from '../components/compliance/CorrectiveActionCen
 import HealthWasteCenter from '../components/compliance/HealthWasteCenter';
 import { PasswordChangeCard } from '../components/security/PasswordSecurityCards';
 import { downloadBlob, shareProtectedDocument } from '../utils/shareUtils';
+import { apiFetch } from '../services/apiBase';
 
 type Tab = 'overview' | 'services' | 'commercial' | 'health' | 'weather' | 'reports' | 'documents' | 'actions' | 'requests' | 'account';
 
@@ -24,7 +25,7 @@ export default function CustomerPortal({ session, onLogout }: { session: Authent
   const [tab, setTab] = useState<Tab>('overview'); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false); const [preview, setPreview] = useState<ServiceReportRecord | null>(null);
   const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pestneer_Hizmet_Raporu' });
-  const downloadReport = async (report: ServiceReportRecord) => { const response = await fetch(getServiceReportPdfUrl(report.id), { headers: { Authorization: `Bearer ${session.accessToken}` } }); if (!response.ok) throw new Error('Hizmet raporu indirilemedi.'); downloadBlob(await response.blob(), `${report.reportNumber}.pdf`); };
+  const downloadReport = async (report: ServiceReportRecord) => { const response = await apiFetch(getServiceReportPdfUrl(report.id), { headers: { Authorization: `Bearer ${session.accessToken}` } }); if (!response.ok) throw new Error('Hizmet raporu indirilemedi.'); downloadBlob(await response.blob(), `${report.reportNumber}.pdf`); };
   const shareReport = async (report: ServiceReportRecord) => { await shareProtectedDocument(session.accessToken, getServiceReportPdfUrl(report.id), `${report.reportNumber}.pdf`, `${report.reportNumber} Hizmet Raporu`); };
   const load = async (forceWeather = false) => { setLoading(true); setError(null); try { const [portal, reportItems, risk, commercialItems] = await Promise.all([getCustomerPortalSummary(session.accessToken), getCustomerServiceReports(session.accessToken), getCustomerWeatherRisks(session.accessToken, forceWeather), getCustomerCommercialSummary(session.accessToken)]); setSummary(portal); setReports(reportItems); setWeatherRisk(risk); setCommercial(commercialItems); } catch (loadError) { if (loadError instanceof CustomerPortalSessionExpiredError || loadError instanceof WeatherRiskSessionExpiredError) return onLogout(); setError(loadError instanceof Error ? loadError.message : 'Müşteri verileri yüklenemedi.'); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, [session.accessToken]);

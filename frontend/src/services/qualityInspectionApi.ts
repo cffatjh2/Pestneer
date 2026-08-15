@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type QualityInspectionType = 'Random' | 'ManagerVisit' | 'RiskBased' | 'ComplaintFollowUp' | 'SecondControl';
 export type QualityGrade = 'Pending' | 'Excellent' | 'Good' | 'Acceptable' | 'NeedsImprovement' | 'Critical';
 
@@ -29,7 +31,7 @@ export const createQualityInspection = (token: string, input: { serviceReportId:
 export const completeQualityInspection = (token: string, id: string, input: { photoQualityScore: number; stationCompletionScore: number; productDoseScore: number; signatureScore: number; timelinessScore: number; reportCompletenessScore: number; findings?: string; notes?: string; createCorrectiveAction: boolean }) => request<QualityInspection>(`/api/company/quality-inspections/${id}/complete`, token, { method: 'PUT', body: JSON.stringify(input) });
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
+  const response = await apiFetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;
     if (response.status === 401 || response.status === 403) throw new QualityInspectionSessionExpiredError(problem?.message ?? 'Oturum süresi doldu.');

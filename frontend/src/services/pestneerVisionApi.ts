@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type VisionModelPreference = 'Auto' | 'pVision' | 'pLens';
 
 export type VisionSettings = {
@@ -16,7 +18,7 @@ export async function updateVisionSettings(token: string, settings: Omit<VisionS
 }
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await apiFetch(path, {
     ...init,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
   });

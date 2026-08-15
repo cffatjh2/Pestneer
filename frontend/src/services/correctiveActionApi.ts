@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type CorrectiveActionEvidence = { id: string; stage: 'Before' | 'After' | 'Supporting'; fileName: string; contentType: string; note?: string; createdAt: string; uploadedBy: string; downloadUrl: string };
 export type CorrectiveActionHistory = { id: string; fromStatus?: string; toStatus: string; note?: string; occurredAt: string; changedBy: string };
 export type CorrectiveAction = {
@@ -31,7 +33,7 @@ export async function uploadCorrectiveActionEvidence(token: string, id: string, 
 import { shareOrDownloadFile } from '../utils/shareUtils';
 
 export async function downloadCorrectiveActionEvidence(token: string, evidence: CorrectiveActionEvidence) {
-  const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new CorrectiveActionSessionExpiredError();
   if (!response.ok) throw new Error('Kanıt dosyası açılamadı.');
   const blob = await response.blob();
@@ -44,7 +46,7 @@ export async function downloadCorrectiveActionEvidence(token: string, evidence: 
 }
 
 export async function shareCorrectiveActionEvidence(token: string, evidence: CorrectiveActionEvidence, title?: string) {
-  const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new CorrectiveActionSessionExpiredError();
   if (!response.ok) throw new Error('Kanıt dosyası açılamadı.');
   const blob = await response.blob();
@@ -59,7 +61,7 @@ export async function shareCorrectiveActionEvidence(token: string, evidence: Cor
 
 async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   let response: Response;
-  try { response = await fetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
+  try { response = await apiFetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
   catch { throw new Error('Düzeltici faaliyet servisine ulaşılamıyor.'); }
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;

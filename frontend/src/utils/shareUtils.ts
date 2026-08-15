@@ -1,3 +1,5 @@
+import { apiFetch } from '../services/apiBase';
+
 /**
  * Universal document sharing and download utility for Pestneer.
  * Supports Web Share API (Mobile WhatsApp, AirDrop, Telegram, Email, etc.),
@@ -106,7 +108,7 @@ export async function shareProtectedDocument(
   fileName: string,
   title?: string
 ): Promise<ShareResult> {
-  const response = await fetch(downloadUrl, {
+  const response = await apiFetch(downloadUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Belge indirilemedi.');

@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type SitePlanElementType = 'rect' | 'line' | 'door' | 'text' | 'station';
 import { cacheSitePlans, getCachedSitePlans, offlineScopeFromToken } from './offlineFieldStore';
 export type SitePlanEquipmentShape = 'square' | 'circle' | 'diamond' | 'star' | 'hexagon';
@@ -89,7 +91,7 @@ export const updateSitePlan = (token: string, id: string, input: SaveSitePlanInp
 import { shareOrDownloadFile } from '../utils/shareUtils';
 
 export async function downloadSitePlan(token: string, plan: SitePlanRecord, open = false) {
-  const response = await fetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new SitePlanSessionExpiredError();
   if (!response.ok) throw new Error('Yerleşim planı PDF dosyası indirilemedi.');
   const blob = await response.blob();
@@ -107,7 +109,7 @@ export async function downloadSitePlan(token: string, plan: SitePlanRecord, open
 }
 
 export async function shareSitePlan(token: string, plan: SitePlanRecord) {
-  const response = await fetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new SitePlanSessionExpiredError();
   if (!response.ok) throw new Error('Yerleşim planı PDF dosyası indirilemedi.');
   const blob = await response.blob();
@@ -123,7 +125,7 @@ export async function shareSitePlan(token: string, plan: SitePlanRecord) {
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
+    response = await apiFetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
   } catch {
     throw new Error('Yerleşim planı servisine ulaşılamıyor. Lütfen tekrar deneyin.');
   }

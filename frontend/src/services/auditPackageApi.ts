@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type AuditPackageFilter = {
   customerId: string;
   branchId?: string;
@@ -85,7 +87,7 @@ export const previewAuditPackage = (token: string, input: AuditPackageFilter) =>
 export const createAuditPackage = (token: string, input: AuditPackageFilter & { acknowledgeWarnings: boolean }) => request<AuditPackage>('/api/audit-packages', token, { method: 'POST', body: JSON.stringify(input) });
 
 export async function downloadAuditPackage(token: string, path: string, fileName: string, open = false) {
-  const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(path, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new AuditPackageSessionExpiredError();
   if (!response.ok) throw new Error('Denetim dosyası indirilemedi.');
   const blob = await response.blob();
@@ -105,7 +107,7 @@ export async function downloadAuditPackage(token: string, path: string, fileName
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
+    response = await apiFetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
   } catch {
     throw new Error('Denetim dosyası servisine ulaşılamıyor. Lütfen tekrar deneyin.');
   }

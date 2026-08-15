@@ -58,6 +58,32 @@ public static class DevelopmentDataSeeder
 
         account.IsActive = true;
 
+        var systemAdminEmail = configuration["SystemAdmin:Email"]?.Trim();
+        var systemAdminPassword = configuration["SystemAdmin:Password"]?.Trim();
+        if (string.IsNullOrWhiteSpace(systemAdminPassword)) systemAdminPassword = ownerPassword;
+        if (!string.IsNullOrWhiteSpace(systemAdminEmail) && !string.IsNullOrWhiteSpace(systemAdminPassword))
+        {
+            var systemNormalizedEmail = systemAdminEmail.ToUpperInvariant();
+            var systemAdmin = await dbContext.Accounts.SingleOrDefaultAsync(item =>
+                item.Portal == PortalType.SystemAdmin && item.NormalizedEmail == systemNormalizedEmail);
+            if (systemAdmin is null)
+            {
+                systemAdmin = new Account
+                {
+                    Id = Guid.NewGuid(),
+                    Email = systemAdminEmail,
+                    NormalizedEmail = systemNormalizedEmail,
+                    DisplayName = "Pestneer Sistem Yöneticisi",
+                    PasswordHash = string.Empty,
+                    Portal = PortalType.SystemAdmin
+                };
+                systemAdmin.PasswordHash = passwordHasher.HashPassword(systemAdmin, systemAdminPassword);
+                dbContext.Accounts.Add(systemAdmin);
+            }
+
+            systemAdmin.IsActive = true;
+        }
+
         var hasMembership = await dbContext.CompanyMemberships.AnyAsync(item =>
             item.AccountId == account.Id && item.CompanyId == company.Id);
         if (!hasMembership)

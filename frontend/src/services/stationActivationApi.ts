@@ -1,4 +1,5 @@
 import type { ReportStationInput } from './serviceReportApi';
+import { apiFetch } from './apiBase';
 
 export type StationActivationRecord = {
   id: string; workOrderId: string; workOrderNumber: string; number: string; status: 'Draft' | 'Finalized';
@@ -15,7 +16,7 @@ export const getStationActivationByWorkOrder = (token: string, workOrderId: stri
 export const saveStationActivation = (token: string, workOrderId: string, input: SaveStationActivationInput) => request<StationActivationRecord>(`/api/station-activations/work-orders/${workOrderId}`, token, { method: 'PUT', body: JSON.stringify(input) });
 
 export async function downloadStationActivationPdf(token: string, record: StationActivationRecord) {
-  const response = await fetch(`/api/station-activations/${record.id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(`/api/station-activations/${record.id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error('Aktivasyon PDF belgesi indirilemedi.');
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement('a');
@@ -24,7 +25,7 @@ export async function downloadStationActivationPdf(token: string, record: Statio
 }
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
+  const response = await apiFetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers } });
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;
     throw new Error(problem?.message ?? problem?.detail ?? (problem?.errors ? Object.values(problem.errors).flat()[0] : undefined) ?? 'Aktivasyon listesi kaydedilemedi.');

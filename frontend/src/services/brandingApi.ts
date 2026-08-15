@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type CompanyBranding = {
   companyName: string;
   hasLogo: boolean;
@@ -68,7 +70,7 @@ export async function disconnectGoogleEmailConnection(accessToken: string) {
 
 async function request(accessToken: string, url: string, init?: RequestInit) {
   let response: Response;
-  try { response = await fetch(url, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${accessToken}` } }); }
+  try { response = await apiFetch(url, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${accessToken}` } }); }
   catch { throw new Error('Sunucuya bağlanılamadı.'); }
   if (response.status === 401) throw new CompanyBrandingSessionExpiredError();
   if (!response.ok) {

@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type AttendanceStatus = 'notStarted' | 'working' | 'onBreak' | 'completed';
 
 export type AttendanceRecord = {
@@ -88,7 +90,7 @@ export const getWorkforceAnalytics = (token: string) =>
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await apiFetch(path, {
       ...init,
       headers: {
         'Content-Type': 'application/json',

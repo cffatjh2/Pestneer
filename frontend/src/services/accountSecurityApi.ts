@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type ManagedAccount = {
   id: string;
   name: string;
@@ -25,7 +27,7 @@ export async function resetCompanyAccountPassword(accessToken: string, accountId
 }
 
 async function request<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await apiFetch(path, {
     ...init,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...(init?.headers ?? {}) },
   });

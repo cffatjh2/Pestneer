@@ -27,22 +27,35 @@ public static class SystemAdministrationEndpoints
     private static async Task<IResult> LoginAsync(SystemAdminLoginRequest request, IConfiguration configuration, PesneerDbContext dbContext,
         IPasswordHasher<Account> passwordHasher, IJwtTokenService tokens, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            return Results.Json(new { message = "E-posta ve şifre zorunludur." }, statusCode: StatusCodes.Status401Unauthorized);
+
         var normalizedEmail = request.Email.Trim().ToUpperInvariant();
-        var account = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
+        var accounts = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.NormalizedEmail == normalizedEmail && item.IsActive)
-            .OrderBy(item => item.Portal == PortalType.SystemAdmin ? 0 : item.Portal == PortalType.Owner ? 1 : 2)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
         var bootstrapEmail = configuration["SystemAdmin:Email"]?.Trim();
-        var hasDedicatedSystemAdmin = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
-            .AnyAsync(item => item.Portal == PortalType.SystemAdmin && item.IsActive, cancellationToken);
-        var isBootstrapAccount = account is not null && !string.IsNullOrWhiteSpace(bootstrapEmail)
-            && !hasDedicatedSystemAdmin
-            && bootstrapEmail.Equals(account.Email, StringComparison.OrdinalIgnoreCase);
-        if (account is null || (account.Portal != PortalType.SystemAdmin && !isBootstrapAccount)
-            || passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
-            return Results.Unauthorized();
-        var token = tokens.CreateSystemAdmin(account);
-        return Results.Ok(new { accessToken = token.Value, expiresAt = token.ExpiresAt, user = new { account.Id, account.DisplayName, account.Email } });
+        Account? matched = null;
+        foreach (var account in accounts.OrderBy(item => item.Portal == PortalType.SystemAdmin ? 0 : item.Portal == PortalType.Owner ? 1 : 2))
+        {
+            if (passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
+                continue;
+
+            var isConfiguredOperator = !string.IsNullOrWhiteSpace(bootstrapEmail)
+                && bootstrapEmail.Equals(account.Email, StringComparison.OrdinalIgnoreCase)
+                && account.Portal is PortalType.SystemAdmin or PortalType.Owner;
+            if (account.Portal == PortalType.SystemAdmin || isConfiguredOperator)
+            {
+                matched = account;
+                break;
+            }
+        }
+
+        if (matched is null)
+            return Results.Json(new { message = "Sistem yöneticisi e-postası veya şifre hatalı." }, statusCode: StatusCodes.Status401Unauthorized);
+
+        var token = tokens.CreateSystemAdmin(matched);
+        return Results.Ok(new { accessToken = token.Value, expiresAt = token.ExpiresAt, user = new { matched.Id, matched.DisplayName, matched.Email } });
     }
 
     private static async Task<IResult> GetCompanyAccountsAsync(Guid companyId, PesneerDbContext dbContext, CancellationToken cancellationToken)

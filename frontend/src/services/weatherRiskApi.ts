@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type ForecastDay = {
   date: string;
   minimumTemperatureC: number;
@@ -64,7 +66,7 @@ export const getCustomerWeatherRisks = (token: string, forceRefresh = false) =>
 
 async function request(path: string, token: string): Promise<WeatherRiskOverview> {
   let response: Response;
-  try { response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } }); }
+  try { response = await apiFetch(path, { headers: { Authorization: `Bearer ${token}` } }); }
   catch { throw new Error('Hava ve risk servisine ulaşılamıyor.'); }
   if (response.status === 401 || response.status === 403) throw new WeatherRiskSessionExpiredError();
   if (!response.ok) {

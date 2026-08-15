@@ -19,9 +19,9 @@ public sealed class LoginService(
     {
         var companyCode = request.CompanyCode.Trim().ToUpperInvariant();
         var normalizedEmail = request.Email.Trim().ToUpperInvariant();
-        var company = await dbContext.Companies.AsNoTracking()
+        var company = await dbContext.Companies.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item => item.Code == companyCode && item.IsActive, cancellationToken);
-        var account = await dbContext.Accounts.AsNoTracking()
+        var account = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item => item.Portal == portal && item.NormalizedEmail == normalizedEmail && item.IsActive, cancellationToken);
 
         if (company is null || account is null ||
@@ -45,7 +45,7 @@ public sealed class LoginService(
         }
         else
         {
-            var membership = await dbContext.CompanyMemberships.AsNoTracking()
+            var membership = await dbContext.CompanyMemberships.IgnoreQueryFilters().AsNoTracking()
                 .SingleOrDefaultAsync(item => item.AccountId == account.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
             if (membership is null || portal == PortalType.Owner && membership.Role != CompanyRole.Owner) return null;
             role = membership.Role;

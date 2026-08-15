@@ -57,6 +57,8 @@ services:
         value: https://pesneer.onrender.com
       - key: Email__FrontendBaseUrl
         value: https://pestneer-ctf.pages.dev
+      - key: Cors__AllowedOrigins__0
+        value: https://pestneer-ctf.pages.dev
       - key: Email__GoogleClientId
         sync: false
       - key: Email__GoogleClientSecret

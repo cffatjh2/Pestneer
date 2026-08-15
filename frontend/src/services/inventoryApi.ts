@@ -1,4 +1,5 @@
 import { FieldSessionExpiredError } from './fieldOperationsApi';
+import { apiFetch } from './apiBase';
 
 export type InventoryItem = {
   id: string;
@@ -120,7 +121,7 @@ export const transferInventoryToVehicle = (token: string, input: TransferInvento
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await apiFetch(path, {
       ...init,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers },
     });

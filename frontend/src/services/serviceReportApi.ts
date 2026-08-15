@@ -1,3 +1,5 @@
+import { apiFetch, apiUrl } from './apiBase';
+
 export type ReportPestObservationInput = {
   pestKey: string;
   pestName: string;
@@ -110,11 +112,11 @@ export async function uploadServiceReportPhotos(token: string, workOrderId: stri
   return request<ReportPhoto[]>(`/api/service-reports/work-orders/${workOrderId}/photos`, token, { method: 'POST', body }, false);
 }
 export const getServiceReportAnalytics = (token: string, query = '') => request<ServiceReportAnalytics>(`/api/company/service-reports/analytics${query ? `?${query}` : ''}`, token);
-export const getServiceReportPdfUrl = (reportId: string) => `/api/service-reports/${reportId}/pdf`;
+export const getServiceReportPdfUrl = (reportId: string) => apiUrl(`/api/service-reports/${reportId}/pdf`);
 
 async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   let response: Response;
-  try { response = await fetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
+  try { response = await apiFetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
   catch { throw new ReportNetworkError(); }
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]>; current?: ServiceReportRecord } | null;

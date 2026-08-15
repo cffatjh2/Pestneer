@@ -1,13 +1,14 @@
 import type { ServiceReportRecord } from '../../services/serviceReportApi';
 import { useEffect, useState, type ReactNode } from 'react';
 import { getCompanyBranding, getCompanyLogoObjectUrl } from '../../services/brandingApi';
+import { apiFetch } from '../../services/apiBase';
 
 export default function ServiceReportPrintSheet({ report, accessToken }: { report: ServiceReportRecord; accessToken: string }) {
   const [photoUrls, setPhotoUrls] = useState<{ id: string; fileName: string; url: string }[]>([]);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   useEffect(() => {
     let disposed = false; const objectUrls: string[] = [];
-    Promise.all(report.photos.map(async (photo) => { const response = await fetch(photo.url, { headers: { Authorization: `Bearer ${accessToken}` } }); if (!response.ok) return null; const url = URL.createObjectURL(await response.blob()); objectUrls.push(url); return { id: photo.id, fileName: photo.fileName, url }; })).then((items) => { if (!disposed) setPhotoUrls(items.filter((item): item is { id: string; fileName: string; url: string } => item !== null)); });
+    Promise.all(report.photos.map(async (photo) => { const response = await apiFetch(photo.url, { headers: { Authorization: `Bearer ${accessToken}` } }); if (!response.ok) return null; const url = URL.createObjectURL(await response.blob()); objectUrls.push(url); return { id: photo.id, fileName: photo.fileName, url }; })).then((items) => { if (!disposed) setPhotoUrls(items.filter((item): item is { id: string; fileName: string; url: string } => item !== null)); });
     return () => { disposed = true; objectUrls.forEach((url) => URL.revokeObjectURL(url)); };
   }, [accessToken, report.id]);
   useEffect(() => {

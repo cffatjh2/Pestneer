@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type QualityLocation = { customerId: string; customerName: string; branchId?: string; branchName: string; address: string };
 export type TrendPeriodPayload = { period: string; reportCount: number; totalStations: number; activeStations: number; plateChanges: number; totalCaught: number; activityRate: number };
 export type PestTotalPayload = { pest: string; totalCaught: number };
@@ -50,7 +52,7 @@ export async function uploadQualityDocument(token: string, input: UploadQualityD
 }
 
 export async function downloadQualityDocument(token: string, document: QualityDocument, open = false) {
-  const response = await fetch(document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new QualitySessionExpiredError();
   if (!response.ok) throw new Error('Belge indirilemedi.');
   const blob = await response.blob(); const url = URL.createObjectURL(blob);
@@ -60,7 +62,7 @@ export async function downloadQualityDocument(token: string, document: QualityDo
 
 async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   let response: Response;
-  try { response = await fetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
+  try { response = await apiFetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
   catch { throw new Error('Analiz ve belge servisine ulaşılamıyor. Lütfen tekrar deneyin.'); }
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;

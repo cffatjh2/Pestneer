@@ -195,8 +195,12 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
   );
 }
 
+function isSystemControlPath(pathname: string) {
+  return pathname.replace(/\/+$/, '') === '/pestneer-system-control-9f4c2';
+}
+
 export default function App() {
-  if (window.location.pathname === '/pestneer-system-control-9f4c2') return <Suspense fallback={<LoadingScreen />}><SystemAdminPage /></Suspense>;
+  if (isSystemControlPath(window.location.pathname)) return <Suspense fallback={<LoadingScreen />}><SystemAdminPage /></Suspense>;
   const [session, setSession] = useState<AuthenticatedSession | null>(loadStoredSession);
   const [isLoginVisible, setIsLoginVisible] = useState(false);
 

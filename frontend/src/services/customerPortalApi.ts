@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type CustomerPortalBranch = { id: string; name: string; code: string; address: string; city?: string; district?: string; phoneNumber?: string; email?: string; mapUrl?: string };
 export type CustomerPortalWorkOrder = { id: string; number: string; branchId?: string; branchName: string; serviceType: string; visitType: string; scheduledAt: string; durationMinutes: number; status: string; employeeName: string; customerDurationMinutes?: number; totalLaborMinutes: number; completionNote?: string; recommendation?: string };
 export type RequestHistory = { status: string; note?: string; occurredAt: string; changedBy: string };
@@ -13,7 +15,7 @@ export type CreateEmergencyRequestInput = { branchId?: string; requestType: 'Eme
 export type UpdateEmergencyRequestInput = { status: string; employeeAccountId?: string; note?: string; dueAt?: string };
 
 export class CustomerPortalSessionExpiredError extends Error {}
-async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> { const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers ?? {}) } }); if (response.status === 401) throw new CustomerPortalSessionExpiredError(); if (!response.ok) { const body = await response.json().catch(() => ({})); const message = body.message ?? Object.values(body.errors ?? {}).flat()[0] ?? 'İşlem tamamlanamadı.'; throw new Error(String(message)); } if (response.status === 204) return undefined as T; return response.json(); }
+async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> { const response = await apiFetch(path, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers ?? {}) } }); if (response.status === 401) throw new CustomerPortalSessionExpiredError(); if (!response.ok) { const body = await response.json().catch(() => ({})); const message = body.message ?? Object.values(body.errors ?? {}).flat()[0] ?? 'İşlem tamamlanamadı.'; throw new Error(String(message)); } if (response.status === 204) return undefined as T; return response.json(); }
 
 export const getCustomerPortalSummary = (token: string) => request<CustomerPortalSummary>('/api/customer/portal/summary', token);
 export const getCustomerCommercialSummary = (token: string) => request<CustomerCommercialSummary>('/api/customer/portal/commercial', token);
@@ -22,10 +24,10 @@ export const decideCustomerProposal = (token: string, id: string, accepted: bool
 import { shareOrDownloadFile } from '../utils/shareUtils';
 
 
-export async function downloadCustomerCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string) { const response = await fetch(`/api/customer/portal/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); if (response.status === 401) throw new CustomerPortalSessionExpiredError(); if (!response.ok) throw new Error('PDF indirilemedi.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `${number}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+export async function downloadCustomerCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string) { const response = await apiFetch(`/api/customer/portal/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); if (response.status === 401) throw new CustomerPortalSessionExpiredError(); if (!response.ok) throw new Error('PDF indirilemedi.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `${number}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 
 export async function shareCustomerCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string, title?: string) {
-  const response = await fetch(`/api/customer/portal/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(`/api/customer/portal/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401) throw new CustomerPortalSessionExpiredError();
   if (!response.ok) throw new Error('PDF indirilemedi.');
   const blob = await response.blob();

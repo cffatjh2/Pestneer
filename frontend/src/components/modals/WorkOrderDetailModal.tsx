@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Camera, CheckCircle2, Clock3, Download, FileText, Lightbulb, MapPin, Pencil, Share2, UserRound, X } from 'lucide-react';
 import type { WorkOrder, WorkOrderPhoto } from '../../types';
 import { shareOrDownloadFile } from '../../utils/shareUtils';
+import { apiFetch } from '../../services/apiBase';
 
 type Props = { order: WorkOrder; accessToken: string; onClose: () => void; onEdit?: () => void };
 
@@ -30,7 +31,7 @@ function AuthorizedPhoto({ photo, token }: { photo: WorkOrderPhoto; token: strin
 
   useEffect(() => {
     let objectUrl = '';
-    fetch(photo.url, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(photo.url, { headers: { Authorization: `Bearer ${token}` } })
       .then((response) => (response.ok ? response.blob() : Promise.reject()))
       .then((blob) => {
         setBlobData(blob);

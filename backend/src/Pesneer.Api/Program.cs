@@ -113,25 +113,30 @@ builder.Services.AddScoped<IWeatherService, OpenMeteoWeatherService>();
 builder.Services.AddScoped<IWeatherRiskService, WeatherRiskService>();
 builder.Services.AddProblemDetails();
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?.Where(origin => !string.IsNullOrWhiteSpace(origin))
-    .Select(origin => origin.TrimEnd('/'))
+var allowedOrigins = (builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
+    .Concat([
+        builder.Configuration["Email:FrontendBaseUrl"],
+        "http://localhost:5173",
+        "https://pestneer-ctf.pages.dev",
+        "https://pesneer.onrender.com"
+    ])
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Select(origin => origin!.Trim().TrimEnd('/'))
     .Distinct(StringComparer.OrdinalIgnoreCase)
-    .ToArray() ?? [];
+    .ToArray();
 
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        if (allowedOrigins.Length == 0)
+        policy.SetIsOriginAllowed(origin =>
         {
-            policy.WithOrigins("http://localhost:5173");
-        }
-        else
-        {
-            policy.WithOrigins(allowedOrigins);
-        }
-
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+            if (allowedOrigins.Contains(origin.TrimEnd('/'), StringComparer.OrdinalIgnoreCase)) return true;
+            return uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.EndsWith(".pages.dev", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase);
+        });
         policy.AllowAnyHeader().AllowAnyMethod();
     });
 });

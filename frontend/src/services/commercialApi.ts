@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type ProposalLine = { id: string; description: string; quantity: number; unit: string; unitPrice: number; lineTotal: number };
 export type Proposal = { id: string; number: string; customerId: string; customerName: string; branchId?: string; branchName: string; title: string; status: string; issueDate: string; validUntil: string; currency: string; subtotal: number; discountAmount: number; vatRate: number; vatAmount: number; totalAmount: number; notes?: string; terms?: string; customerDecisionAt?: string; customerDecisionNote?: string; createdAt: string; lines: ProposalLine[] };
 export type ContractServicePlan = { id: string; branchId?: string; branchName: string; employeeAccountId?: string; employeeName: string; serviceType: string; recurrenceType: string; visitsPerPeriod: number; preferredDay: number; preferredTime: string; durationMinutes: number; branchPrice: number; generatedThrough?: string; isActive: boolean; generatedWorkOrderCount: number };
@@ -11,7 +13,7 @@ export type ConvertProposalInput = { startDate: string; endDate: string; billing
 export type ContractGenerationResult = { contractId: string; generatedThrough: string; createdCount: number; skippedExistingCount: number };
 
 export class CommercialSessionExpiredError extends Error {}
-async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> { const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers ?? {}) } }); if (response.status === 401) throw new CommercialSessionExpiredError(); if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(String(body.message ?? Object.values(body.errors ?? {}).flat()[0] ?? 'İşlem tamamlanamadı.')); } if (response.status === 204) return undefined as T; return response.json(); }
+async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> { const response = await apiFetch(path, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init?.headers ?? {}) } }); if (response.status === 401) throw new CommercialSessionExpiredError(); if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(String(body.message ?? Object.values(body.errors ?? {}).flat()[0] ?? 'İşlem tamamlanamadı.')); } if (response.status === 204) return undefined as T; return response.json(); }
 export const getProposals = (token: string) => request<Proposal[]>('/api/company/commercial/proposals', token);
 export const createProposal = (token: string, input: CreateProposalInput) => request<Proposal>('/api/company/commercial/proposals', token, { method: 'POST', body: JSON.stringify(input) });
 export const convertProposal = (token: string, id: string, input: ConvertProposalInput) => request<Contract>(`/api/company/commercial/proposals/${id}/convert`, token, { method: 'POST', body: JSON.stringify(input) });
@@ -42,10 +44,10 @@ export const saveWorkOrderEconomics = (token: string, id: string, input: WorkOrd
 import { shareOrDownloadFile } from '../utils/shareUtils';
 
 
-export async function downloadCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string) { const response = await fetch(`/api/company/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); if (response.status === 401) throw new CommercialSessionExpiredError(); if (!response.ok) throw new Error('PDF oluşturulamadı.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `${number}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+export async function downloadCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string) { const response = await apiFetch(`/api/company/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } }); if (response.status === 401) throw new CommercialSessionExpiredError(); if (!response.ok) throw new Error('PDF oluşturulamadı.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `${number}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 
 export async function shareCommercialPdf(token: string, kind: 'proposals' | 'contracts', id: string, number: string, title?: string) {
-  const response = await fetch(`/api/company/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(`/api/company/commercial/${kind}/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401) throw new CommercialSessionExpiredError();
   if (!response.ok) throw new Error('PDF oluşturulamadı.');
   const blob = await response.blob();

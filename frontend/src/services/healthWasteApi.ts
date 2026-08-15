@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type HealthScoreComponent = {
   code: string;
   label: string;
@@ -64,7 +66,7 @@ export async function uploadWasteEvidence(token: string, id: string, file: File,
 import { shareOrDownloadFile } from '../utils/shareUtils';
 
 export async function downloadWasteEvidence(token: string, evidence: WasteDisposalEvidence) {
-  const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new HealthWasteSessionExpiredError('Oturum süresi doldu.');
   if (!response.ok) throw new Error('Kanıt dosyası indirilemedi.');
   const blob = await response.blob();
@@ -77,7 +79,7 @@ export async function downloadWasteEvidence(token: string, evidence: WasteDispos
 }
 
 export async function shareWasteEvidence(token: string, evidence: WasteDisposalEvidence, title?: string) {
-  const response = await fetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiFetch(evidence.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new HealthWasteSessionExpiredError('Oturum süresi doldu.');
   if (!response.ok) throw new Error('Kanıt dosyası indirilemedi.');
   const blob = await response.blob();
@@ -92,7 +94,7 @@ export async function shareWasteEvidence(token: string, evidence: WasteDisposalE
 
 async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   const headers: HeadersInit = { Authorization: `Bearer ${token}`, ...(json ? { 'Content-Type': 'application/json' } : {}), ...(init?.headers ?? {}) };
-  const response = await fetch(path, { ...init, headers });
+  const response = await apiFetch(path, { ...init, headers });
   if (response.status === 401 || response.status === 403) throw new HealthWasteSessionExpiredError('Oturum süresi doldu.');
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;

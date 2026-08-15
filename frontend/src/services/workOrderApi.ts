@@ -1,4 +1,5 @@
 import type { WorkOrder, WorkStatus } from '../types';
+import { apiFetch } from './apiBase';
 
 export type CustomerBranchRecord = { id: string; name: string; code: string; address: string; city?: string; district?: string; contactName?: string; phoneNumber?: string; email?: string; latitude?: number; longitude?: number; mapUrl?: string; isActive: boolean };
 export type CustomerRecord = { id: string; legalName: string; code: string; contactName?: string; phoneNumber?: string; email?: string; address?: string; city?: string; district?: string; latitude?: number; longitude?: number; mapUrl?: string; isActive: boolean; branches: CustomerBranchRecord[] };
@@ -75,7 +76,7 @@ function formatTime(value: Date) { return new Intl.DateTimeFormat('tr-TR', { hou
 
 async function request<T>(path: string, token: string, init?: RequestInit, json = true): Promise<T> {
   let response: Response;
-  try { response = await fetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
+  try { response = await apiFetch(path, { ...init, headers: { ...(json ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${token}`, ...init?.headers } }); }
   catch { throw new Error('İş emri servisine ulaşılamıyor. Lütfen tekrar deneyin.'); }
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { message?: string; detail?: string; errors?: Record<string, string[]> } | null;

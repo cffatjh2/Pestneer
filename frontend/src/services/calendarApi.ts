@@ -1,3 +1,5 @@
+import { apiFetch } from './apiBase';
+
 export type CalendarEntryKind = 'Task' | 'Note' | 'WorkOrder';
 export type CalendarEntryPriority = 'Low' | 'Normal' | 'High';
 export type CalendarEntryStatus = 'Planned' | 'Completed';
@@ -61,7 +63,7 @@ export async function deleteCalendarEntry(accessToken: string, entryId: string) 
 async function request<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await apiFetch(path, {
       ...init,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...init?.headers },
     });
