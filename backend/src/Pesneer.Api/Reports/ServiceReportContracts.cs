@@ -35,7 +35,14 @@ public sealed record ServiceReportStationInput(
     decimal? ReplacementQuantity,
     string? ReplacementUnit,
     string? Notes,
-    IReadOnlyList<ServiceReportPestObservationInput>? PestObservations);
+    IReadOnlyList<ServiceReportPestObservationInput>? PestObservations,
+    bool BaitGelCompleted = false,
+    bool StickyPlateChanged = false,
+    bool StationCleaned = false,
+    bool StationRelocated = false,
+    bool StationReplaced = false,
+    bool LockCheckDone = false,
+    bool LabelRenewed = false);
 
 public sealed record ServiceReportProductInput(
     Guid? VehicleStockItemId,

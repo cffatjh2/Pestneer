@@ -52,16 +52,17 @@ internal static class StationActivationPdfRenderer
                     {
                         table.ColumnsDefinition(columns =>
                         {
-                            columns.ConstantColumn(60); columns.RelativeColumn(1.5f); columns.ConstantColumn(75);
-                            columns.ConstantColumn(85); columns.RelativeColumn(); columns.ConstantColumn(45); columns.RelativeColumn(1.3f);
+                            columns.ConstantColumn(55); columns.RelativeColumn(1.3f); columns.ConstantColumn(70);
+                            columns.ConstantColumn(80); columns.RelativeColumn(); columns.ConstantColumn(40); columns.RelativeColumn(1.1f); columns.RelativeColumn(1.2f);
                         });
-                        foreach (var title in new[] { "İstasyon", "Konum / Alan", "Ekipman", "Durum", "Zararlı / Aktivite", "Adet", "İşlem / Açıklama" })
+                        foreach (var title in new[] { "İstasyon", "Konum / Alan", "Ekipman", "Durum", "Zararlı / Aktivite", "Adet", "Yapılan İşlemler", "İşlem / Açıklama" })
                             table.Cell().Background(Navy).Padding(6).Text(title).FontColor(Colors.White).Bold();
                         foreach (var station in stations.OrderBy(item => item.DeviceNumber, StringComparer.OrdinalIgnoreCase))
                         {
                             Cell(table, station.DeviceNumber, true); Cell(table, station.Area); Cell(table, station.DeviceType);
                             Cell(table, Status(station.DeviceStatus)); Cell(table, station.TargetPest ?? station.ActivityType ?? "—");
                             Cell(table, station.CaughtCount > 0 ? station.CaughtCount.ToString() : "—");
+                            Cell(table, Checklist(station));
                             var operation = station.AppliedProductName is not null ? $"{station.AppliedProductName} · {station.AppliedAmount} {station.AppliedUnit}" : station.ReplacementProductName is not null ? $"Değişim: {station.ReplacementProductName} · {station.ReplacementQuantity} {station.ReplacementUnit}" : station.Notes ?? "—";
                             Cell(table, operation);
                         }
@@ -83,4 +84,17 @@ internal static class StationActivationPdfRenderer
         "Activity" => "Aktivite var", "NoActivity" => "Aktivite yok", "Damaged" => "Kırık / hasarlı",
         "Inaccessible" => "Ulaşılamadı", "Missing" => "Kayıp", "Replaced" => "Değiştirildi", _ => value
     };
+
+    private static string Checklist(ServiceReportStationInput station)
+    {
+        var items = new List<string>(7);
+        if (station.BaitGelCompleted) items.Add("Y/J");
+        if (station.StickyPlateChanged) items.Add("P.D");
+        if (station.StationCleaned) items.Add("T");
+        if (station.StationRelocated) items.Add("Y.D");
+        if (station.StationReplaced) items.Add("D");
+        if (station.LockCheckDone) items.Add("K");
+        if (station.LabelRenewed) items.Add("E");
+        return items.Count > 0 ? string.Join(", ", items) : "—";
+    }
 }

@@ -23,6 +23,13 @@ export type ReportStationInput = {
   replacementVehicleStockItemId?: string; replacementProductName?: string; replacementQuantity?: number; replacementUnit?: string;
   notes?: string;
   pestObservations?: ReportPestObservationInput[];
+  baitGelCompleted?: boolean;
+  stickyPlateChanged?: boolean;
+  stationCleaned?: boolean;
+  stationRelocated?: boolean;
+  stationReplaced?: boolean;
+  lockCheckDone?: boolean;
+  labelRenewed?: boolean;
 };
 
 export type ReportProductInput = {
