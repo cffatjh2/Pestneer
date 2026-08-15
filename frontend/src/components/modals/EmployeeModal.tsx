@@ -85,19 +85,19 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
           <div className="form-grid employee-form-grid">
             <label>
               Ad
-              <input name="firstName" defaultValue={nameParts.firstName} autoComplete="given-name" minLength={2} maxLength={80} placeholder="Örn. Ahmet" required />
+              <input name="firstName" defaultValue={nameParts.firstName} autoComplete="given-name" minLength={2} maxLength={80} required />
             </label>
             <label>
               Soyad
-              <input name="lastName" defaultValue={nameParts.lastName} autoComplete="family-name" minLength={2} maxLength={80} placeholder="Örn. Yılmaz" required />
+              <input name="lastName" defaultValue={nameParts.lastName} autoComplete="family-name" minLength={2} maxLength={80} required />
             </label>
             <label>
               Telefon numarası
-              <input name="phoneNumber" defaultValue={employee?.phoneNumber} type="tel" autoComplete="tel" minLength={10} maxLength={24} placeholder="05xx xxx xx xx" required />
+              <input name="phoneNumber" defaultValue={employee?.phoneNumber} type="tel" autoComplete="tel" minLength={10} maxLength={24} required />
             </label>
             <label>
               E-posta adresi
-              <input name="email" defaultValue={employee?.email} type="email" autoComplete="email" maxLength={320} placeholder="personel@firma.com" required />
+              <input name="email" defaultValue={employee?.email} type="email" autoComplete="email" maxLength={320} required />
             </label>
             <label className={isEditing ? '' : 'form-field-wide'}>
               Yetki / görev

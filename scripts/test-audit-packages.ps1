@@ -1,4 +1,14 @@
 $ErrorActionPreference = 'Stop'
+
+function Get-HttpErrorMessage($errorRecord) {
+    if ($errorRecord.ErrorDetails.Message) { return $errorRecord.ErrorDetails.Message }
+    if ($errorRecord.Exception.Response -and $errorRecord.Exception.Response.Content) {
+        return $errorRecord.Exception.Response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    }
+
+    return $errorRecord.Exception.Message
+}
+
 $root = Split-Path $PSScriptRoot -Parent
 $project = Join-Path $root 'backend/src/Pesneer.Api/Pesneer.Api.csproj'
 $projectDirectory = Split-Path $project -Parent
@@ -7,10 +17,12 @@ $assembly = Join-Path $buildDirectory 'Pesneer.Api.dll'
 $runId = [Guid]::NewGuid().ToString('N').Substring(0, 8)
 $testDb = Join-Path $env:TEMP "pesneer-audit-packages-$runId.db"
 $pdfFile = Join-Path $env:TEMP "pesneer-audit-$runId.pdf"
+$ownerReportPdfFile = Join-Path $env:TEMP "pesneer-service-report-owner-$runId.pdf"
+$customerReportPdfFile = Join-Path $env:TEMP "pesneer-service-report-customer-$runId.pdf"
 $zipFile = Join-Path $env:TEMP "pesneer-audit-$runId.zip"
 $outputLog = Join-Path $env:TEMP 'pesneer-audit-packages-test.out.log'
 $errorLog = Join-Path $env:TEMP 'pesneer-audit-packages-test.err.log'
-Remove-Item -LiteralPath $testDb, $pdfFile, $zipFile, $outputLog, $errorLog -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $testDb, $pdfFile, $ownerReportPdfFile, $customerReportPdfFile, $zipFile, $outputLog, $errorLog -Force -ErrorAction SilentlyContinue
 dotnet build $project -c Release -o $buildDirectory | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Test derlemesi oluşturulamadı.' }
 
@@ -45,17 +57,20 @@ try {
     $orders = @(Invoke-RestMethod 'http://127.0.0.1:5105/api/company/work-orders/batch' -Method Post -ContentType 'application/json; charset=utf-8' -Headers $ownerHeaders -Body (@{ customerId = $customer.id; branchIds = @($branches[0].id); serviceType = 'Periyodik zararlı mücadelesi'; date = $today; time = '10:00'; durationMinutes = 60; employeeAccountId = $employee.id; visitType = 'Routine'; recurrenceType = 'Once' } | ConvertTo-Json -Depth 5))
     try {
     $report = Invoke-RestMethod "http://127.0.0.1:5105/api/service-reports/work-orders/$($orders[0].id)" -Method Put -ContentType 'application/json; charset=utf-8' -Headers $ownerHeaders -Body (@{
-        firmName = 'Tura Çevre Sağlığı'; firmAddress = 'Ankara'; firmPhone = $null; firmWeb = $null; responsibleManager = 'Mesul Müdür'; permissionNumber = 'TEST-001'; teamManager = 'Denetim Personeli'; targetPests = 'Kemirgen'; residenceType = 'Gıda üretimi'; areaSquareMeters = 1200; workType = 'Periyodik kontrol'; consumables = $null; safetyMeasures = 'Alan güvenliği sağlandı.';
+        firmName = 'Tura Çevre Sağlığı'; firmAddress = 'Ankara'; firmPhone = $null; firmWeb = $null; responsibleManager = 'Mesul Müdür'; permissionNumber = 'TEST-001'; teamManager = 'Denetim Personeli'; targetPests = 'Norveç sıçanı'; residenceType = 'Gıda üretim tesisi'; areaSquareMeters = 1200; workType = 'Kemirgen kontrolü'; consumables = $null; safetyMeasures = 'Diğer: Alan güvenliği sağlandı.';
         applicationSummary = 'Tüm istasyonlar kontrol edildi.'; findings = 'M-01 istasyonunda aktivite görüldü.'; correctiveActions = 'İzleme sıklığı artırıldı.'; recommendations = 'Kapı altı izolasyonu önerildi.';
         customerRepresentativeName = 'Test Yetkili'; managerSignatureData = 'data:image/png;base64,dGVzdA=='; customerSignatureData = 'data:image/png;base64,dGVzdA=='; baseUpdatedAt = $null; forceOverwrite = $false; finalize = $true;
         stations = @(@{ sitePlanId = $null; sitePlanElementId = $null; deviceNumber = 'M-01'; area = 'Üretim çıkışı'; deviceType = 'M'; targetPest = $null; caughtCount = 0; hasActivity = $false; plateChanged = $false; deviceStatus = 'NoActivity'; activityType = $null; inaccessibilityReason = $null; appliedVehicleStockItemId = $null; appliedProductName = $null; appliedAmount = $null; appliedUnit = $null; replacementVehicleStockItemId = $null; replacementProductName = $null; replacementQuantity = $null; replacementUnit = $null; notes = 'Kontrol tamamlandı.' });
-        products = @(@{ vehicleStockItemId = $null; productName = 'Test Rodentisit'; licenseNumber = 'RHS-001'; applicationMethod = 'Yem istasyonu'; dilutionRate = $null; activeIngredient = 'Brodifacoum'; antidote = 'Vitamin K1'; packingQuantity = '1 kg'; amountUsed = 0; unit = 'Gram' })
+        products = @(@{ vehicleStockItemId = $null; productName = 'Test Rodentisit'; licenseNumber = 'RHS-001'; applicationMethod = 'İstasyon içine uygulama'; dilutionRate = $null; activeIngredient = 'Brodifacoum'; antidote = 'Vitamin K1'; packingQuantity = '1 kg'; amountUsed = 0; unit = 'Gram' })
     } | ConvertTo-Json -Depth 8)
     }
     catch {
-        $reader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
-        throw $reader.ReadToEnd()
+        throw (Get-HttpErrorMessage $_)
     }
+
+    Invoke-WebRequest "http://127.0.0.1:5105/api/service-reports/$($report.id)/pdf" -Headers $ownerHeaders -OutFile $ownerReportPdfFile | Out-Null
+    $ownerReportPdfHeader = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($ownerReportPdfFile), 0, 4)
+    if ($ownerReportPdfHeader -ne '%PDF') { throw 'Firma sahibi servis raporu PDF çıktısına erişemedi.' }
 
     $plan = Invoke-RestMethod 'http://127.0.0.1:5105/api/site-plans/' -Method Post -ContentType 'application/json; charset=utf-8' -Headers $ownerHeaders -Body (@{
         customerId = $customer.id; branchId = $branches[0].id; title = 'Zararlı Mücadelesi Ekipman Yerleşim Planı'; areaName = 'Üretim ve dış alan'; fieldGuide = 'BRCGS / Saha Kılavuzu'; revisionNote = 'İlk yayın';
@@ -84,12 +99,15 @@ try {
 
     $customerLogin = Invoke-RestMethod 'http://127.0.0.1:5105/api/auth/customer/login' -Method Post -ContentType 'application/json' -Body (@{ companyCode = 'TURA-ANKARA'; email = $customerEmail; password = '123456' } | ConvertTo-Json)
     $customerHeaders = @{ Authorization = "Bearer $($customerLogin.accessToken)" }
+    Invoke-WebRequest "http://127.0.0.1:5105/api/service-reports/$($report.id)/pdf" -Headers $customerHeaders -OutFile $customerReportPdfFile | Out-Null
+    $customerReportPdfHeader = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($customerReportPdfFile), 0, 4)
+    if ($customerReportPdfHeader -ne '%PDF') { throw 'Müşteri servis raporu PDF çıktısına erişemedi.' }
     $customerPackages = @(Invoke-RestMethod 'http://127.0.0.1:5105/api/audit-packages' -Headers $customerHeaders)
     if ($customerPackages.Count -ne 1 -or $customerPackages[0].id -ne $package.id) { throw 'Denetim paketi müşteri portalına yansımadı.' }
     $archiveDocuments = @(Invoke-RestMethod 'http://127.0.0.1:5105/api/quality/documents?category=AuditPackages' -Headers $customerHeaders)
     if ($archiveDocuments.Count -ne 1 -or $archiveDocuments[0].contentType -ne 'application/pdf') { throw 'Denetim PDF belgesi müşteri arşivine kaydedilmedi.' }
 
-    [pscustomobject]@{ Health = $health.status; Report = $report.reportNumber; Plan = $plan.number; Readiness = $preflight.readinessScore; Findings = $preflight.blockingIssueCount; Evidence = $package.itemCount; PdfBytes = (Get-Item $pdfFile).Length; ZipEntries = $package.itemCount + 2; CustomerPortal = $customerPackages.Count; Archive = $archiveDocuments.Count }
+    [pscustomobject]@{ Health = $health.status; Report = $report.reportNumber; Plan = $plan.number; Readiness = $preflight.readinessScore; Findings = $preflight.blockingIssueCount; Evidence = $package.itemCount; PdfBytes = (Get-Item $pdfFile).Length; ServicePdfBytes = (Get-Item $customerReportPdfFile).Length; ZipEntries = $package.itemCount + 2; CustomerPortal = $customerPackages.Count; Archive = $archiveDocuments.Count }
 }
 finally {
     if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }

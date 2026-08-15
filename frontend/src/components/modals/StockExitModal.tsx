@@ -40,7 +40,7 @@ export default function StockExitModal({ items, onClose, onSubmit }: {
         <form onSubmit={handleSubmit}>
           {availableItems.length > 0 ? <div className="form-grid">
             <label className="form-field-wide">Ürün<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} required>{availableItems.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatQuantity(item.quantity)} {item.unit}</option>)}</select></label>
-            <label>Çıkış miktarı<input name="quantity" type="number" min="0.01" max={selectedItem?.quantity} step="0.01" placeholder="0" required /></label>
+            <label>Çıkış miktarı<input name="quantity" type="number" min="0.01" max={selectedItem?.quantity} step="0.01" required /></label>
             <label>Çıkış sonrası<input value={selectedItem ? `${formatQuantity(selectedItem.quantity)} ${selectedItem.unit} mevcut` : '—'} readOnly /></label>
             <label className="form-field-wide">Açıklama<textarea name="note" rows={3} maxLength={500} placeholder="İş emri, araç, personel veya kullanım nedeni" /></label>
           </div> : <div className="modal-form-error" role="alert">Çıkış yapılabilecek miktarda stok bulunmuyor.</div>}

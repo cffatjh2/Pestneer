@@ -99,17 +99,14 @@ public sealed class ReportEmailDispatcher(
 
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken, Guid? companyId = null)
     {
-        if (!emailSender.IsConfigured)
-        {
-            logger.LogWarning("Email delivery is waiting for configuration: {Error}", emailSender.ConfigurationError);
-            return 0;
-        }
         var now = DateTimeOffset.UtcNow;
         var staleQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters()
             .Where(item => item.Status == "Sending");
         if (companyId.HasValue) staleQuery = staleQuery.Where(item => item.CompanyId == companyId.Value);
-        var stale = (await staleQuery.OrderBy(item => item.CreatedAt).Take(500).ToListAsync(cancellationToken))
-            .Where(item => item.LastAttemptAt < now.AddMinutes(-10)).ToList();
+        var stale = (await staleQuery.OrderBy(item => item.Id).Take(500).ToListAsync(cancellationToken))
+            .Where(item => item.LastAttemptAt < now.AddMinutes(-10))
+            .OrderBy(item => item.CreatedAt)
+            .ToList();
         foreach (var companyGroup in stale.GroupBy(item => item.CompanyId))
         {
             foreach (var item in companyGroup) item.Status = "Pending";
@@ -119,12 +116,25 @@ public sealed class ReportEmailDispatcher(
         var deliveryQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters()
             .Where(item => item.Status == "Pending");
         if (companyId.HasValue) deliveryQuery = deliveryQuery.Where(item => item.CompanyId == companyId.Value);
-        var deliveries = (await deliveryQuery.OrderBy(item => item.CreatedAt).Take(500).ToListAsync(cancellationToken))
+        var deliveries = (await deliveryQuery.OrderBy(item => item.Id).Take(500).ToListAsync(cancellationToken))
             .Where(item => !item.NextAttemptAt.HasValue || item.NextAttemptAt <= now)
             .OrderBy(item => item.CreatedAt).Take(10).ToList();
         var sent = 0;
+        var statusByCompany = new Dictionary<Guid, EmailSenderStatus>();
         foreach (var delivery in deliveries)
         {
+            if (!statusByCompany.TryGetValue(delivery.CompanyId, out var senderStatus))
+            {
+                senderStatus = await emailSender.GetStatusAsync(delivery.CompanyId, cancellationToken);
+                statusByCompany.Add(delivery.CompanyId, senderStatus);
+            }
+            if (!senderStatus.IsConfigured)
+            {
+                logger.LogWarning("Email delivery for company {CompanyId} is waiting for configuration: {Error}",
+                    delivery.CompanyId, senderStatus.ConfigurationError);
+                continue;
+            }
+
             delivery.Status = "Sending";
             delivery.AttemptCount++;
             delivery.LastAttemptAt = now;
@@ -142,7 +152,8 @@ public sealed class ReportEmailDispatcher(
                 var subject = $"{report.ReportNumber} · {report.WorkOrder.Customer.LegalName} / {location} saha raporu";
                 var body = BuildBody(company, report, location);
                 var pdf = AuditPackageRenderer.RenderServiceReport(report, company);
-                await emailSender.SendAsync(new OutboundEmail(delivery.RecipientEmail, subject, body, $"{report.ReportNumber}.pdf", "application/pdf", pdf), cancellationToken);
+                await emailSender.SendAsync(new OutboundEmail(delivery.CompanyId, $"pestneer-report-{delivery.Id:N}",
+                    delivery.RecipientEmail, subject, body, $"{report.ReportNumber}.pdf", "application/pdf", pdf), cancellationToken);
                 delivery.Status = "Sent";
                 delivery.SentAt = DateTimeOffset.UtcNow;
                 delivery.NextAttemptAt = null;
@@ -164,7 +175,7 @@ public sealed class ReportEmailDispatcher(
     private string BuildBody(Company company, ServiceReport report, string location)
     {
         static string Safe(string value) => WebUtility.HtmlEncode(value);
-        var portalUrl = options.PublicBaseUrl.TrimEnd('/');
+        var portalUrl = options.FrontendBaseUrl.TrimEnd('/');
         return $"""
             <div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#18324b">
               <div style="border-bottom:3px solid #10a37f;padding:18px 0"><strong style="font-size:20px">{Safe(company.LegalName)}</strong></div>

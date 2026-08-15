@@ -71,7 +71,7 @@ export default function FieldInspectionModal({
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
+
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       
       const blob = pdf.output('blob');
@@ -154,7 +154,7 @@ export default function FieldInspectionModal({
                   {customer?.branches.filter((item) => item.isActive).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
                 </select>
               </label>
-              
+
               <label>Açık alan m² bilgisi<input value={outdoorArea} onChange={e => setOutdoorArea(e.target.value)} /></label>
               <label>Kapalı alan m² bilgisi<input value={indoorArea} onChange={e => setIndoorArea(e.target.value)} /></label>
               
@@ -162,7 +162,7 @@ export default function FieldInspectionModal({
               <label>Kaç adet canlı yakalama kullanılır?<input value={liveTrapCount} onChange={e => setLiveTrapCount(e.target.value)} type="number" min="0" /></label>
               
               <label>Sinek cihazları var mı? (Varsa türleri)<input value={flyCatchers} onChange={e => setFlyCatchers(e.target.value)} /></label>
-              <label>Serviste geçirilecek ortalama zaman<input value={averageServiceTime} onChange={e => setAverageServiceTime(e.target.value)} placeholder="Örn: 2 saat" /></label>
+              <label>Serviste geçirilecek ortalama zaman<input value={averageServiceTime} onChange={e => setAverageServiceTime(e.target.value)} /></label>
               
               <label className="form-field-wide">İşletmede sık yaşanan problemler neler?<textarea value={frequentProblems} onChange={e => setFrequentProblems(e.target.value)} rows={2} /></label>
               
@@ -289,7 +289,7 @@ export default function FieldInspectionModal({
                 </tbody>
               </table>
             </div>
-            
+
             <div style={{ marginTop: '50px', textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>
               Bu belge sistem üzerinden dijital olarak oluşturulmuştur.
             </div>

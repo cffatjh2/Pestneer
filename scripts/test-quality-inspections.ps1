@@ -1,4 +1,14 @@
 $ErrorActionPreference = 'Stop'
+
+function Get-HttpErrorMessage($errorRecord) {
+    if ($errorRecord.ErrorDetails.Message) { return $errorRecord.ErrorDetails.Message }
+    if ($errorRecord.Exception.Response -and $errorRecord.Exception.Response.Content) {
+        return $errorRecord.Exception.Response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    }
+
+    return $errorRecord.Exception.Message
+}
+
 $root = Split-Path $PSScriptRoot -Parent
 $project = Join-Path $root 'backend/src/Pesneer.Api/Pesneer.Api.csproj'
 $projectDirectory = Split-Path $project -Parent
@@ -37,14 +47,13 @@ try {
         $customer = Invoke-RestMethod 'http://127.0.0.1:5098/api/company/customers' -Method Post -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{ legalName = "Kalite Musterisi $runId"; code = $null; contactName = 'Test Yetkili'; phoneNumber = $null; email = $null; address = 'Ankara'; city = 'Ankara'; district = 'Cankaya'; latitude = $null; longitude = $null; mapUrl = $null; portalContactName = $null; portalEmail = $null; portalPassword = $null } | ConvertTo-Json)
     }
     catch {
-        $reader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
-        throw $reader.ReadToEnd()
+        throw (Get-HttpErrorMessage $_)
     }
     $branches = @(Invoke-RestMethod "http://127.0.0.1:5098/api/company/customers/$($customer.id)/branches/bulk" -Method Post -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{ branches = @(@{ name = 'Merkez Sube'; code = $null; address = 'Ankara'; city = 'Ankara'; district = 'Cankaya'; contactName = $null; phoneNumber = $null; email = $null; latitude = $null; longitude = $null; mapUrl = $null; portalContactName = $null; portalEmail = $null; portalPassword = $null }) } | ConvertTo-Json -Depth 5))
     $orders = @(Invoke-RestMethod 'http://127.0.0.1:5098/api/company/work-orders/batch' -Method Post -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{ customerId = $customer.id; branchIds = @($branches[0].id); serviceType = 'Periyodik zararli mucadelesi'; date = (Get-Date).ToString('yyyy-MM-dd'); time = '10:00'; durationMinutes = 60; employeeAccountId = $employee.id; visitType = 'Routine'; recurrenceType = 'Once' } | ConvertTo-Json -Depth 5))
     try {
     $report = Invoke-RestMethod "http://127.0.0.1:5098/api/service-reports/work-orders/$($orders[0].id)" -Method Put -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{
-        firmName = 'Tura Cevre Sagligi'; firmAddress = $null; firmPhone = $null; firmWeb = $null; responsibleManager = $null; permissionNumber = $null; teamManager = $null; targetPests = 'Rodent'; residenceType = $null; areaSquareMeters = $null; workType = $null; consumables = $null; safetyMeasures = $null;
+        firmName = 'Tura Cevre Sagligi'; firmAddress = $null; firmPhone = $null; firmWeb = $null; responsibleManager = $null; permissionNumber = $null; teamManager = $null; targetPests = 'Norveç sıçanı'; residenceType = $null; areaSquareMeters = $null; workType = $null; consumables = $null; safetyMeasures = $null;
         applicationSummary = 'Periyodik kontrol tamamlandi.'; findings = 'Test bulgusu'; correctiveActions = $null; recommendations = 'Izleme surdurulmeli.';
         customerRepresentativeName = 'Test Yetkili'; managerSignatureData = 'data:image/png;base64,dGVzdA=='; customerSignatureData = 'data:image/png;base64,dGVzdA=='; baseUpdatedAt = $null; forceOverwrite = $false; finalize = $true;
         stations = @(@{ sitePlanId = $null; sitePlanElementId = $null; deviceNumber = 'M-01'; area = 'Uretim cikisi'; deviceType = 'M'; targetPest = $null; caughtCount = 0; hasActivity = $false; plateChanged = $false; deviceStatus = 'NoActivity'; activityType = $null; inaccessibilityReason = $null; appliedVehicleStockItemId = $null; appliedProductName = $null; appliedAmount = $null; appliedUnit = $null; replacementVehicleStockItemId = $null; replacementProductName = $null; replacementQuantity = $null; replacementUnit = $null; notes = $null });
@@ -52,8 +61,7 @@ try {
     } | ConvertTo-Json -Depth 8)
     }
     catch {
-        $reader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
-        throw $reader.ReadToEnd()
+        throw (Get-HttpErrorMessage $_)
     }
     $candidates = @(Invoke-RestMethod 'http://127.0.0.1:5098/api/company/quality-inspections/candidates' -Headers $headers)
     $inspection = Invoke-RestMethod 'http://127.0.0.1:5098/api/company/quality-inspections/' -Method Post -ContentType 'application/json; charset=utf-8' -Headers $headers -Body (@{ serviceReportId = $report.id; inspectionType = 'RiskBased'; selectionReason = 'Uctan uca kalite testi' } | ConvertTo-Json)

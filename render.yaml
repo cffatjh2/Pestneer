@@ -55,6 +55,12 @@ services:
         value: "true"
       - key: Email__PublicBaseUrl
         value: https://pesneer.onrender.com
+      - key: Email__FrontendBaseUrl
+        value: https://pestneer-ctf.pages.dev
+      - key: Email__GoogleClientId
+        sync: false
+      - key: Email__GoogleClientSecret
+        sync: false
 
 databases:
   - name: pesneer-db

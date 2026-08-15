@@ -16,4 +16,11 @@ public sealed class EmailDeliveryOptions
     public string? ReplyTo { get; set; }
     public bool EnableSsl { get; set; } = true;
     public string PublicBaseUrl { get; set; } = "https://pesneer.onrender.com";
+    public string FrontendBaseUrl { get; set; } = "https://pestneer-ctf.pages.dev";
+    public string? GoogleClientId { get; set; }
+    public string? GoogleClientSecret { get; set; }
+    public string GoogleAuthorizationUrl { get; set; } = "https://accounts.google.com/o/oauth2/v2/auth";
+    public string GoogleTokenUrl { get; set; } = "https://oauth2.googleapis.com/token";
+    public string GoogleUserInfoUrl { get; set; } = "https://openidconnect.googleapis.com/v1/userinfo";
+    public string GoogleGmailApiBaseUrl { get; set; } = "https://gmail.googleapis.com/gmail/v1/";
 }

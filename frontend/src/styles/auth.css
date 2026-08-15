@@ -301,6 +301,7 @@
 .customer-report-grid article > span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #2877b7; background: #edf5fc; }
 .customer-report-grid strong, .customer-report-grid small, .customer-report-grid em { display: block; }.customer-report-grid strong { color: #334e6a; font-size: 10px; }.customer-report-grid small { margin-top: 3px; color: #7d8ea2; font-size: 8px; }.customer-report-grid em { margin-top: 4px; color: #2b8c72; font-size: 8px; font-style: normal; }
 .customer-report-grid button { display: flex; align-items: center; gap: 5px; padding: 8px; border-radius: 7px; color: #216fab; background: #edf6fd; font-size: 8px; font-weight: 800; }
+.customer-report-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .customer-empty, .customer-portal-state { display: grid; place-items: center; gap: 8px; min-height: 130px; color: #8798aa; text-align: center; font-size: 9px; }.customer-empty svg, .customer-portal-state svg { color: #7ea0bd; }
 .customer-portal-state { min-height: 300px; }.customer-portal-state strong { color: #526b83; }.customer-portal-state button { color: #1d70b2; font-weight: 800; }
 .emergency-request-list article { padding: 15px; border: 1px solid #e2e8ef; border-left: 4px solid #6f93b3; border-radius: 10px; }.emergency-request-list article.priority-urgent { border-left-color: #e79035; }.emergency-request-list article.priority-critical { border-left-color: #d44747; background: #fffafa; }
@@ -322,7 +323,7 @@
 }
 @media (max-width: 620px) {
   .customer-portal-tabs { margin-inline: -4px; }.customer-portal-tabs .customer-refresh { margin-left: 0; }
-  .customer-list-surface { padding: 15px; }.customer-report-grid article { grid-template-columns: auto 1fr; }.customer-report-grid article button { grid-column: 1 / -1; justify-content: center; }
+  .customer-list-surface { padding: 15px; }.customer-report-grid article { grid-template-columns: auto 1fr; }.customer-report-actions { grid-column: 1 / -1; justify-content: stretch; }.customer-report-actions button { flex: 1; justify-content: center; }
   .emergency-request-list article > div:first-child { align-items: flex-start; flex-direction: column; gap: 4px; }.emergency-request-list article > div:first-child small { margin-left: 0; }
   .owner-emergency-row { grid-template-columns: 1fr; }.owner-emergency-actions { justify-content: flex-start; flex-wrap: wrap; }
   .customer-portal-account-block .customer-data-grid { grid-template-columns: 1fr; }

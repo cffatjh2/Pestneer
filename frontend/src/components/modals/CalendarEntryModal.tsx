@@ -64,7 +64,7 @@ export default function CalendarEntryModal({ employees, selectedDate, entry, onC
         <form onSubmit={handleSubmit}>
           <div className="calendar-kind-switch"><button type="button" className={kind === 'Task' ? 'active' : ''} onClick={() => setKind('Task')}><CalendarClock size={16} /> Görev</button><button type="button" className={kind === 'Note' ? 'active' : ''} onClick={() => setKind('Note')}><StickyNote size={16} /> Not</button></div>
           <div className="form-grid calendar-entry-form">
-            <label className="form-field-wide">Başlık<input name="title" defaultValue={entry?.title} minLength={2} maxLength={180} required placeholder={kind === 'Task' ? 'Örn. Depo sayımı yap' : 'Örn. Ruhsat yenileme notu'} /></label>
+            <label className="form-field-wide">Başlık<input name="title" defaultValue={entry?.title} minLength={2} maxLength={180} required /></label>
             <label>Tarih<input name="date" type="date" defaultValue={entryDate} required /></label>
             <label>Saat<span className="calendar-time-field"><input name="time" type="time" defaultValue={entryTime} disabled={isAllDay} required={!isAllDay} /><button type="button" className={isAllDay ? 'active' : ''} onClick={() => setIsAllDay((value) => !value)}>Tüm gün</button></span></label>
             {kind === 'Task' && <label>Atanacak personel<select name="assignedEmployeeAccountId" defaultValue={entry?.assignedEmployeeAccountId ?? ''}><option value="">Atama bekliyor</option>{employees.filter((employee) => employee.isActive).map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>}

@@ -509,6 +509,54 @@ namespace Pesneer.Api.Data.Migrations
                     b.ToTable("Companies");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.CompanyEmailConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ConnectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EncryptedRefreshToken")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastSuccessfulSendAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SenderEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Provider")
+                        .IsUnique();
+
+                    b.ToTable("CompanyEmailConnections");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.CompanyMembership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3217,6 +3265,17 @@ namespace Pesneer.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("CommercialProposal");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.CompanyEmailConnection", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.CompanyMembership", b =>

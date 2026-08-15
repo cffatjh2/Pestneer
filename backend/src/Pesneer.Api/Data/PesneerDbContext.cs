@@ -9,6 +9,7 @@ public class PesneerDbContext(
     ICompanyContext companyContext) : DbContext(options)
 {
     public DbSet<Company> Companies => Set<Company>();
+    public DbSet<CompanyEmailConnection> CompanyEmailConnections => Set<CompanyEmailConnection>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<CompanyMembership> CompanyMemberships => Set<CompanyMembership>();
     public DbSet<Customer> Customers => Set<Customer>();
@@ -68,6 +69,17 @@ public class PesneerDbContext(
             entity.Property(company => company.VisionEnabled).HasDefaultValue(true);
             entity.Property(company => company.VisionReviewRequired).HasDefaultValue(true);
             entity.Property(company => company.VisionPreferredModel).HasMaxLength(16).HasDefaultValue("Auto");
+        });
+
+        modelBuilder.Entity<CompanyEmailConnection>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.Provider }).IsUnique();
+            entity.Property(item => item.Provider).HasMaxLength(32);
+            entity.Property(item => item.SenderEmail).HasMaxLength(320);
+            entity.Property(item => item.EncryptedRefreshToken).HasMaxLength(4000);
+            entity.Property(item => item.LastError).HasMaxLength(2000);
+            entity.HasOne(item => item.Company).WithMany().HasForeignKey(item => item.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
         modelBuilder.Entity<Account>(entity =>
@@ -766,6 +778,18 @@ public class PesneerDbContext(
             .ToArray();
         if (changedCompanyEntries.Any(entry => entry.Entity is not ReportEmailDelivery))
             throw new SecurityException("E-posta teslimat işlemi başka operasyon verisini değiştiremez.");
+
+        EnforceCompanyBoundary(targetCompanyId);
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<int> SaveEmailConnectionChangesAsync(Guid targetCompanyId, CancellationToken cancellationToken = default)
+    {
+        var changedCompanyEntries = ChangeTracker.Entries<ICompanyScoped>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToArray();
+        if (changedCompanyEntries.Any(entry => entry.Entity is not CompanyEmailConnection))
+            throw new SecurityException("E-posta bağlantı işlemi başka operasyon verisini değiştiremez.");
 
         EnforceCompanyBoundary(targetCompanyId);
         return base.SaveChangesAsync(cancellationToken);

@@ -84,7 +84,6 @@ export function parseBranchRows(rows: unknown[][]): CreateBranchInput[] {
 export function downloadBranchTemplate() {
   const worksheet = utils.aoa_to_sheet([
     ['Şube Adı', 'Şube Kodu', 'İl', 'İlçe', 'Açık Adres', 'Yetkili', 'Telefon', 'E-posta', 'Enlem', 'Boylam', 'Google Haritalar', 'Portal Yetkilisi', 'Portal E-posta', 'Geçici Şifre'],
-    ['ATG Şube', 'ARB-ATG', 'Ankara', 'Altındağ', 'Zübeyde Hanım Mah. No:10', 'Ayşe Yılmaz', '0500 000 00 00', 'atg@arabica.com', '39,950000', '32,850000', 'https://maps.google.com/', 'Ayşe Yılmaz', 'atg.portal@arabica.com', 'Degistir123'],
   ]);
   worksheet['!cols'] = [
     { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 42 },

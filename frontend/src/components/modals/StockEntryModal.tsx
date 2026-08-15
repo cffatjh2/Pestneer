@@ -46,7 +46,7 @@ export default function StockEntryModal({ onClose, onSubmit }: {
             {isManual && <label className="form-field-wide">Yeni ürün adı<input name="customProduct" minLength={2} maxLength={160} placeholder="Ticari ürün adını yazın" required /></label>}
             <label>Kategori<select name="category" defaultValue="Biyosidal ürün" required><option>Biyosidal ürün</option><option>Larvasit</option><option>Jel insektisit</option><option>Sarf malzeme</option><option>Ekipman</option></select></label>
             <label>Birim<select name="unit" defaultValue="Litre" required><option>Litre</option><option>Mililitre</option><option>Kilogram</option><option>Gram</option><option>Adet</option><option>Tüp</option><option>Kutu</option><option>Paket</option></select></label>
-            <label>Giriş miktarı<input name="quantity" type="number" min="0.01" step="0.01" placeholder="0" required /></label>
+            <label>Giriş miktarı<input name="quantity" type="number" min="0.01" step="0.01" required /></label>
             <label>Minimum stok<input name="minimumQuantity" type="number" min="0" step="0.01" defaultValue="1" required /></label>
             <label>Birim maliyet (₺)<input name="unitCost" type="number" min="0" step="0.01" defaultValue="0" required /></label>
             <label className="form-field-wide">Lot / Parti No<input name="lotNumber" maxLength={80} placeholder="İsteğe bağlı" /></label>

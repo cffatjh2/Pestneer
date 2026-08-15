@@ -42,6 +42,21 @@ public sealed class Company
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class CompanyEmailConnection : ICompanyScoped
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string Provider { get; set; } = "Google";
+    public required string SenderEmail { get; set; }
+    public required string EncryptedRefreshToken { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastSuccessfulSendAt { get; set; }
+    public string? LastError { get; set; }
+    public Company Company { get; set; } = null!;
+}
+
 public sealed class Account
 {
     public Guid Id { get; set; }

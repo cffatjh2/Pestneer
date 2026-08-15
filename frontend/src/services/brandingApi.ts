@@ -8,6 +8,11 @@ export type CompanyBranding = {
   emailDeliveryConfigured: boolean;
   emailDeliveryProvider?: string;
   emailDeliveryConfigurationError?: string;
+  emailOAuthAvailable: boolean;
+  emailOAuthConnected: boolean;
+  emailOAuthSenderEmail?: string;
+  emailOAuthConnectedAt?: string;
+  emailOAuthLastError?: string;
 };
 
 export async function getCompanyBranding(accessToken: string) {
@@ -50,6 +55,15 @@ export async function testReportEmail(accessToken: string, email?: string) {
     body: JSON.stringify({ email: email?.trim() || null })
   });
   return response.json() as Promise<{ sent: boolean; recipient: string; provider: string }>;
+}
+
+export async function startGoogleEmailConnection(accessToken: string) {
+  const response = await request(accessToken, '/api/company/branding/email/google/connect', { method: 'POST' });
+  return response.json() as Promise<{ authorizationUrl: string }>;
+}
+
+export async function disconnectGoogleEmailConnection(accessToken: string) {
+  await request(accessToken, '/api/company/branding/email/google', { method: 'DELETE' });
 }
 
 async function request(accessToken: string, url: string, init?: RequestInit) {

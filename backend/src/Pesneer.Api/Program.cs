@@ -77,7 +77,17 @@ builder.Services.AddHttpClient("Resend", (services, client) =>
     client.BaseAddress = new Uri(emailOptions.ApiBaseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddSingleton<IEmailSender, ReliableEmailSender>();
+builder.Services.AddHttpClient("GoogleOAuth", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient("Gmail", (services, client) =>
+{
+    var emailOptions = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailDeliveryOptions>>().Value;
+    client.BaseAddress = new Uri(emailOptions.GoogleGmailApiBaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddSingleton<IEmailCredentialProtector, EmailCredentialProtector>();
+builder.Services.AddSingleton<IEmailOAuthStateService, EmailOAuthStateService>();
+builder.Services.AddScoped<IGoogleEmailConnectionService, GoogleEmailConnectionService>();
+builder.Services.AddScoped<IEmailSender, ReliableEmailSender>();
 builder.Services.AddScoped<IReportEmailDispatcher, ReportEmailDispatcher>();
 builder.Services.AddHostedService<ReportEmailDeliveryWorker>();
 builder.Services.AddMemoryCache();

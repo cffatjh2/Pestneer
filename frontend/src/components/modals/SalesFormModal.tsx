@@ -57,7 +57,7 @@ export default function SalesFormModal({
   const printRef = useRef<HTMLDivElement>(null);
 
   const toggleTechnician = (id: string) => {
-    setSellingTechnicianIds((prev) => 
+    setSellingTechnicianIds((prev) =>
       prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]
     );
   };
@@ -79,7 +79,7 @@ export default function SalesFormModal({
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
+
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       
       const blob = pdf.output('blob');
@@ -172,9 +172,9 @@ export default function SalesFormModal({
                 </div>
               </label>
 
-              <label>Ürün Türü<input value={productType} onChange={e => setProductType(e.target.value)} placeholder="Örn: EFT CİHAZI TAVAN TİPİ" /></label>
+              <label>Ürün Türü<input value={productType} onChange={e => setProductType(e.target.value)} /></label>
               <label>Ürün Adet<input value={productQuantity} onChange={e => setProductQuantity(e.target.value)} type="number" min="1" /></label>
-              
+
               <label className="form-field-wide">Yetkili İsim Soyisim<input value={authorizedName} onChange={e => setAuthorizedName(e.target.value)} /></label>
 
               <label className="form-field-wide">İmza
@@ -297,7 +297,7 @@ export default function SalesFormModal({
                 </div>
               </div>
             </div>
-            
+
             <div style={{ marginTop: '50px', textAlign: 'center', fontSize: '13px', color: '#94a3b8' }}>
               Bu belge sistem üzerinden dijital imza ile kayıt altına alınmıştır.
             </div>

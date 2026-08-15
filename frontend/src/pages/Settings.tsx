@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { BrainCircuit, Building2, CheckCircle2, FileBadge2, FileCheck2, ImagePlus, Mail, RefreshCw, RotateCw, Save, ShieldCheck, Trash2, Upload } from 'lucide-react';
-import { CompanyBrandingSessionExpiredError, deleteCompanyLogo, getCompanyBranding, getCompanyLogoObjectUrl, retryReportEmails, testReportEmail, updateReportNotificationEmail, uploadCompanyLogo, type CompanyBranding } from '../services/brandingApi';
+import { BrainCircuit, Building2, CheckCircle2, FileBadge2, FileCheck2, ImagePlus, Link2, Mail, RefreshCw, RotateCw, Save, ShieldCheck, Trash2, Unlink2, Upload } from 'lucide-react';
+import { CompanyBrandingSessionExpiredError, deleteCompanyLogo, disconnectGoogleEmailConnection, getCompanyBranding, getCompanyLogoObjectUrl, retryReportEmails, startGoogleEmailConnection, testReportEmail, updateReportNotificationEmail, uploadCompanyLogo, type CompanyBranding } from '../services/brandingApi';
 import { getVisionSettings, updateVisionSettings, type VisionSettings } from '../services/pestneerVisionApi';
 import { getStoredCompanyEk1Defaults, saveStoredCompanyEk1Defaults, type CompanyEk1Defaults } from '../services/companySettingsStorage';
 import { CompanyAccountResetCard, PasswordChangeCard } from '../components/security/PasswordSecurityCards';
@@ -15,6 +15,7 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
   const [notificationEmail, setNotificationEmail] = useState('');
   const [ek1Defaults, setEk1Defaults] = useState<CompanyEk1Defaults>(() => getStoredCompanyEk1Defaults(companyName));
   const inputRef = useRef<HTMLInputElement>(null);
+  const emailOAuthPopupRef = useRef<Window | null>(null);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -33,6 +34,22 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
 
   useEffect(() => { void load(); return () => { if (logoUrl) URL.revokeObjectURL(logoUrl); }; }, [accessToken]);
   useEffect(() => { getVisionSettings(accessToken).then(setVision).catch(() => setError('PestneerVision ayarları yüklenemedi.')); }, [accessToken]);
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== emailOAuthPopupRef.current) return;
+      const payload = event.data as { type?: string; success?: boolean; senderEmail?: string; error?: string } | null;
+      if (payload?.type !== 'pestneer-email-oauth') return;
+      emailOAuthPopupRef.current = null;
+      if (payload.success) {
+        onNotify(`${payload.senderEmail ?? 'Gmail hesabı'} otomatik e-posta gönderimi için bağlandı.`);
+        void load();
+      } else {
+        setError(payload.error ?? 'Gmail hesabı bağlanamadı.');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [accessToken]);
 
   const saveEk1Defaults = () => {
     saveStoredCompanyEk1Defaults(ek1Defaults, companyName);
@@ -94,6 +111,35 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
     } finally { setSaving(false); }
   };
 
+  const connectGoogleEmail = async () => {
+    const popup = window.open('about:blank', 'pestneer-google-email', 'popup=yes,width=620,height=760');
+    if (!popup) return setError('Gmail bağlantı penceresi engellendi. Tarayıcıda açılır pencerelere izin verin.');
+    emailOAuthPopupRef.current = popup;
+    setSaving(true); setError(null);
+    try {
+      const result = await startGoogleEmailConnection(accessToken);
+      popup.location.replace(result.authorizationUrl);
+    } catch (connectError) {
+      popup.close();
+      emailOAuthPopupRef.current = null;
+      if (connectError instanceof CompanyBrandingSessionExpiredError) return onSessionExpired();
+      setError(connectError instanceof Error ? connectError.message : 'Gmail hesabı bağlanamadı.');
+    } finally { setSaving(false); }
+  };
+
+  const disconnectGoogleEmail = async () => {
+    if (!window.confirm('Bağlı Gmail hesabını otomatik e-posta gönderiminden ayırmak istiyor musunuz?')) return;
+    setSaving(true); setError(null);
+    try {
+      await disconnectGoogleEmailConnection(accessToken);
+      await load();
+      onNotify('Gmail bağlantısı kaldırıldı. Bekleyen e-postalar silinmedi.');
+    } catch (disconnectError) {
+      if (disconnectError instanceof CompanyBrandingSessionExpiredError) return onSessionExpired();
+      setError(disconnectError instanceof Error ? disconnectError.message : 'Gmail bağlantısı kaldırılamadı.');
+    } finally { setSaving(false); }
+  };
+
   return <section className="page settings-page"><div className="page-header"><div><p className="eyebrow">FİRMA AYARLARI</p><h1>Kurumsal Kimlik & Form Ayarları</h1><span>Resmi saha raporları, EK-1 formları ve bildirimlerde kullanılacak firma bilgilerini yönetin.</span></div></div>
     {error && <div className="field-operation-error"><span>{error}</span></div>}
     <div className="settings-brand-grid"><section className="settings-brand-card"><header><span><Building2 size={21} /></span><div><strong>Firma logosu</strong><small>{branding?.companyName ?? companyName}</small></div></header>{loading ? <div className="settings-logo-loading"><RefreshCw className="spin-icon" /><span>Logo yükleniyor…</span></div> : <div className={`settings-logo-preview ${logoUrl ? 'has-logo' : ''}`}>{logoUrl ? <img src={logoUrl} alt={`${companyName} logosu`} /> : <><ImagePlus size={38} /><strong>Henüz firma logosu yüklenmedi</strong><span>Belge başlıklarında firma adı metin olarak kullanılacak.</span></>}</div>}<input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => void upload(event.target.files?.[0])} /><div className="settings-logo-actions"><button className="primary-button" disabled={saving} onClick={() => inputRef.current?.click()}><Upload size={16} /> {logoUrl ? 'Logoyu Değiştir' : 'Logo Yükle'}</button>{logoUrl && <button className="secondary-button danger" disabled={saving} onClick={() => void remove()}><Trash2 size={16} /> Kaldır</button>}</div><p>Şeffaf arka planlı PNG önerilir. En fazla 4 MB; PNG, JPG veya WEBP.</p></section>
@@ -114,7 +160,6 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
             type="text"
             value={ek1Defaults.responsibleManager ?? ''}
             onChange={(e) => setEk1Defaults(prev => ({ ...prev, responsibleManager: e.target.value }))}
-            placeholder="Örn: Fatih Alpaslan"
           />
         </label>
         <label>
@@ -123,7 +168,6 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
             type="text"
             value={ek1Defaults.teamManager ?? ''}
             onChange={(e) => setEk1Defaults(prev => ({ ...prev, teamManager: e.target.value }))}
-            placeholder="Örn: Fatih Alpaslan"
           />
         </label>
         <label className="settings-ek1-span-2">
@@ -132,7 +176,6 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
             type="text"
             value={ek1Defaults.firmAddress ?? ''}
             onChange={(e) => setEk1Defaults(prev => ({ ...prev, firmAddress: e.target.value }))}
-            placeholder="Örn: Organize Sanayi Bölgesi 4. Cadde No:12"
           />
         </label>
         <label>
@@ -141,7 +184,6 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
             type="text"
             value={ek1Defaults.firmPhone ?? ''}
             onChange={(e) => setEk1Defaults(prev => ({ ...prev, firmPhone: e.target.value }))}
-            placeholder="Örn: 0212 555 0000"
           />
         </label>
         <label>
@@ -150,7 +192,6 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
             type="text"
             value={ek1Defaults.permissionNumber ?? ''}
             onChange={(e) => setEk1Defaults(prev => ({ ...prev, permissionNumber: e.target.value }))}
-            placeholder="Örn: 2024/158"
           />
         </label>
       </div>
@@ -161,7 +202,28 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
       </div>
     </section>
 
-    <section className="settings-email-card"><header><span><Mail /></span><div><strong>Otomatik rapor e-postaları</strong><small>Onaylanan PDF raporları firma, çatı müşteri ve şube alıcılarına gönderilir.</small></div><em className={branding?.emailDeliveryConfigured ? 'ready' : 'missing'}>{branding?.emailDeliveryConfigured ? `${branding.emailDeliveryProvider ?? 'E-posta'} hazır` : 'Sunucu ayarı eksik'}</em></header><div className="settings-email-controls"><label>İlaçlama firması bildirim e-postası<input type="email" value={notificationEmail} onChange={(event) => setNotificationEmail(event.target.value)} placeholder="rapor@firmaniz.com" /></label><button className="primary-button" disabled={saving || notificationEmail === (branding?.reportNotificationEmail ?? '')} onClick={() => void saveNotificationEmail()}><Mail size={16} /> Kaydet</button><button className="secondary-button" disabled={saving || !branding?.emailDeliveryConfigured || !notificationEmail.trim()} onClick={() => void sendTestEmail()}><Mail size={16} /> Test gönder</button><button className="secondary-button" disabled={saving || !branding?.emailDeliveryConfigured} onClick={() => void retryEmails()}><RotateCw size={16} /> Başarısızları yeniden gönder</button></div>{branding?.emailDeliveryConfigurationError && <p className="settings-email-error">{branding.emailDeliveryConfigurationError}</p>}<p>Çatı müşteri ve şube e-postaları müşteri kartlarından alınır. EK-1 formundaki opsiyonel alıcılar da dağıtıma eklenir.</p></section>
+    <section className="settings-email-card">
+      <header>
+        <span><Mail /></span>
+        <div><strong>Otomatik rapor e-postaları</strong><small>Onaylanan PDF raporları firma, çatı müşteri ve şube alıcılarına gönderilir.</small></div>
+        <em className={branding?.emailDeliveryConfigured ? 'ready' : 'missing'}>{branding?.emailDeliveryConfigured ? `${branding.emailDeliveryProvider ?? 'E-posta'} hazır` : 'Bağlantı bekleniyor'}</em>
+      </header>
+      <div className={`settings-email-oauth ${branding?.emailOAuthConnected ? 'connected' : ''}`}>
+        <div><strong>{branding?.emailOAuthConnected ? 'Gmail hesabı bağlı' : 'Gmail ile güvenli gönderim'}</strong><span>{branding?.emailOAuthConnected ? `${branding.emailOAuthSenderEmail} hesabı PDF raporlarını otomatik gönderir.` : 'Firma sahibi bir kez Google hesabını yetkilendirir; şifre Pestneer ile paylaşılmaz.'}</span></div>
+        {branding?.emailOAuthConnected
+          ? <button className="secondary-button danger" disabled={saving} onClick={() => void disconnectGoogleEmail()}><Unlink2 size={16} /> Bağlantıyı kaldır</button>
+          : <button className="primary-button" disabled={saving || !branding?.emailOAuthAvailable} onClick={() => void connectGoogleEmail()}><Link2 size={16} /> Gmail hesabını bağla</button>}
+      </div>
+      <div className="settings-email-controls">
+        <label>İlaçlama firması bildirim e-postası<input type="email" value={notificationEmail} onChange={(event) => setNotificationEmail(event.target.value)} /></label>
+        <button className="primary-button" disabled={saving || notificationEmail === (branding?.reportNotificationEmail ?? '')} onClick={() => void saveNotificationEmail()}><Mail size={16} /> Kaydet</button>
+        <button className="secondary-button" disabled={saving || !branding?.emailDeliveryConfigured || !notificationEmail.trim()} onClick={() => void sendTestEmail()}><Mail size={16} /> Test gönder</button>
+        <button className="secondary-button" disabled={saving || !branding?.emailDeliveryConfigured} onClick={() => void retryEmails()}><RotateCw size={16} /> Kuyruğu yeniden gönder</button>
+      </div>
+      {branding?.emailDeliveryConfigurationError && <p className="settings-email-error">{branding.emailDeliveryConfigurationError}</p>}
+      {branding?.emailOAuthLastError && branding.emailOAuthConnected && <p className="settings-email-error">Son Gmail hatası: {branding.emailOAuthLastError}</p>}
+      <p>Çatı müşteri ve şube e-postaları müşteri kartlarından alınır. EK-1 formundaki opsiyonel alıcılar da dağıtıma eklenir.</p>
+    </section>
     {vision && <section className="settings-vision-card"><header><span><BrainCircuit /></span><div><strong>PestneerVision</strong><small>Yapışkan kart ve sinek cihazı fotoğraflarını tarayıcıda analiz eder.</small></div><label className="settings-switch"><input type="checkbox" checked={vision.enabled} disabled={saving} onChange={(event) => void saveVision({ ...vision, enabled: event.target.checked })} /><span /></label></header><div className="settings-vision-grid"><label>Model tercihi<select value={vision.preferredModel} disabled={saving || !vision.enabled} onChange={(event) => void saveVision({ ...vision, preferredModel: event.target.value as VisionSettings['preferredModel'] })}><option value="Auto">Otomatik — cihaza göre</option><option value="pVision">pVision — en hızlı</option><option value="pLens">pLens — daha ayrıntılı</option></select></label><label className="settings-vision-review"><input type="checkbox" checked={vision.reviewRequired} disabled={saving || !vision.enabled} onChange={(event) => void saveVision({ ...vision, reviewRequired: event.target.checked })} /><span><strong>Personel kontrolü zorunlu</strong><small>Sonuçlar + / − ile kontrol edilmeden rapora işlenmez.</small></span></label></div><p>{vision.disclaimer}</p></section>}
     <div className="account-security-grid"><PasswordChangeCard accessToken={accessToken} onSessionExpired={onSessionExpired} onNotify={onNotify} /><CompanyAccountResetCard accessToken={accessToken} onSessionExpired={onSessionExpired} onNotify={onNotify} /></div>
   </section>;

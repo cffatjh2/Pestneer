@@ -1,30 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import type { ViewId, WorkOrder, ServiceReport } from './types';
 import { demoReport } from './data/mockData';
 import Sidebar from './components/layout/Sidebar';
 import Topbar from './components/layout/Topbar';
-import Dashboard from './pages/Dashboard';
-import WorkOrders from './pages/WorkOrders';
-import Calendar from './pages/Calendar';
-import Stock from './pages/Stock';
-import Team from './pages/Team';
-import ReportView from './pages/ReportView';
-import ReportsAnalytics from './pages/ReportsAnalytics';
-import QualityCenter from './components/quality/QualityCenter';
-import SettingsPage from './pages/Settings';
-import RequestCenter from './pages/RequestCenter';
-import CommercialManagement from './pages/CommercialManagement';
-import WorkOrderModal from './components/modals/WorkOrderModal';
-import WorkOrderDetailModal from './components/modals/WorkOrderDetailModal';
-import CustomerBranchModal from './components/modals/CustomerBranchModal';
 import LoginPage from './auth/LoginPage';
 import type { AuthenticatedSession } from './auth/types';
-import CustomerPortal from './portals/CustomerPortal';
-import QualityComplianceHub from './components/compliance/QualityComplianceHub';
-import EmployeePortal from './portals/EmployeePortal';
 import LandingPage from './marketing/LandingPage';
-import SystemAdminPage from './pages/SystemAdminPage';
 import { getEmployees, SessionExpiredError, type EmployeeRecord } from './services/employeeApi';
 import {
   addCustomerBranches,
@@ -40,6 +22,29 @@ import {
   type UpdateWorkOrderInput,
   type CustomerRecord,
 } from './services/workOrderApi';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const WorkOrders = lazy(() => import('./pages/WorkOrders'));
+const Calendar = lazy(() => import('./pages/Calendar'));
+const Stock = lazy(() => import('./pages/Stock'));
+const Team = lazy(() => import('./pages/Team'));
+const ReportView = lazy(() => import('./pages/ReportView'));
+const ReportsAnalytics = lazy(() => import('./pages/ReportsAnalytics'));
+const QualityCenter = lazy(() => import('./components/quality/QualityCenter'));
+const SettingsPage = lazy(() => import('./pages/Settings'));
+const RequestCenter = lazy(() => import('./pages/RequestCenter'));
+const CommercialManagement = lazy(() => import('./pages/CommercialManagement'));
+const WorkOrderModal = lazy(() => import('./components/modals/WorkOrderModal'));
+const WorkOrderDetailModal = lazy(() => import('./components/modals/WorkOrderDetailModal'));
+const CustomerBranchModal = lazy(() => import('./components/modals/CustomerBranchModal'));
+const CustomerPortal = lazy(() => import('./portals/CustomerPortal'));
+const QualityComplianceHub = lazy(() => import('./components/compliance/QualityComplianceHub'));
+const EmployeePortal = lazy(() => import('./portals/EmployeePortal'));
+const SystemAdminPage = lazy(() => import('./pages/SystemAdminPage'));
+
+function LoadingScreen() {
+  return <div className="app-loading-screen"><span className="spinner" /><strong>Pestneer hazırlanıyor…</strong></div>;
+}
 
 function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onLogout: () => void }) {
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
@@ -191,7 +196,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
 }
 
 export default function App() {
-  if (window.location.pathname === '/pestneer-system-control-9f4c2') return <SystemAdminPage />;
+  if (window.location.pathname === '/pestneer-system-control-9f4c2') return <Suspense fallback={<LoadingScreen />}><SystemAdminPage /></Suspense>;
   const [session, setSession] = useState<AuthenticatedSession | null>(loadStoredSession);
   const [isLoginVisible, setIsLoginVisible] = useState(false);
 
@@ -213,9 +218,9 @@ export default function App() {
 
   if (!session && !isLoginVisible) return <LandingPage onLogin={() => setIsLoginVisible(true)} />;
   if (!session) return <LoginPage onAuthenticated={handleAuthenticated} onBack={() => setIsLoginVisible(false)} />;
-  if (session.portal === 'employee') return <EmployeePortal session={session} onLogout={handleLogout} />;
-  if (session.portal === 'customer') return <CustomerPortal session={session} onLogout={handleLogout} />;
-  return <OwnerPortal session={session} onLogout={handleLogout} />;
+  if (session.portal === 'employee') return <Suspense fallback={<LoadingScreen />}><EmployeePortal session={session} onLogout={handleLogout} /></Suspense>;
+  if (session.portal === 'customer') return <Suspense fallback={<LoadingScreen />}><CustomerPortal session={session} onLogout={handleLogout} /></Suspense>;
+  return <Suspense fallback={<LoadingScreen />}><OwnerPortal session={session} onLogout={handleLogout} /></Suspense>;
 }
 
 function loadStoredSession(): AuthenticatedSession | null {

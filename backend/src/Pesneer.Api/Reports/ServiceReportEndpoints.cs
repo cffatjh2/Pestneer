@@ -8,6 +8,7 @@ using Pesneer.Api.Compliance;
 using Pesneer.Api.Email;
 using Pesneer.Api.WorkOrders;
 using Pesneer.Api.StationActivations;
+using Pesneer.Api.Audits;
 
 namespace Pesneer.Api.Reports;
 
@@ -35,7 +36,23 @@ public static class ServiceReportEndpoints
 
         app.MapGet("/api/employee/service-reports", GetEmployeeReportsAsync).RequireAuthorization("EmployeePortal");
         app.MapGet("/api/customer/service-reports", GetCustomerReportsAsync).RequireAuthorization("CustomerPortal");
+        app.MapGet("/api/service-reports/{reportId:guid}/pdf", DownloadPdfAsync).RequireAuthorization();
         return app;
+    }
+
+    private static async Task<IResult> DownloadPdfAsync(
+        Guid reportId,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        CancellationToken cancellationToken)
+    {
+        var report = await ReportQuery(dbContext).SingleOrDefaultAsync(item => item.Id == reportId, cancellationToken);
+        if (report is null || !CanViewReport(report, companyContext))
+            return Results.NotFound(new { message = "Hizmet raporu bulunamadı." });
+
+        var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == report.CompanyId, cancellationToken);
+        var pdf = AuditPackageRenderer.RenderServiceReport(report, company);
+        return Results.File(pdf, "application/pdf", $"{report.ReportNumber}.pdf");
     }
 
     private static async Task<IResult> GetByWorkOrderAsync(Guid workOrderId, PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
@@ -370,6 +387,7 @@ public static class ServiceReportEndpoints
     }
 
     private static IQueryable<ServiceReport> ReportQuery(PesneerDbContext dbContext) => dbContext.ServiceReports.AsNoTracking()
+        .Include(item => item.CreatedByAccount)
         .Include(item => item.WorkOrder).ThenInclude(item => item.Customer)
         .Include(item => item.WorkOrder).ThenInclude(item => item.CustomerBranch)
         .Include(item => item.WorkOrder).ThenInclude(item => item.AssignedEmployeeAccount)
@@ -387,6 +405,16 @@ public static class ServiceReportEndpoints
     private static bool CanAccess(WorkOrder order, ICompanyContext companyContext) => companyContext.Portal == PortalType.Owner ||
         (companyContext.Portal == PortalType.Employee && companyContext.AccountId.HasValue &&
             (order.AssignedEmployeeAccountId == companyContext.AccountId.Value || order.Assignments.Any(item => item.EmployeeAccountId == companyContext.AccountId.Value)));
+
+    private static bool CanViewReport(ServiceReport report, ICompanyContext companyContext)
+    {
+        if (companyContext.Portal == PortalType.Customer)
+            return report.Status == "Finalized" && companyContext.CustomerId.HasValue &&
+                   report.WorkOrder.CustomerId == companyContext.CustomerId.Value &&
+                   (!companyContext.CustomerBranchId.HasValue || report.WorkOrder.CustomerBranchId == companyContext.CustomerBranchId.Value);
+
+        return CanAccess(report.WorkOrder, companyContext);
+    }
 
     private static Dictionary<string, string[]> Validate(UpsertServiceReportRequest request)
     {
