@@ -238,6 +238,7 @@ app.MapQualityInspectionEndpoints();
 app.MapHealthWasteEndpoints();
 app.MapAuditPackageEndpoints();
 app.MapVisionSettingsEndpoints();
+app.MapAccountSecurityEndpoints();
 app.MapSystemAdministrationEndpoints();
 
 app.MapFallbackToFile("index.html");

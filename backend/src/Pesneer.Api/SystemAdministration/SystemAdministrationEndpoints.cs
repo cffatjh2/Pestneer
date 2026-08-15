@@ -14,6 +14,10 @@ public static class SystemAdministrationEndpoints
         app.MapPost("/api/system-control/auth/login", LoginAsync).AllowAnonymous();
         var group = app.MapGroup("/api/system-control").RequireAuthorization("SystemAdmin");
         group.MapGet("/companies", GetCompaniesAsync);
+        group.MapGet("/companies/{companyId:guid}/accounts", GetCompanyAccountsAsync);
+        group.MapPut("/accounts/{accountId:guid}/password", ResetAnyAccountPasswordAsync);
+        group.MapGet("/admins", GetSystemAdminsAsync);
+        group.MapPost("/admins", UpsertSystemAdminAsync);
         group.MapPost("/companies", CreateCompanyAsync);
         group.MapPost("/companies/{companyId:guid}/employees", CreateEmployeeAsync);
         group.MapPost("/companies/{companyId:guid}/customers", CreateCustomerAsync);
@@ -23,18 +27,84 @@ public static class SystemAdministrationEndpoints
     private static async Task<IResult> LoginAsync(SystemAdminLoginRequest request, IConfiguration configuration, PesneerDbContext dbContext,
         IPasswordHasher<Account> passwordHasher, IJwtTokenService tokens, CancellationToken cancellationToken)
     {
-        var authorizedEmail = configuration["SystemAdmin:Email"]?.Trim();
-        if (string.IsNullOrWhiteSpace(authorizedEmail) || !authorizedEmail.Equals(request.Email.Trim(), StringComparison.OrdinalIgnoreCase))
-            return Results.Unauthorized();
         var normalizedEmail = request.Email.Trim().ToUpperInvariant();
         var account = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.NormalizedEmail == normalizedEmail && item.IsActive)
-            .OrderBy(item => item.Portal == PortalType.Owner ? 0 : 1)
+            .OrderBy(item => item.Portal == PortalType.SystemAdmin ? 0 : item.Portal == PortalType.Owner ? 1 : 2)
             .FirstOrDefaultAsync(cancellationToken);
-        if (account is null || passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
+        var bootstrapEmail = configuration["SystemAdmin:Email"]?.Trim();
+        var hasDedicatedSystemAdmin = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(item => item.Portal == PortalType.SystemAdmin && item.IsActive, cancellationToken);
+        var isBootstrapAccount = account is not null && !string.IsNullOrWhiteSpace(bootstrapEmail)
+            && !hasDedicatedSystemAdmin
+            && bootstrapEmail.Equals(account.Email, StringComparison.OrdinalIgnoreCase);
+        if (account is null || (account.Portal != PortalType.SystemAdmin && !isBootstrapAccount)
+            || passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
             return Results.Unauthorized();
         var token = tokens.CreateSystemAdmin(account);
         return Results.Ok(new { accessToken = token.Value, expiresAt = token.ExpiresAt, user = new { account.Id, account.DisplayName, account.Email } });
+    }
+
+    private static async Task<IResult> GetCompanyAccountsAsync(Guid companyId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        if (!await dbContext.Companies.IgnoreQueryFilters().AnyAsync(item => item.Id == companyId, cancellationToken))
+            return Results.NotFound(new { message = "Firma bulunamadı." });
+
+        var staff = await dbContext.CompanyMemberships.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.CompanyId == companyId && item.IsActive && item.Account.IsActive)
+            .Select(item => new SystemAccountRecord(item.Account.Id, item.Account.DisplayName, item.Account.Email, item.Account.Portal.ToString(), item.Role.ToString()))
+            .ToListAsync(cancellationToken);
+        var customers = await dbContext.CustomerMemberships.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.CompanyId == companyId && item.IsActive && item.Account.IsActive)
+            .Select(item => new SystemAccountRecord(item.Account.Id, item.Account.DisplayName, item.Account.Email, item.Account.Portal.ToString(), item.Role.ToString()))
+            .ToListAsync(cancellationToken);
+        return Results.Ok(staff.Concat(customers).DistinctBy(item => item.Id).OrderBy(item => item.Portal).ThenBy(item => item.Name));
+    }
+
+    private static async Task<IResult> ResetAnyAccountPasswordAsync(Guid accountId, ResetSystemAccountPasswordRequest request,
+        PesneerDbContext dbContext, IPasswordHasher<Account> passwordHasher, CancellationToken cancellationToken)
+    {
+        var validation = AccountSecurityEndpoints.ValidateNewPassword(request.NewPassword, request.NewPasswordConfirmation);
+        if (validation is not null) return validation;
+        var account = await dbContext.Accounts.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == accountId && item.IsActive, cancellationToken);
+        if (account is null) return Results.NotFound(new { message = "Hesap bulunamadı." });
+        account.PasswordHash = passwordHasher.HashPassword(account, request.NewPassword);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { message = $"{account.DisplayName} için geçici şifre atandı." });
+    }
+
+    private static async Task<IResult> GetSystemAdminsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var admins = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.Portal == PortalType.SystemAdmin && item.IsActive)
+            .OrderBy(item => item.DisplayName)
+            .Select(item => new SystemAccountRecord(item.Id, item.DisplayName, item.Email, item.Portal.ToString(), "SystemAdmin"))
+            .ToListAsync(cancellationToken);
+        return Results.Ok(admins);
+    }
+
+    private static async Task<IResult> UpsertSystemAdminAsync(CreateSystemAdminRequest request, PesneerDbContext dbContext,
+        IPasswordHasher<Account> passwordHasher, CancellationToken cancellationToken)
+    {
+        var error = ValidateIdentity(request.Email, request.Password, request.Name);
+        if (error is not null) return error;
+        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
+        var account = await dbContext.Accounts.IgnoreQueryFilters()
+            .SingleOrDefaultAsync(item => item.Portal == PortalType.SystemAdmin && item.NormalizedEmail == normalizedEmail, cancellationToken);
+        if (account is null)
+        {
+            account = CreateAccount(request.Email, request.Name, request.Phone, request.Password, PortalType.SystemAdmin, passwordHasher);
+            dbContext.Accounts.Add(account);
+        }
+        else
+        {
+            account.DisplayName = request.Name.Trim();
+            account.PhoneNumber = request.Phone?.Trim();
+            account.PasswordHash = passwordHasher.HashPassword(account, request.Password);
+            account.IsActive = true;
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { account.Id, account.DisplayName, account.Email });
     }
 
     private static async Task<IResult> GetCompaniesAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
@@ -119,6 +189,9 @@ public static class SystemAdministrationEndpoints
 }
 
 public sealed record SystemAdminLoginRequest(string Email, string Password);
+public sealed record CreateSystemAdminRequest(string Name, string Email, string Password, string? Phone);
+public sealed record ResetSystemAccountPasswordRequest(string NewPassword, string NewPasswordConfirmation);
+public sealed record SystemAccountRecord(Guid Id, string Name, string Email, string Portal, string Role);
 public sealed record CreateSystemCompanyRequest(string CompanyName, string CompanyCode, string OwnerName, string OwnerEmail, string OwnerPassword, string? OwnerPhone);
 public sealed record CreateSystemEmployeeRequest(string Name, string Email, string Password, string? Phone, string Role, bool CanSelfSchedule);
 public sealed record CreateSystemCustomerRequest(string CustomerName, string? CustomerCode, string ContactName, string Email, string Password, string? Phone, string? Address, string? City, string? District, string? MapUrl);
