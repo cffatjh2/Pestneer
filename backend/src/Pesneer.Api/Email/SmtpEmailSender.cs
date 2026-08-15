@@ -20,9 +20,14 @@ public sealed class ReliableEmailSender(IOptions<EmailDeliveryOptions> options, 
 {
     private readonly EmailDeliveryOptions options = options.Value;
 
+    private string EffectiveFromAddress => MailAddress.TryCreate(options.FromAddress, out _)
+        ? options.FromAddress
+        : MailAddress.TryCreate(options.Username, out _)
+            ? options.Username!
+            : "onboarding@resend.dev";
     private bool ResendConfigured => options.Enabled && !string.IsNullOrWhiteSpace(options.ApiKey) && ValidFromAddress;
     private bool SmtpConfigured => options.Enabled && !string.IsNullOrWhiteSpace(options.Host) && ValidFromAddress;
-    private bool ValidFromAddress => !string.IsNullOrWhiteSpace(options.FromAddress) && MailAddress.TryCreate(options.FromAddress, out _);
+    private bool ValidFromAddress => MailAddress.TryCreate(EffectiveFromAddress, out _);
     private bool PreferResend => options.Provider.Equals("Resend", StringComparison.OrdinalIgnoreCase) ||
         options.Provider.Equals("Auto", StringComparison.OrdinalIgnoreCase) && ResendConfigured;
 
@@ -63,7 +68,7 @@ public sealed class ReliableEmailSender(IOptions<EmailDeliveryOptions> options, 
         request.Headers.TryAddWithoutValidation("Idempotency-Key", $"pestneer-{Guid.NewGuid():N}");
         request.Content = JsonContent.Create(new
         {
-            from = $"{options.FromName} <{options.FromAddress}>",
+            from = $"{options.FromName} <{EffectiveFromAddress}>",
             to = new[] { email.Recipient },
             subject = email.Subject,
             html = email.HtmlBody,
@@ -80,7 +85,7 @@ public sealed class ReliableEmailSender(IOptions<EmailDeliveryOptions> options, 
     {
         using var message = new MailMessage
         {
-            From = new MailAddress(options.FromAddress, options.FromName),
+            From = new MailAddress(EffectiveFromAddress, options.FromName),
             Subject = email.Subject,
             Body = email.HtmlBody,
             IsBodyHtml = true
