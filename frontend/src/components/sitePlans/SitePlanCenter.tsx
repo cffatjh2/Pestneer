@@ -128,6 +128,7 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
   const undoStack = useRef<SitePlanElement[][]>([]);
   const redoStack = useRef<SitePlanElement[][]>([]);
   const drag = useRef<{ id: string; offsetX: number; offsetY: number; before: SitePlanElement[] } | null>(null);
+  const resize = useRef<{ id: string; handle: string; startPoint: { x: number; y: number }; initial: { x: number; y: number; width: number; height: number }; before: SitePlanElement[] } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const selected = elements.find((item) => item.id === selectedId);
 
@@ -180,14 +181,82 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
     drag.current = { id: item.id, offsetX: location.x - item.x, offsetY: location.y - item.y, before: structuredClone(elements) };
     svgRef.current?.setPointerCapture(event.pointerId);
   };
-  const moveDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (!drag.current) return;
-    const location = point(event); const grid = snap ? 10 : 1;
-    const x = Math.round((location.x - drag.current.offsetX) / grid) * grid;
-    const y = Math.round((location.y - drag.current.offsetY) / grid) * grid;
-    setElements((current) => current.map((item) => item.id === drag.current?.id ? { ...item, x: clamp(x, -100, 1300), y: clamp(y, -100, 820) } : item));
+  const startResize = (event: ReactPointerEvent<SVGElement>, item: SitePlanElement, handle: string) => {
+    event.stopPropagation();
+    event.preventDefault();
+    setSelectedId(item.id);
+    const location = point(event as unknown as ReactPointerEvent<SVGSVGElement>);
+    resize.current = {
+      id: item.id,
+      handle,
+      startPoint: location,
+      initial: { x: item.x, y: item.y, width: item.width, height: item.height },
+      before: structuredClone(elements),
+    };
+    svgRef.current?.setPointerCapture(event.pointerId);
   };
-  const endDrag = () => { if (!drag.current) return; undoStack.current.push(drag.current.before); redoStack.current = []; drag.current = null; };
+  const moveDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const location = point(event);
+    const grid = snap ? 10 : 1;
+
+    if (resize.current) {
+      const { id, handle, startPoint, initial } = resize.current;
+      const dx = location.x - startPoint.x;
+      const dy = location.y - startPoint.y;
+
+      setElements((current) =>
+        current.map((item) => {
+          if (item.id !== id) return item;
+
+          let { x, y, width, height } = initial;
+
+          if (handle.includes('e')) {
+            width = Math.max(20, Math.round((initial.width + dx) / grid) * grid);
+          }
+          if (handle.includes('s')) {
+            height = Math.max(20, Math.round((initial.height + dy) / grid) * grid);
+          }
+          if (handle.includes('w')) {
+            const newX = Math.round((initial.x + dx) / grid) * grid;
+            const newW = initial.width - (newX - initial.x);
+            if (newW >= 20) {
+              x = newX;
+              width = newW;
+            }
+          }
+          if (handle.includes('n')) {
+            const newY = Math.round((initial.y + dy) / grid) * grid;
+            const newH = initial.height - (newY - initial.y);
+            if (newH >= 20) {
+              y = newY;
+              height = newH;
+            }
+          }
+
+          return { ...item, x: clamp(x, -100, 1300), y: clamp(y, -100, 820), width, height };
+        })
+      );
+      return;
+    }
+
+    if (drag.current) {
+      const x = Math.round((location.x - drag.current.offsetX) / grid) * grid;
+      const y = Math.round((location.y - drag.current.offsetY) / grid) * grid;
+      setElements((current) => current.map((item) => item.id === drag.current?.id ? { ...item, x: clamp(x, -100, 1300), y: clamp(y, -100, 820) } : item));
+    }
+  };
+  const endDrag = () => {
+    if (resize.current) {
+      undoStack.current.push(resize.current.before);
+      redoStack.current = [];
+      resize.current = null;
+    }
+    if (drag.current) {
+      undoStack.current.push(drag.current.before);
+      redoStack.current = [];
+      drag.current = null;
+    }
+  };
 
   const addCustomType = (event: FormEvent) => {
     event.preventDefault();
@@ -216,7 +285,7 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
     <nav className="site-plan-mobile-tabs" aria-label="Kroki düzenleme bölümleri"><button className={mobilePanel === 'canvas' ? 'active' : ''} onClick={() => setMobilePanel('canvas')}><Map /> Çizim</button><button className={mobilePanel === 'tools' ? 'active' : ''} onClick={() => setMobilePanel('tools')}><Shapes /> Araçlar</button><button className={mobilePanel === 'inspector' ? 'active' : ''} onClick={() => setMobilePanel('inspector')}><MousePointer2 /> Özellikler{selected && <i />}</button></nav>
     <div className="site-plan-workspace">
       <aside className={`site-plan-tools ${mobilePanel === 'tools' ? 'mobile-panel-active' : ''}`}><h3><Shapes /> Çizim araçları</h3><div className="site-plan-tool-grid"><button onClick={() => addElement('rect', 140, 140)}><Square />Kare</button><button onClick={() => addElement('rect', 280, 160)}><LayoutTemplate />Dikdörtgen / Oda</button><button onClick={() => addElement('line')}><Minus />Çizgi</button><button onClick={() => addElement('door')}><DoorOpen />Kapı</button><button onClick={() => addElement('text')}><Type />Metin</button></div><h3><Grid3X3 /> Ekipman noktaları</h3><div className="equipment-palette">{equipmentTypes.map((item) => <button key={item.id} className={activeEquipmentId === item.id ? 'active' : ''} onClick={() => { setActiveEquipmentId(item.id); addStation(item.id); }}><EquipmentSymbol item={item} /><span><b>{item.code}</b>{item.name}</span><Plus /></button>)}</div><button className="add-custom-equipment" onClick={() => setCustomOpen((current) => !current)}><Plus /> Manuel ekipman tanımla</button>{customOpen && <form className="custom-equipment-form" onSubmit={addCustomType}><input maxLength={4} placeholder="Kod" value={customType.code} onChange={(event) => setCustomType({ ...customType, code: event.target.value })} /><input placeholder="Ekipman adı" value={customType.name} onChange={(event) => setCustomType({ ...customType, name: event.target.value })} /><select value={customType.shape} onChange={(event) => setCustomType({ ...customType, shape: event.target.value as SitePlanEquipmentShape })}><option value="square">Kare</option><option value="circle">Daire</option><option value="diamond">Baklava</option><option value="star">Yıldız</option><option value="hexagon">Altıgen</option></select><input type="color" value={customType.color} onChange={(event) => setCustomType({ ...customType, color: event.target.value })} /><button>Tanımla</button></form>}</aside>
-      <main className={`site-plan-stage ${mobilePanel === 'canvas' ? 'mobile-panel-active' : ''}`}><div className="site-plan-toolbar"><div><button disabled={!undoStack.current.length} onClick={undo} title="Geri al"><Undo2 /></button><button disabled={!redoStack.current.length} onClick={redo} title="Yinele"><Redo2 /></button><button disabled={!selected} onClick={duplicateSelected} title="Çoğalt"><Copy /></button><button disabled={!selected} onClick={removeSelected} title="Sil"><Trash2 /></button></div><div><button className={snap ? 'active' : ''} onClick={() => setSnap((current) => !current)}><Grid3X3 /> Izgaraya yapış</button><select aria-label="Kroki yakınlaştırma" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}><option value="0.28">Sığdır</option><option value="0.4">%40</option><option value="0.55">%55</option><option value="0.72">%72</option><option value="0.9">%90</option><option value="1">%100</option></select></div></div><div className="site-plan-canvas-scroll"><div className="site-plan-paper" style={{ width: 1200 * zoom, height: 720 * zoom }}><svg ref={svgRef} viewBox="0 0 1200 720" onPointerDown={() => setSelectedId(null)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>{snap && <defs><pattern id="site-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="#E2E8F0" strokeWidth="1" /></pattern></defs>}<rect width="1200" height="720" fill={snap ? 'url(#site-grid)' : '#FFFFFF'} />{elements.map((item) => <CanvasElement key={item.id} item={item} equipmentTypes={equipmentTypes} selected={item.id === selectedId} onPointerDown={startDrag} />)}</svg></div></div><p className="site-plan-touch-hint">Boş alanda kaydırın, öğeyi basılı tutup sürükleyin.</p></main>
+      <main className={`site-plan-stage ${mobilePanel === 'canvas' ? 'mobile-panel-active' : ''}`}><div className="site-plan-toolbar"><div><button disabled={!undoStack.current.length} onClick={undo} title="Geri al"><Undo2 /></button><button disabled={!redoStack.current.length} onClick={redo} title="Yinele"><Redo2 /></button><button disabled={!selected} onClick={duplicateSelected} title="Çoğalt"><Copy /></button><button disabled={!selected} onClick={removeSelected} title="Sil"><Trash2 /></button></div><div><button className={snap ? 'active' : ''} onClick={() => setSnap((current) => !current)}><Grid3X3 /> Izgaraya yapış</button><select aria-label="Kroki yakınlaştırma" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}><option value="0.28">Sığdır</option><option value="0.4">%40</option><option value="0.55">%55</option><option value="0.72">%72</option><option value="0.9">%90</option><option value="1">%100</option></select></div></div><div className="site-plan-canvas-scroll"><div className="site-plan-paper" style={{ width: 1200 * zoom, height: 720 * zoom }}><svg ref={svgRef} viewBox="0 0 1200 720" onPointerDown={() => setSelectedId(null)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>{snap && <defs><pattern id="site-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="#E2E8F0" strokeWidth="1" /></pattern></defs>}<rect width="1200" height="720" fill={snap ? 'url(#site-grid)' : '#FFFFFF'} />{elements.map((item) => <CanvasElement key={item.id} item={item} equipmentTypes={equipmentTypes} selected={item.id === selectedId} onPointerDown={startDrag} onResizeStart={startResize} />)}</svg></div></div><p className="site-plan-touch-hint">Boş alanda kaydırın, öğeyi basılı tutup sürükleyin veya tutamaçlardan boyutlandırın.</p></main>
       <aside className={`site-plan-inspector ${mobilePanel === 'inspector' ? 'mobile-panel-active' : ''}`}><h3><MousePointer2 /> Özellikler</h3>{selected ? <ElementInspector element={selected} equipmentTypes={equipmentTypes} onChange={updateSelected} onDelete={removeSelected} onQrPair={() => setQrScannerOpen(true)} /> : <div className="inspector-empty"><MousePointer2 /><strong>Bir öğe seçin</strong><span>Konum, ölçü, metin ve numarayı buradan düzenleyin.</span></div>}<div className="site-plan-summary"><h4>Plan özeti</h4>{equipmentTypes.map((type) => <div key={type.id}><span><i style={{ background: type.color }} />{type.code} · {type.name}</span><b>{elements.filter((item) => item.type === 'station' && item.equipmentTypeId === type.id).length}</b></div>)}</div></aside>
     </div>
     <footer className="site-plan-editor-footer"><div><label>Revizyon notu<input value={revisionNote} onChange={(event) => setRevisionNote(event.target.value)} /></label>{error && <span>{error}</span>}</div><button className="secondary-button" onClick={onClose}>Vazgeç</button><button className="primary-button" onClick={() => void submit()} disabled={saving}><Save size={17} />{saving ? 'PDF hazırlanıyor…' : plan ? `R${String(plan.revision + 1).padStart(2, '0')} olarak yayımla` : 'Planı yayımla'}</button></footer>
@@ -225,17 +294,43 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
 
 function ElementInspector({ element, equipmentTypes, onChange, onDelete, onQrPair }: { element: SitePlanElement; equipmentTypes: SitePlanEquipmentType[]; onChange: (patch: Partial<SitePlanElement>) => void; onDelete: () => void; onQrPair: () => void }) {
   const number = (key: keyof SitePlanElement, label: string) => <label>{label}<input type="number" value={Number(element[key] ?? 0) || ''} onChange={(event) => onChange({ [key]: Number(event.target.value) })} /></label>;
-  return <div className="element-inspector"><span className="selected-kind">{elementLabel(element.type)}</span><div className="inspector-grid">{number('x', 'X')}{number('y', 'Y')}{element.type !== 'text' && number('width', element.type === 'line' ? 'X uzunluğu' : 'Genişlik')}{element.type !== 'text' && number('height', element.type === 'line' ? 'Y uzunluğu' : 'Yükseklik')}</div>{element.type === 'rect' && <label>Alan adı<input value={element.text ?? ''} onChange={(event) => onChange({ text: event.target.value })} /></label>}{element.type === 'text' && <label>Metin<input value={element.text ?? ''} onChange={(event) => onChange({ text: event.target.value })} /></label>}{element.type === 'station' && <><label>Ekipman türü<select value={element.equipmentTypeId} onChange={(event) => onChange({ equipmentTypeId: event.target.value })}>{equipmentTypes.map((item) => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label><label>İstasyon numarası<input value={element.stationNumber ?? ''} onChange={(event) => onChange({ stationNumber: event.target.value.toUpperCase() })} /></label><label>QR kimliği<input maxLength={160} value={element.qrCode ?? ''} onChange={(event) => onChange({ qrCode: event.target.value })} placeholder="Etiketteki kodu yazın veya okutun" /></label><div className="station-qr-actions"><button onClick={() => onChange({ qrCode: newStationQrCode() })}><RotateCcw /> Otomatik üret</button><button onClick={onQrPair}><QrCode /> QR okut ve eşleştir</button></div><small className="station-qr-help">Bu kimlik yalnızca bu istasyona ait olmalıdır. Mevcut etiketinizi okutarak da eşleştirebilirsiniz.</small></>}{element.type !== 'station' && <><label>Çizgi rengi<input type="color" value={element.stroke ?? '#102A43'} onChange={(event) => onChange({ stroke: event.target.value })} /></label>{element.type === 'rect' && <label>Dolgu rengi<input type="color" value={element.fill ?? '#FFFFFF'} onChange={(event) => onChange({ fill: event.target.value })} /></label>}</>}<button className="inspector-delete" onClick={onDelete}><Trash2 /> Seçili öğeyi sil</button></div>;
+  return <div className="element-inspector"><span className="selected-kind">{elementLabel(element.type)}</span><div className="inspector-grid">{number('x', 'X')}{number('y', 'Y')}{element.type !== 'text' && number('width', element.type === 'line' ? 'X uzunluğu' : 'Genişlik / Boyut')}{element.type !== 'text' && number('height', element.type === 'line' ? 'Y uzunluğu' : 'Yükseklik')}</div>{element.type === 'rect' && <label>Alan adı<input value={element.text ?? ''} onChange={(event) => onChange({ text: event.target.value })} /></label>}{element.type === 'text' && <><label>Metin<input value={element.text ?? ''} onChange={(event) => onChange({ text: event.target.value })} /></label>{number('height', 'Yazı boyutu (px)')}</>}{element.type === 'station' && <><label>Ekipman türü<select value={element.equipmentTypeId} onChange={(event) => onChange({ equipmentTypeId: event.target.value })}>{equipmentTypes.map((item) => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label><label>İstasyon numarası<input value={element.stationNumber ?? ''} onChange={(event) => onChange({ stationNumber: event.target.value.toUpperCase() })} /></label><label>QR kimliği<input maxLength={160} value={element.qrCode ?? ''} onChange={(event) => onChange({ qrCode: event.target.value })} placeholder="Etiketteki kodu yazın veya okutun" /></label><div className="station-qr-actions"><button onClick={() => onChange({ qrCode: newStationQrCode() })}><RotateCcw /> Otomatik üret</button><button onClick={onQrPair}><QrCode /> QR okut ve eşleştir</button></div><small className="station-qr-help">Bu kimlik yalnızca bu istasyona ait olmalıdır. Mevcut etiketinizi okutarak da eşleştirebilirsiniz.</small></>}{element.type !== 'station' && <><label>Çizgi rengi<input type="color" value={element.stroke ?? '#102A43'} onChange={(event) => onChange({ stroke: event.target.value })} /></label>{element.type === 'rect' && <label>Dolgu rengi<input type="color" value={element.fill ?? '#FFFFFF'} onChange={(event) => onChange({ fill: event.target.value })} /></label>}</>}<button className="inspector-delete" onClick={onDelete}><Trash2 /> Seçili öğeyi sil</button></div>;
 }
 
-function CanvasElement({ item, equipmentTypes, selected, onPointerDown }: { item: SitePlanElement; equipmentTypes: SitePlanEquipmentType[]; selected: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, item: SitePlanElement) => void }) {
+function CanvasElement({ item, equipmentTypes, selected, onPointerDown, onResizeStart }: { item: SitePlanElement; equipmentTypes: SitePlanEquipmentType[]; selected: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, item: SitePlanElement) => void; onResizeStart: (event: ReactPointerEvent<SVGElement>, item: SitePlanElement, handle: string) => void }) {
   const equipment = equipmentTypes.find((type) => type.id === item.equipmentTypeId);
   const transform = item.rotation ? `rotate(${item.rotation} ${item.x + item.width / 2} ${item.y + item.height / 2})` : undefined;
   const hitX = Math.min(item.x, item.x + item.width) - 14;
   const hitY = Math.min(item.y, item.y + item.height) - 14;
   const hitWidth = Math.max(44, Math.abs(item.width) + 28);
   const hitHeight = Math.max(44, Math.abs(item.height) + 28);
-  return <g className="canvas-element" transform={transform} onPointerDown={(event) => onPointerDown(event, item)}><rect className="canvas-hit-area" x={hitX} y={hitY} width={hitWidth} height={hitHeight} />{item.type === 'rect' && <><rect x={item.x} y={item.y} width={item.width} height={item.height} rx="3" fill={item.fill ?? '#FFFFFF'} stroke={item.stroke ?? '#102A43'} strokeWidth={item.strokeWidth} />{item.text && <text x={item.x + item.width / 2} y={item.y + item.height / 2} textAnchor="middle" dominantBaseline="middle">{item.text}</text>}</>}{item.type === 'line' && <line x1={item.x} y1={item.y} x2={item.x + item.width} y2={item.y + item.height} stroke={item.stroke ?? '#102A43'} strokeWidth={item.strokeWidth} strokeLinecap="round" />}{item.type === 'door' && <><line x1={item.x} y1={item.y} x2={item.x + item.width} y2={item.y} stroke={item.stroke ?? '#102A43'} strokeWidth={item.strokeWidth} /><path d={`M ${item.x} ${item.y} A ${Math.abs(item.width)} ${Math.abs(item.height)} 0 0 1 ${item.x + item.width} ${item.y + item.height}`} fill="none" stroke="#94A3B8" strokeWidth="2" strokeDasharray="5 4" /></>}{item.type === 'text' && <text x={item.x} y={item.y} fontSize={clamp(item.height, 12, 48)} fontWeight="700" fill={item.fill ?? '#102A43'}>{item.text ?? 'Alan etiketi'}</text>}{item.type === 'station' && equipment && <><g transform={`translate(${item.x} ${item.y})`}><EquipmentShapeSvg shape={equipment.shape} color={equipment.color} width={item.width} height={item.height} /><text x={item.width / 2} y={item.height / 2} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={Math.max(10, item.height * .34)} fontWeight="800">{equipment.code}</text></g><text x={item.x + item.width + 5} y={item.y + item.height / 2} dominantBaseline="middle" fontSize="13" fontWeight="800">{item.stationNumber}</text></>}{selected && <rect className="selection-box" x={Math.min(item.x, item.x + item.width) - 7} y={Math.min(item.y, item.y + item.height) - 7} width={Math.abs(item.width) + 14} height={Math.abs(item.height) + 14} />}</g>;
+
+  const minX = Math.min(item.x, item.x + item.width);
+  const minY = Math.min(item.y, item.y + item.height);
+  const absW = Math.abs(item.width);
+  const absH = Math.abs(item.height);
+
+  return <g className="canvas-element" transform={transform} onPointerDown={(event) => onPointerDown(event, item)}><rect className="canvas-hit-area" x={hitX} y={hitY} width={hitWidth} height={hitHeight} />{item.type === 'rect' && <><rect x={item.x} y={item.y} width={item.width} height={item.height} rx="3" fill={item.fill ?? '#FFFFFF'} stroke={item.stroke ?? '#102A43'} strokeWidth={item.strokeWidth} />{item.text && <text x={item.x + item.width / 2} y={item.y + item.height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={clamp(Math.min(item.width / (item.text.length || 1) * 1.5, item.height * 0.4), 11, 24)} fontWeight="600" fill={item.stroke ?? '#102A43'}>{item.text}</text>}</>}{item.type === 'line' && <line x1={item.x} y1={item.y} x2={item.x + item.width} y2={item.y + item.height} stroke={item.stroke ?? '#102A43'} strokeWidth={item.strokeWidth} strokeLinecap="round" />}{item.type === 'door' && <><line x1={item.x} y1={item.y} x2={item.x + item.width} y2={item.y} stroke={item.stroke ?? '#102A43'} strokeWidth={item.strokeWidth} /><path d={`M ${item.x} ${item.y} A ${Math.abs(item.width)} ${Math.abs(item.height)} 0 0 1 ${item.x + item.width} ${item.y + item.height}`} fill="none" stroke="#94A3B8" strokeWidth="2" strokeDasharray="5 4" /></>}{item.type === 'text' && <text x={item.x} y={item.y + (item.height || 22) * 0.75} fontSize={clamp(item.height || 22, 12, 48)} fontWeight="700" fill={item.fill ?? '#102A43'}>{item.text ?? 'Alan etiketi'}</text>}{item.type === 'station' && equipment && <><g transform={`translate(${item.x} ${item.y})`}><EquipmentShapeSvg shape={equipment.shape} color={equipment.color} width={item.width} height={item.height} /><text x={item.width / 2} y={item.height / 2} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={Math.max(10, item.height * .34)} fontWeight="800">{equipment.code}</text></g><text x={item.x + item.width + 5} y={item.y + item.height / 2} dominantBaseline="middle" fontSize="13" fontWeight="800">{item.stationNumber}</text></>}{selected && <>
+    <rect className="selection-box" x={minX - 5} y={minY - 5} width={absW + 10} height={absH + 10} />
+    {(item.type === 'rect' || item.type === 'door' || item.type === 'station') && <>
+      <rect className="resize-handle resize-handle-nw" x={minX - 9} y={minY - 9} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'nw')} />
+      <rect className="resize-handle resize-handle-ne" x={minX + absW} y={minY - 9} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'ne')} />
+      <rect className="resize-handle resize-handle-se" x={minX + absW} y={minY + absH} width="11" height="11" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'se')} />
+      <rect className="resize-handle resize-handle-sw" x={minX - 9} y={minY + absH} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'sw')} />
+      <rect className="resize-handle resize-handle-e" x={minX + absW} y={minY + absH / 2 - 4.5} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'e')} />
+      <rect className="resize-handle resize-handle-s" x={minX + absW / 2 - 4.5} y={minY + absH} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 's')} />
+      <rect className="resize-handle resize-handle-w" x={minX - 9} y={minY + absH / 2 - 4.5} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'w')} />
+      <rect className="resize-handle resize-handle-n" x={minX + absW / 2 - 4.5} y={minY - 9} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'n')} />
+    </>}
+    {item.type === 'line' && <>
+      <rect className="resize-handle resize-handle-nw" x={item.x - 5} y={item.y - 5} width="10" height="10" rx="5" onPointerDown={(e) => onResizeStart(e, item, 'nw')} />
+      <rect className="resize-handle resize-handle-se" x={item.x + item.width - 5} y={item.y + item.height - 5} width="10" height="10" rx="5" onPointerDown={(e) => onResizeStart(e, item, 'se')} />
+    </>}
+    {item.type === 'text' && <>
+      <rect className="resize-handle resize-handle-se" x={minX + absW} y={minY + absH} width="11" height="11" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'se')} />
+      <rect className="resize-handle resize-handle-e" x={minX + absW} y={minY + absH / 2 - 4.5} width="9" height="9" rx="2" onPointerDown={(e) => onResizeStart(e, item, 'e')} />
+    </>}
+  </>}</g>;
 }
 
 function EquipmentSymbol({ item }: { item: SitePlanEquipmentType }) { return <svg viewBox="0 0 40 40"><EquipmentShapeSvg shape={item.shape} color={item.color} width={40} height={40} /><text x="20" y="20" textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize="13" fontWeight="800">{item.code}</text></svg>; }
@@ -246,7 +341,7 @@ function EquipmentShapeSvg({ shape, color, width, height }: { shape: SitePlanEqu
   if (shape === 'hexagon') return <polygon points={`${width * .25},0 ${width * .75},0 ${width},${height / 2} ${width * .75},${height} ${width * .25},${height} 0,${height / 2}`} fill={color} stroke="#fff" strokeWidth="2" />;
   return <rect width={width} height={height} rx="4" fill={color} stroke="#fff" strokeWidth="2" />;
 }
-function MiniPlan({ canvas }: { canvas: SitePlanCanvas }) { return <svg viewBox="0 0 1200 720"><rect width="1200" height="720" fill="#fff" />{canvas.elements.slice(0, 160).map((item) => <CanvasElement key={item.id} item={item} equipmentTypes={canvas.equipmentTypes} selected={false} onPointerDown={() => undefined} />)}</svg>; }
+function MiniPlan({ canvas }: { canvas: SitePlanCanvas }) { return <svg viewBox="0 0 1200 720"><rect width="1200" height="720" fill="#fff" />{canvas.elements.slice(0, 160).map((item) => <CanvasElement key={item.id} item={item} equipmentTypes={canvas.equipmentTypes} selected={false} onPointerDown={() => undefined} onResizeStart={() => undefined} />)}</svg>; }
 function starPoints(width: number, height: number) { return Array.from({ length: 10 }, (_, index) => { const angle = -Math.PI / 2 + index * Math.PI / 5; const radius = index % 2 === 0 ? .5 : .22; return `${width / 2 + Math.cos(angle) * width * radius},${height / 2 + Math.sin(angle) * height * radius}`; }).join(' '); }
 function locationValue(location?: QualityLocation) { return location ? `${location.customerId}|${location.branchId ?? ''}` : ''; }
 function newStationQrCode() { return `PST-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`; }
