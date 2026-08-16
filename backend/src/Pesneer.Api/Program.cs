@@ -266,7 +266,17 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
         try
         {
             await using var scope = services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<PesneerDbContext>().Database.MigrateAsync();
+            var db = scope.ServiceProvider.GetRequiredService<PesneerDbContext>();
+            await db.Database.MigrateAsync();
+
+            if (db.Database.IsNpgsql())
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "IsTrial" boolean NOT NULL DEFAULT false;
+                    ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "TrialStartedAt" timestamp with time zone;
+                    ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "TrialEndsAt" timestamp with time zone;
+                """);
+            }
             return;
         }
         catch when (attempt < 5)

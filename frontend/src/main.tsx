@@ -13,6 +13,23 @@ import './styles/landing.css';
 
 import App from './App';
 
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  window.location.reload();
+});
+
+window.addEventListener('error', (event) => {
+  if (event.message && (event.message.includes('Failed to fetch dynamically imported module') || event.message.includes('Importing a module script failed'))) {
+    const key = 'last_chunk_reload';
+    const last = sessionStorage.getItem(key);
+    const now = Date.now();
+    if (!last || now - Number(last) > 10000) {
+      sessionStorage.setItem(key, String(now));
+      window.location.reload();
+    }
+  }
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
