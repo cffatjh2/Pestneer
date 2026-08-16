@@ -21,6 +21,21 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => registration.update());
+    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
+      void registration.update();
+      if (registration.waiting) {
+        registration.waiting.postMessage('SKIP_WAITING');
+      }
+      registration.addEventListener('updatefound', () => {
+        const installingWorker = registration.installing;
+        if (installingWorker) {
+          installingWorker.addEventListener('statechange', () => {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              installingWorker.postMessage('SKIP_WAITING');
+            }
+          });
+        }
+      });
+    });
   });
 }
