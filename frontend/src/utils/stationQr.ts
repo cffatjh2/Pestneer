@@ -14,9 +14,18 @@ export type StationQrPayload = {
   deviceNumber: string;
 };
 
-export function createStationQrValue(plan: SitePlanRecord, station: ReportStationInput) {
+export type StationLabelPlanInfo = {
+  id: string;
+  customerId: string;
+  branchId?: string;
+  customerName: string;
+  branchName: string;
+  areaName?: string;
+};
+
+export function createStationQrValue(plan: StationLabelPlanInfo, station: ReportStationInput) {
   if (station.qrCode?.trim()) return station.qrCode.trim();
-  return [PREFIX, '1', plan.id, station.sitePlanElementId ?? '', plan.customerId, plan.branchId ?? '', station.deviceNumber].map(encodeURIComponent).join('|');
+  return [PREFIX, '1', plan.id, station.sitePlanElementId ?? station.deviceNumber, plan.customerId, plan.branchId ?? '', station.deviceNumber].map(encodeURIComponent).join('|');
 }
 
 export function normalizeStationQrValue(value?: string) {
@@ -29,8 +38,8 @@ export function parseStationQrValue(value: string): StationQrPayload | null {
   return { version: 1, sitePlanId: parts[2], elementId: parts[3], customerId: parts[4], branchId: parts[5] || undefined, deviceNumber: parts[6] };
 }
 
-export async function downloadStationLabelPdf(plan: SitePlanRecord, stations: ReportStationInput[], companyName: string) {
-  const labeled = stations.filter((station) => station.sitePlanElementId && station.deviceNumber.trim());
+export async function downloadStationLabelPdf(plan: StationLabelPlanInfo, stations: ReportStationInput[], companyName: string) {
+  const labeled = stations.filter((station) => station.deviceNumber.trim());
   if (labeled.length === 0) throw new Error('QR etiketi oluşturulacak kroki istasyonu bulunamadı.');
   const document = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const margin = 10;
@@ -62,12 +71,36 @@ export async function downloadStationLabelPdf(plan: SitePlanRecord, stations: Re
     document.text(companyName, x + 33, y + 15, { maxWidth: width - 36 });
     document.text(`${plan.customerName} / ${plan.branchName}`, x + 33, y + 20, { maxWidth: width - 36 });
     document.setTextColor(72, 98, 124);
-    document.text(station.area || plan.areaName, x + 33, y + 27, { maxWidth: width - 36 });
+    document.text(station.area || plan.areaName || 'Genel Alan', x + 33, y + 27, { maxWidth: width - 36 });
     document.setFontSize(5.5);
     document.text('Dijital QR istasyon kimliği', x + 3, y + height - 2.5);
   }
 
   document.save(`${sanitize(plan.customerName)}_${sanitize(plan.branchName)}_QR_Etiketleri.pdf`);
+}
+
+export async function downloadSitePlanStationLabels(plan: SitePlanRecord, companyName = 'Pestneer İlaçlama') {
+  const equipmentMap = new Map(plan.canvas.equipmentTypes.map((item) => [item.id, item]));
+  const stationElements = plan.canvas.elements.filter((item) => item.type === 'station');
+  if (stationElements.length === 0) {
+    throw new Error('Bu krokide henüz tanımlanmış istasyon noktası bulunamadı.');
+  }
+
+  const stations: ReportStationInput[] = stationElements.map((item) => ({
+    deviceNumber: item.stationNumber?.trim() || `${equipmentMap.get(item.equipmentTypeId ?? '')?.code ?? 'ST'}-01`,
+    area: item.text?.trim() || plan.areaName || 'Genel Tesis Alanı',
+    deviceType: equipmentMap.get(item.equipmentTypeId ?? '')?.code ?? 'B',
+    sitePlanId: plan.id,
+    sitePlanElementId: item.id,
+    qrCode: item.qrCode?.trim() || undefined,
+    targetPest: '',
+    caughtCount: 0,
+    hasActivity: false,
+    plateChanged: false,
+    deviceStatus: 'Unchecked',
+  }));
+
+  await downloadStationLabelPdf(plan, stations, companyName);
 }
 
 function sanitize(value: string) {

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Ban, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, Pencil, Plus, Save, Search, Trash2, Wrench, X } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, Pencil, Plus, QrCode, Save, ScanLine, Search, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getServiceReportCatalog, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
-import { getSitePlans } from '../../services/sitePlanApi';
+import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
 import {
   downloadStationActivationPdf,
   getStationActivationByWorkOrder,
   saveStationActivation,
   type StationActivationRecord,
 } from '../../services/stationActivationApi';
+import QrScannerModal from './QrScannerModal';
+import { downloadStationLabelPdf, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
 
 type Props = {
   accessToken: string;
@@ -66,6 +68,9 @@ export default function StationActivationModal({ accessToken, order, onClose, on
   const [multiSelect, setMultiSelect] = useState<Set<number>>(new Set());
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [sitePlan, setSitePlan] = useState<SitePlanRecord | null>(null);
+  const [qrNotice, setQrNotice] = useState<string | null>(null);
   const readOnly = record?.status === 'Finalized' && !isEditing;
 
   useEffect(() => {
@@ -75,8 +80,9 @@ export default function StationActivationModal({ accessToken, order, onClose, on
         if (!active) return;
         setCatalog(loadedCatalog);
         setRecord(existing); setNotes(existing?.notes ?? '');
-        if (existing?.stations.length) { setStations(existing.stations); return; }
         const plan = plans.find((item) => item.customerId === order.customerId && (order.branchId ? item.branchId === order.branchId : !item.branchId));
+        setSitePlan(plan || null);
+        if (existing?.stations.length) { setStations(existing.stations); return; }
         const equipment = new Map(plan?.canvas.equipmentTypes.map((item) => [item.id, item]) ?? []);
         const planned = plan?.canvas.elements.filter((item) => item.type === 'station').map((item) => ({
           ...blankStation(), sitePlanId: plan.id, sitePlanElementId: item.id, qrCode: item.qrCode,
@@ -89,6 +95,67 @@ export default function StationActivationModal({ accessToken, order, onClose, on
       .finally(() => setLoading(false));
     return () => { active = false; };
   }, [accessToken, order.branchId, order.customerId, order.recordId]);
+
+  const handleQrScan = (value: string) => {
+    const normalized = normalizeStationQrValue(value);
+    const pairedIndex = stations.findIndex((station) => station.qrCode && normalizeStationQrValue(station.qrCode) === normalized);
+    if (pairedIndex >= 0) {
+      setScannerOpen(false);
+      setSelected(pairedIndex);
+      setFilter('all');
+      setSearchQuery('');
+      setQrNotice(`İstasyon ${stations[pairedIndex].deviceNumber} QR ile seçildi.`);
+      setError(null);
+      return;
+    }
+    const payload = parseStationQrValue(value);
+    if (payload) {
+      if (payload.customerId !== order.customerId || (payload.branchId ?? '') !== (order.branchId ?? '')) {
+        setError('Okutulan QR kod farklı bir müşteriye veya şubeye ait.');
+        return;
+      }
+      const index = stations.findIndex((station) =>
+        (station.sitePlanId === payload.sitePlanId && station.sitePlanElementId === payload.elementId) ||
+        station.deviceNumber.toUpperCase() === payload.deviceNumber.toUpperCase()
+      );
+      if (index >= 0) {
+        setScannerOpen(false);
+        setSelected(index);
+        setFilter('all');
+        setSearchQuery('');
+        setQrNotice(`İstasyon ${stations[index].deviceNumber} QR ile seçildi.`);
+        setError(null);
+        return;
+      }
+    }
+    const directNumIndex = stations.findIndex((s) => s.deviceNumber && value.toUpperCase().includes(s.deviceNumber.toUpperCase()));
+    if (directNumIndex >= 0) {
+      setScannerOpen(false);
+      setSelected(directNumIndex);
+      setFilter('all');
+      setSearchQuery('');
+      setQrNotice(`İstasyon ${stations[directNumIndex].deviceNumber} seçildi.`);
+      setError(null);
+      return;
+    }
+    setError('QR kodu bu listedeki hiçbir istasyonla eşleştirilemedi.');
+  };
+
+  const handleDownloadQrLabels = async () => {
+    try {
+      const planToUse = sitePlan || {
+        id: order.recordId,
+        customerId: order.customerId,
+        customerName: order.client,
+        branchId: order.branchId,
+        branchName: order.branch,
+        areaName: 'Tüm Tesis',
+      };
+      await downloadStationLabelPdf(planToUse, stations, 'Pestneer İlaçlama');
+    } catch (qrErr) {
+      setError(qrErr instanceof Error ? qrErr.message : 'QR etiketleri oluşturulamadı.');
+    }
+  };
 
   /* ── filtrelenmiş liste ── */
   const filteredIndices = useMemo(() => {
@@ -187,7 +254,17 @@ export default function StationActivationModal({ accessToken, order, onClose, on
 
       {/* ── Filtre bar ── */}
       <div className="activation-filter-bar">
-        <div className="activation-search"><Search size={16} /><input placeholder="İstasyon ara…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
+        <div className="activation-search"><Search size={16} /><input placeholder="İstasyon ara (YM-01, alan...)…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
+        <div className="activation-qr-buttons">
+          <button type="button" className="activation-btn-qr-scan" onClick={() => setScannerOpen(true)} title="Kamerayla İstasyon QR / Barkodunu Okut">
+            <ScanLine size={16} />
+            <strong>QR Kod Okut</strong>
+          </button>
+          <button type="button" className="activation-btn-qr-print" onClick={() => void handleDownloadQrLabels()} title="Bu Şubenin Tüm İstasyonları İçin A4 Yapışkanlı QR Etiketi İndir (PDF)">
+            <QrCode size={15} />
+            <span>QR Etiketleri İndir</span>
+          </button>
+        </div>
         <div className="activation-filter-chips">
           {filterOptions.map((opt) => <button key={opt.value} type="button" className={filter === opt.value ? 'active' : ''} onClick={() => setFilter(opt.value)}>{opt.label} <span>{opt.count}</span></button>)}
         </div>
@@ -196,6 +273,8 @@ export default function StationActivationModal({ accessToken, order, onClose, on
           {multiSelect.size > 0 && <button type="button" onClick={() => setBulkStatusOpen(true)}><Filter size={15} /> Seçilenlere durum ata ({multiSelect.size})</button>}
         </div>}
       </div>
+
+      {qrNotice && <div className="activation-qr-notice"><ScanLine size={16} /><span>{qrNotice}</span><button type="button" onClick={() => setQrNotice(null)}>Tamam</button></div>}
 
       <div className="activation-workspace"><aside>
         {filteredIndices.map((index) => {
@@ -277,6 +356,9 @@ export default function StationActivationModal({ accessToken, order, onClose, on
 
     {/* ── Toplu Durum Atama ── */}
     {bulkStatusOpen && <BulkStatusModal count={multiSelect.size} onClose={() => setBulkStatusOpen(false)} onApply={applyBulkStatus} />}
+
+    {/* ── Canlı QR Tarayıcı Modal ── */}
+    {scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onScan={handleQrScan} />}
   </div></div>;
 }
 

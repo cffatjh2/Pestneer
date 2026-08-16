@@ -1355,6 +1355,17 @@
 .activation-filter-bar { margin: 0 24px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .activation-search { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 12px; border: 1px solid #d7e1ec; border-radius: 11px; background: #fff; color: #718198; flex: 0 1 220px; }
 .activation-search input { border: 0; outline: 0; background: transparent; color: #17263b; font-size: 13px; min-width: 0; flex: 1; }
+
+.activation-qr-buttons { display: flex; align-items: center; gap: 8px; }
+.activation-btn-qr-scan { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 16px; border: 1px solid #059669; border-radius: 11px; color: #fff; background: linear-gradient(135deg, #10b981 0%, #059669 100%); font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 8px rgba(16,185,129,0.25); transition: transform .12s, box-shadow .12s; }
+.activation-btn-qr-scan:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.35); }
+.activation-btn-qr-scan:active { transform: translateY(0); }
+.activation-btn-qr-print { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 13px; border: 1px solid #cbd5e1; border-radius: 11px; color: #334155; background: #f8fafc; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .15s; }
+.activation-btn-qr-print:hover { background: #e2e8f0; color: #0f172a; }
+
+.activation-qr-notice { margin: -4px 24px 12px; padding: 10px 14px; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; }
+.activation-qr-notice button { border: 0; background: #d1fae5; color: #047857; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+
 .activation-filter-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
 .activation-filter-chips button { min-height: 34px; padding: 0 12px; border: 1px solid #d7e1ec; border-radius: 9px; background: #fff; color: #4a6280; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all .15s; }
 .activation-filter-chips button.active { border-color: #2563eb; color: #fff; background: #2563eb; box-shadow: 0 3px 10px rgba(37,99,235,.18); }
