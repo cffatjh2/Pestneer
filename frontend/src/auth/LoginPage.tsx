@@ -161,7 +161,7 @@ export default function LoginPage({ onAuthenticated, onBack }: { onAuthenticated
     <main className="login-page">
       {onBack && <button type="button" className="login-return" onClick={onBack}><ArrowLeft size={16} /> Tanıtıma dön</button>}
       <section className="login-story">
-        <div className="login-brand"><span className="auth-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span><div><strong>pesneer</strong><small>PEST KONTROL YÖNETİM SİSTEMİ</small></div></div>
+        <div className="login-brand"><span className="auth-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span><div><strong>Pestneer</strong><small>PEST KONTROL YÖNETİM SİSTEMİ</small></div></div>
         <div className="story-copy"><p className="story-kicker">OPERASYONUNUZUN GÜVENLİ MERKEZİ</p><h1>Her rol için doğru ekran.<br /><em>Her firma için ayrı veri.</em></h1><p>İş planından stok ve müşteri raporlarına kadar tüm pest kontrol süreçlerini tek, güvenli yapıda yönetin.</p></div>
         <div className="trust-list">
           <div><ShieldCheck size={19} /><span><strong>Firma bazlı kesin izolasyon</strong><small>Bir firmanın verisine başka firma erişemez.</small></span></div>
@@ -174,7 +174,7 @@ export default function LoginPage({ onAuthenticated, onBack }: { onAuthenticated
 
       <section className="login-panel">
         <div className="login-card">
-          <div className="mobile-login-brand"><span className="auth-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span><strong>pesneer</strong></div>
+          <div className="mobile-login-brand"><span className="auth-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span><strong>Pestneer</strong></div>
           <header><span className="secure-chip"><ShieldCheck size={14} />Güvenli giriş</span><h2>Hesabınıza giriş yapın</h2><p>Devam etmek için kullanacağınız hesabı seçin.</p></header>
           <div className="portal-selector" role="tablist" aria-label="Giriş türü">
             {roleOptions.map((option) => {
