@@ -131,7 +131,12 @@ export default function Dashboard({ workOrders, onCreate, onReport, accessToken,
               </div>
             </div>
             <div className="progress-content">
-              <div className="progress-ring">
+              <div
+                className="progress-ring"
+                style={{
+                  background: `conic-gradient(var(--blue-600, #2563eb) 0deg ${Math.min(360, Math.max(0, Math.round((totalCount > 0 ? (completedCount / totalCount) * 100 : 0) * 3.6)))}deg, var(--gray-200, #e2e8f0) ${Math.min(360, Math.max(0, Math.round((totalCount > 0 ? (completedCount / totalCount) * 100 : 0) * 3.6)))}deg 360deg)`
+                }}
+              >
                 <div>
                   <strong>{totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%</strong>
                   <span>Tamamlandı</span>
