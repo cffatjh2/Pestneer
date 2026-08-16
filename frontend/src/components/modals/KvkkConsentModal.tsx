@@ -122,51 +122,100 @@ export default function KvkkConsentModal({ session, onAccepted, onLogout }: { se
             <div>
               <div className="kvkk-doc-title">
                 <span>6698 SAYILI KİŞİSEL VERİLERİN KORUNMASI KANUNU (KVKK) KAPSAMINDA AYDINLATMA METNİ</span>
-                <span className="kvkk-doc-version">Sürüm: 2026.1-TR</span>
+                <span className="kvkk-doc-version">Sürüm: 2026.1-TR · Resmi Mevzuat Formatı</span>
               </div>
 
               <div className="kvkk-highlight-box">
-                <strong>Veri Sorumlusu Bilgilendirmesi:</strong> Pestneer Dijital Operasyon ve Biyosidal Takip Sistemleri (“Pestneer”) olarak, 6698 sayılı Kişisel Verilerin Korunması Kanunu (“KVKK”) ve ilgili mevzuat uyarınca; çalışanlarımızın, iş ortaklarımızın, saha teknisyenlerimizin ve müşteri yetkililerimizin kişisel verilerinin gizliliğine ve güvenliğine en üst düzeyde önem vermekteyiz.
+                <strong>Veri Sorumlusu Bilgilendirmesi:</strong> Pestneer Dijital Operasyon ve Biyosidal Takip Sistemleri (“Pestneer”) olarak; 6698 sayılı Kişisel Verilerin Korunması Kanunu (“KVKK”), Aydınlatma Yükümlülüğünün Yerine Getirilmesinde Uyulacak Usul ve Esaslar Hakkında Tebliğ ve Sağlık Bakanlığı Biyosidal Ürünler Yönetmeliği uyarınca, sistem kullanıcılarımızın, mesul müdürlerin, uygulayıcı teknisyenlerin ve müşteri yetkililerinin kişisel verilerinin korunması, gizliliği ve güvenliğine en üst düzeyde hassasiyet göstermekteyiz.
               </div>
 
               <section className="kvkk-section">
-                <h4><span>1</span> İşlenen Kişisel Veri Kategorileri</h4>
-                <p>Pestneer platformu kullanımı süresince aşağıdaki veri kategorileri işlenmektedir:</p>
-                <ul>
-                  <li><strong>Kimlik Verileri:</strong> Ad, soyad, unvan ve yetki bilgileri.</li>
-                  <li><strong>İletişim Verileri:</strong> Kurumsal/şahsi e-posta adresi, telefon numarası, görev yapılan şube/adres bilgileri.</li>
-                  <li><strong>Mesleki Deneyim & Belge Verileri:</strong> Biyosidal uygulayıcı lisansı, sertifika numarası, mesul müdür yetki tanımları.</li>
-                  <li><strong>İşlem Güvenliği ve Sistem Logları:</strong> Giriş IP adresi, oturum zaman damgaları, parola hash kayıtları, cihaz/tarayıcı bilgileri (5651 sayılı Kanun gereği).</li>
-                  <li><strong>Saha ve Operasyon Verileri:</strong> İş emri uygulama raporları, QR kod tarama zamanları ve lokasyon doğrulama verileri.</li>
-                </ul>
-              </section>
-
-              <section className="kvkk-section">
-                <h4><span>2</span> Kişisel Verilerin İşlenme Amaçları</h4>
-                <ul>
-                  <li>Biyosidal Ürünlerin Kullanım Usul ve Esasları Hakkında Yönetmelik ve Sağlık Bakanlığı denetim standartlarına tam uyumlu dijital servis raporu, EK-1 formu ve istasyon takip kayıtlarının oluşturulması,</li>
-                  <li>İş emirlerinin planlanması, rota optimizasyonu, saha ziyaretlerinin teyidi ve müşteri memnuniyeti süreçlerinin yürütülmesi,</li>
-                  <li>Sistem erişim güvenliğinin temini, yetkisiz erişimlerin engellenmesi ve yasal loglama yükümlülüklerinin yerine getirilmesi,</li>
-                  <li>Kalite kontrol, pestisit tüketim analizi ve trend raporlarının hazırlanması.</li>
-                </ul>
-              </section>
-
-              <section className="kvkk-section">
-                <h4><span>3</span> Kişisel Verilerin Aktarılması</h4>
-                <p>Toplanan kişisel veriler, KVKK’nın 8. ve 9. maddelerine uygun olarak yalnızca;</p>
-                <ul>
-                  <li>Yasal denetim yetkisine sahip kamu kurum ve kuruluşları (Sağlık Bakanlığı, Tarım ve Orman Bakanlığı, adli ve idari merciler),</li>
-                  <li>Hizmetin ifası kapsamında servis raporu alan ilgili müşteri firma ve şube yetkilileri,</li>
-                  <li>Yüksek güvenlik standartlarına sahip sunucu, veri tabanı ve e-posta altyapı sağlayıcıları ile paylaşılabilmektedir.</li>
-                </ul>
-              </section>
-
-              <section className="kvkk-section">
-                <h4><span>4</span> İlgili Kişinin Hakları (KVKK Madde 11)</h4>
+                <h4><span>1</span> Veri Sorumlusunun Kimliği</h4>
                 <p>
-                  KVKK Madde 11 uyarınca veri sahipleri; verilerinin işlenip işlenmediğini öğrenme, işlenmişse bilgi talep etme, işlenme amacına uygun kullanılıp kullanılmadığını öğrenme, yurt içinde/yurt dışında aktarıldığı üçüncü kişileri bilme, eksik/yanlış işlenmişse düzeltilmesini isteme ve silinmesini/yok edilmesini talep etme haklarına sahiptir.
+                  KVKK’nın 10. maddesi kapsamında veri sorumlusu sıfatıyla hareket eden Pestneer Platform İşletmecisi (“Pestneer”), sistem üzerinden toplanan kişisel verileri aşağıda belirtilen amaçlar ve yasal dayanaklar doğrultusunda, hukuka ve dürüstlük kurallarına uygun olarak işlemekte, saklamakta ve korumaktadır.
                 </p>
-                <p>Haklarınıza ilişkin taleplerinizi <strong>kvkk@pestneer.com</strong> adresine iletebilirsiniz.</p>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>2</span> Alınan ve İşlenen Kişisel Verilerin Eksiksiz Dökümü</h4>
+                <p>Pestneer platformu üzerinden doğrudan kullanıcıdan, mobil cihaz sensörlerinden, QR tarayıcıdan ve sistem etkileşimlerinden toplanan verilerin açık dökümü aşağıdadır:</p>
+                <ul>
+                  <li>
+                    <strong>1. Kimlik ve Kimlik Doğrulama Verileri:</strong>
+                    <br />Ad, soyadı, T.C. kimlik numarası (Sağlık Bakanlığı Biyosidal Ürünler Yönetmeliği gereği EK-1 servis formlarında ve Mesul Müdür/Uygulayıcı izin belgelerinde zorunlu olması durumunda), unvan, firma çalışan kodu, sistem kullanıcı kimliği (UUID), tuzlanmış tek yönlü parola hash özetleri (PBKDF2/Argon2) ve dokunmatik imza pedi ile alınan dijital ıslak imza örnekleri.
+                  </li>
+                  <li>
+                    <strong>2. İletişim ve Adres Verileri:</strong>
+                    <br />Kurumsal ve şahsi e-posta adresi, cep telefonu numarası, görev yapılan işletme/şube açık adresi, fatura ve tebligat adresi.
+                  </li>
+                  <li>
+                    <strong>3. Mesleki Yeterlilik ve Ruhsat Verileri:</strong>
+                    <br />Sağlık Bakanlığı Biyosidal Ürün Uygulayıcı İzin Belgesi numarası ve geçerlilik tarihi, Biyosidal Mesul Müdürlük Sertifikası, TMMOB Ziraat/Kimya Mühendisliği veya Biyologlar Odası sicil kayıt numarası, teknisyen yetkilendirme seviyeleri.
+                  </li>
+                  <li>
+                    <strong>4. Saha, Coğrafi Konum (GPS) ve Cihaz Sensör Verileri:</strong>
+                    <br />İş emrine varış ve iş emrinden ayrılış anlık GPS coğrafi koordinatları (enlem/boylam), istasyon QR kod okutma anındaki kesin konum ve zaman damgası (timestamp), rota doğrulama verileri, dijital tesis yerleşim krokisi (Site Plan) üzerindeki istasyon koordinatları (X, Y eksenleri).
+                  </li>
+                  <li>
+                    <strong>5. Görsel, İşitsel ve Saha İnceleme Verileri:</strong>
+                    <br />Saha denetimleri esnasında teknisyen kamerasıyla çekilen haşere aktivite fotoğrafları, riskli alan/yalıtım eksikliği görselleri, istasyon içi fotoğrafları, sesli saha ses kayıtları (sesli not modülü kullanıldığında) ve teknisyen saha açıklama metinleri.
+                  </li>
+                  <li>
+                    <strong>6. Biyosidal Kimyasal Tüketim ve Uygulama Verileri:</strong>
+                    <br />Kullanılan biyosidal ürünün Sağlık Bakanlığı ruhsat tarihi/numarası, ticari adı, aktif madde adı, konsantrasyonu, formülasyon tipi, uygulanan net miktar (gr/ml/adet), seyreltme oranı, uygulama yöntemi, hedef zararlı türü ve uygulama yapılan spesifik oda/alan bilgisi.
+                  </li>
+                  <li>
+                    <strong>7. İşlem Güvenliği, Siber Güvenlik ve Sistem Log Verileri (5651 Sayılı Kanun):</strong>
+                    <br />İstemci gerçek IP adresi, kaynak port numarası, oturum açma/kapama zaman damgaları, yapılan her türlü veri ekleme/güncelleme/silme işlem kaydı (Audit Trail), cihaz türü (mobil/tablet/masaüstü), işletim sistemi, ekran çözünürlüğü ve tarayıcı kullanıcı aracısı (User-Agent) bilgileri.
+                  </li>
+                  <li>
+                    <strong>8. Müşteri ve Tesis Temsilcisi Verileri:</strong>
+                    <br />Hizmet alan müşteri şirket ticari unvanı, VKN/vergi dairesi, tesis şube sorumlusu ad-soyadı, unvanı, iletişim telefonu ve servis formu teslim onay imzası.
+                  </li>
+                </ul>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>3</span> Kişisel Verilerin İşlenme Amaçları</h4>
+                <p>Toplanan kişisel verileriniz aşağıdaki amaçlarla işlenmektedir:</p>
+                <ul>
+                  <li>Sağlık Bakanlığı Biyosidal Ürünlerin Kullanım Usul ve Esasları Hakkında Yönetmelik gereği zorunlu olan EK-1 Uygulama Belgelerinin, dijital servis raporlarının ve kritik istasyon kontrol formlarının mevzuata tam uyumlu olarak tanzim edilmesi,</li>
+                  <li>İş emirlerinin oluşturulması, saha teknisyenlerine rota atanması, servis varış/ayrılış saatlerinin doğrulanması ve operasyonel verimliliğin sağlanması,</li>
+                  <li>Gıda güvenliği ve uluslararası kalite denetim standartları (HACCP, BRC, AIB, ISO 22000, ISO 9001) kapsamında geriye dönük izlenebilirlik kayıtlarının ve trend analizlerinin üretilmesi,</li>
+                  <li>5651 sayılı İnternet Ortamında Yapılan Yayınların Düzenlenmesi Kanunu gereğince sistem işlem kütüklerinin (log) tutulması, bilgi güvenliğinin sağlanması ve yetkisiz erişimlerin engellenmesi,</li>
+                  <li>Sözleşme süreçlerinin yürütülmesi, faturalandırma, cari hesap mutabakatları ve müşteri destek taleplerinin çözümlenmesi.</li>
+                </ul>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>4</span> Kişisel Veri Toplamanın Hukuki Sebepleri</h4>
+                <p>Kişisel verileriniz, KVKK’nın 5. ve 6. maddelerinde belirtilen aşağıdaki hukuki sebeplere dayanılarak işlenmektedir:</p>
+                <ul>
+                  <li><strong>Kanunlarda Açıkça Öngörülmesi (m.5/2-a):</strong> 5651 sayılı Kanun, Türk Ticaret Kanunu, Vergi Usul Kanunu ve Biyosidal Ürünler Yönetmeliği hükümleri.</li>
+                  <li><strong>Sözleşmenin Kurulması veya İfası (m.5/2-c):</strong> Pestneer SaaS Platform Lisans Sözleşmesi’nin ifası, iş emirlerinin yürütülmesi ve kullanıcı hesaplarının yönetimi.</li>
+                  <li><strong>Veri Sorumlusunun Hukuki Yükümlülüğü (m.5/2-ç):</strong> Yasal denetimlerde resmi formların ve arşiv kayıtlarının yetkili mercilere ibraz edilmesi.</li>
+                  <li><strong>Meşru Menfaat (m.5/2-f):</strong> İlgili kişinin temel hak ve özgürlüklerine zarar vermemek kaydıyla; sistemin siber güvenliğinin sağlanması, performans analizi ve hizmet kalitesinin artırılması.</li>
+                </ul>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>5</span> Kişisel Verilerin Aktarılması</h4>
+                <p>Kişisel verileriniz, KVKK’nın 8. ve 9. maddeleri uyarınca yalnızca aşağıdaki taraflara aktarılmaktadır:</p>
+                <ul>
+                  <li><strong>Yetkili Kamu Kurum ve Kuruluşları:</strong> Sağlık Bakanlığı Halk Sağlığı Genel Müdürlüğü, İl/İlçe Sağlık Müdürlükleri, Tarım ve Orman Bakanlığı, adli ve idari yargı makamları (yasal zorunluluk halinde).</li>
+                  <li><strong>Hizmet Alan Müşteriler ve Şube Yetkilileri:</strong> Servis raporunun ve EK-1 formunun tebliğ edilmesi gereken yetkili müşteri temsilcileri.</li>
+                  <li><strong>Hizmet Sağlayıcıları ve Altyapı Ortakları:</strong> ISO 27001 sertifikalı güvenli bulut barındırma, veritabanı, e-posta gönderimi ve SMS altyapı sağlayıcıları.</li>
+                </ul>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>6</span> Veri Sahibinin Hakları (KVKK Madde 11)</h4>
+                <p>
+                  KVKK’nın 11. maddesi uyarınca veri sahibi olarak; kişisel verilerinizin işlenip işlenmediğini öğrenme, işlenmişse bilgi talep etme, işlenme amacını ve amaca uygun kullanılıp kullanılmadığını öğrenme, yurt içinde veya yurt dışında aktarıldığı üçüncü kişileri bilme, eksik veya yanlış işlenmişse düzeltilmesini isteme, silinmesini veya yok edilmesini talep etme, kanuna aykırı işleme nedeniyle zarara uğramanız halinde zararın giderilmesini talep etme haklarına sahipsiniz.
+                </p>
+                <p>
+                  Başvurularınızı Veri Sorumlusuna Başvuru Usul ve Esasları Hakkında Tebliğ’e uygun olarak <strong>kvkk@pestneer.com</strong> adresine veya şirketimizin resmi kayıtlı posta kanalına iletebilirsiniz. Başvurularınız en geç 30 (otuz) gün içerisinde ücretsiz olarak sonuçlandırılacaktır.
+                </p>
               </section>
             </div>
           )}
@@ -174,38 +223,60 @@ export default function KvkkConsentModal({ session, onAccepted, onLogout }: { se
           {activeTab === 'terms' && (
             <div>
               <div className="kvkk-doc-title">
-                <span>PESTNEER PLATFORMU KULLANICI VE HİZMET SÖZLEŞMESİ</span>
-                <span className="kvkk-doc-version">Sürüm: 2026.1-TR</span>
+                <span>PESTNEER PLATFORMU KULLANICI, LİSANS VE HİZMET SÖZLEŞMESİ</span>
+                <span className="kvkk-doc-version">Sürüm: 2026.1-TR · Hizmet ve Sorumluluk Şartları</span>
               </div>
 
               <section className="kvkk-section">
-                <h4><span>1</span> Taraflar ve Sözleşmenin Kapsamı</h4>
+                <h4><span>1</span> Taraflar ve Sözleşmenin Amacı</h4>
                 <p>
-                  Bu Sözleşme, Pestneer Dijital Haşere ve Biyosidal Takip Platformu (“Pestneer”) ile sisteme giriş yapan kullanıcı (“Kullanıcı”) ve Kullanıcı’nın temsil ettiği tüzel/gerçek kişi firma (“Firma”) arasında akdedilmiştir. Kullanıcı, sisteme giriş yaparak bu sözleşmedeki tüm yükümlülükleri kabul etmiş sayılır.
+                  Bu Kullanıcı ve Lisans Sözleşmesi (“Sözleşme”); Pestneer Dijital Haşere ve Biyosidal Takip Platformu (“Pestneer” veya “Lisans Veren”) ile platforma erişim sağlayan gerçek veya tüzel kişi kullanıcı (“Kullanıcı” veya “Lisans Alan”) arasında akdedilmiştir. Kullanıcı, platforma giriş yaparak ve onay butonunu işaretleyerek bu sözleşmedeki tüm maddeleri gayrikabili rücu kabul etmiş sayılır.
                 </p>
               </section>
 
               <section className="kvkk-section">
-                <h4><span>2</span> Hesap Güvenliği ve Kullanıcı Sorumluluğu</h4>
+                <h4><span>2</span> Hesap Güvenliği ve Kullanıcı Yükümlülükleri</h4>
                 <ul>
-                  <li>Kullanıcı, kendisine tahsis edilen giriş kimlik bilgilerini (şifre, token vb.) gizli tutmakla ve üçüncü şahıslarla paylaşmamakla yükümlüdür.</li>
-                  <li>Kullanıcı hesabından gerçekleştirilen tüm iş emri onayları, servis raporu imzaları, ekipman aktivasyonları ve kimyasal tüketim kayıtları doğrudan kullanıcının ve bağlı bulunduğu firmanın sorumluluğundadır.</li>
-                  <li>Şüpheli bir erişim veya şifre ele geçirilmesi durumunda derhal sistem yöneticisine bildirim yapılmalıdır.</li>
+                  <li><strong>Kimlik Gizliliği:</strong> Kullanıcı, kendisine tahsis edilen kullanıcı adı, parola, API anahtarı ve oturum belirteçlerini gizli tutmakla, üçüncü şahıslarla paylaşmamakla ve güvenliğini sağlamakla yükümlüdür.</li>
+                  <li><strong>Hesap Sorumluluğu:</strong> Kullanıcı hesabı üzerinden gerçekleştirilen tüm iş emri onayları, servis raporu imzaları, ekipman eşleştirmeleri, pestisit dozaj kayıtları ve müşteri bildirimleri doğrudan Kullanıcı ve bağlı bulunduğu tüzel firmanın hukuki sorumluluğundadır.</li>
+                  <li><strong>Yetkisiz Erişim Bildirimi:</strong> Hesabın yetkisiz kişilerce ele geçirildiğinden şüphelenilmesi halinde Kullanıcı, durumu derhal sistem yöneticisine bildirmekle yükümlüdür.</li>
                 </ul>
               </section>
 
               <section className="kvkk-section">
-                <h4><span>3</span> Veri Doğruluğu ve Mevzuata Uygunluk Beyanı</h4>
+                <h4><span>3</span> Biyosidal Veri Doğruluğu ve Yasal Sorumluluk Reddi</h4>
                 <ul>
-                  <li>Kullanıcı; sisteme kaydettiği biyosidal ürün ruhsat numaraları, etken maddeler, dozaj oranları ve istasyon kontrol bulgularının gerçeğe uygun olduğunu, yanıltıcı veya sahte veri girişi yapmayacağını taahhüt eder.</li>
-                  <li>Pestneer, kullanıcının girdiği teknik verilerin doğruluğundan sorumlu olmayıp, platformu yasal mevzuat formatlarına uygun raporlama aracı olarak sunmaktadır.</li>
+                  <li><strong>Teknik Veri Doğruluğu:</strong> Sisteme kaydedilen biyosidal ürünlerin Sağlık Bakanlığı ruhsat numaraları, etken madde isimleri, konsantrasyonları, hedef zararlı türleri, uygulama dozajları ve güvenlik tedbirlerinin gerçeğe ve mevzuata uygunluğu münhasıran uygulayıcı ve lisans sahibi firmanın sorumluluğundadır.</li>
+                  <li><strong>Yazılım Sağlayıcısı Sorumluluk Sınırı:</strong> Pestneer, bir dijital kayıt ve raporlama altyapısı sağlayıcısı olup; sahada icra edilen fiili ilaçlama uygulamalarından, kimyasal zehirlenmelerden, çevreye verilen zararlardan, hedef dışı canlı etkilenmelerinden veya yanlış dozaj uygulamalarından ötürü hukuki, idari veya cezai olarak sorumlu tutulamaz.</li>
                 </ul>
               </section>
 
               <section className="kvkk-section">
-                <h4><span>4</span> Fikri Mülkiyet ve Sistem Bütünlüğü</h4>
+                <h4><span>4</span> Fikri ve Sınai Mülkiyet Hakları</h4>
                 <p>
-                  Pestneer yazılımına, arayüzlerine, QR takip algoritmalarına, AI tespit modellerine ve kod tabanına ilişkin tüm fikri mülkiyet hakları münhasıran Pestneer’e aittir. Sistemin tersine mühendislik (reverse engineering), otomatik veri çekme (scraping) veya güvenlik açıklarını suiistimal etme girişimleri hukuki ve cezai yaptırıma tabidir.
+                  Pestneer yazılımının tüm kaynak kodları, veri tabanı yapıları, algoritma mimarisi, yapay zeka haşere teşhis modelleri, dijital yerleşim planı editörü, kullanıcı arayüzleri ve Pestneer tescilli markası münhasıran Lisans Veren’e aittir. Sistemin kopyalanması, tersine mühendislik yapılması, kaynak koda dönüştürülmesi (decompilation), otomatik veri çekme (scraping) araçlarıyla taranması veya yetkisiz çoğaltılması kesinlikle yasaktır.
+                </p>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>5</span> Müşteri Verilerinin Mülkiyeti ve Gizlilik</h4>
+                <p>
+                  Firmanın ve Kullanıcı’nın platforma yüklediği müşteri portföyü, şube adresleri, sözleşme bedelleri ve operasyonel denetim kayıtları münhasıran ilgili firmanın ticari sırrı niteliğindedir. Pestneer, bu verileri gizli tutmayı, yasal merciler haricinde hiçbir üçüncü tarafla paylaşmamayı ve ticari amaçla satmamayı taahhüt eder.
+                </p>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>6</span> Hizmet Seviyesi (SLA), Bakım ve Sorumluluk Sınırı</h4>
+                <ul>
+                  <li>Pestneer, sistemin 7/24 kesintisiz çalışması için %99.5 yıllık çalışma süresi (uptime) hedefler; planlı bakım çalışmaları önceden bildirilir.</li>
+                  <li>Doğal afetler, global internet omurgası arızaları, telekomünikasyon kesintileri veya siber saldırılar gibi mücbir sebeplerden kaynaklanan geçici kesintilerden ötürü Pestneer’e kar kaybı veya dolaylı zarar tazminatı yüklenemez.</li>
+                </ul>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>7</span> Yetkili Hukuk ve Uyuşmazlıkların Çözümü</h4>
+                <p>
+                  Bu Sözleşme Türkiye Cumhuriyeti Hukuku’na tabidir. Sözleşmenin uygulanmasından veya yorumlanmasından doğabilecek her türlü uyuşmazlıkta İstanbul (Çağlayan) Mahkemeleri ve İcra Daireleri münhasıran yetkilidir.
                 </p>
               </section>
             </div>
@@ -214,28 +285,36 @@ export default function KvkkConsentModal({ session, onAccepted, onLogout }: { se
           {activeTab === 'privacy' && (
             <div>
               <div className="kvkk-doc-title">
-                <span>GİZLİLİK, ÇEREZ VE SİSTEM GÜVENLİĞİ POLİTİKASI</span>
-                <span className="kvkk-doc-version">Sürüm: 2026.1-TR</span>
+                <span>GİZLİLİK, ÇEREZ VE SİBER GÜVENLİK POLİTİKASI</span>
+                <span className="kvkk-doc-version">Sürüm: 2026.1-TR · Bilgi Güvenliği Standartları</span>
               </div>
 
               <section className="kvkk-section">
-                <h4><span>1</span> Güvenlik Standartları & Şifreleme</h4>
+                <h4><span>1</span> Siber Güvenlik Standartları ve Şifreleme</h4>
                 <p>
-                  Pestneer, endüstri standardı 256-bit TLS/SSL uçtan uca şifreleme protokolleri, PBKDF2/Argon2 şifre hash algoritmaları ve izole çok kiracılı (multi-tenant) veri mimarisi kullanmaktadır. Tüm operasyon verileriniz güvenli bulut ortamında periyodik olarak yedeklenmektedir.
+                  Pestneer altyapısında; tüm veri transferleri endüstri standardı 256-bit TLS/SSL (HTTPS) protokolü ile şifrelenir. Kullanıcı parolaları tek yönlü kriptografik özetleme algoritmaları (PBKDF2/Argon2) ile tuzlanarak saklanır. Veritabanı ve yedekleme katmanında dinlenme halindeki veriler (Data-at-Rest) AES-256 standardında şifrelenmektedir.
                 </p>
               </section>
 
               <section className="kvkk-section">
-                <h4><span>2</span> Çerezler ve Yerel Depolama (Cookies & Local Storage)</h4>
+                <h4><span>2</span> Çerez Politikası ve Üçüncü Taraf Takip Reddi</h4>
+                <ul>
+                  <li><strong>Sıfır Pazarlama Takibi:</strong> Pestneer platformunda <strong>asla üçüncü taraf reklam, pazarlama, davranışsal hedefleme veya sosyal medya takip çerezleri kullanılmamaktadır</strong>.</li>
+                  <li><strong>Zorunlu Teknik Çerezler:</strong> Yalnızca kullanıcının oturum güvenliğini sağlayan, kimlik doğrulama belirteçlerini (JWT) koruyan ve sistem ayarlarını hatırlayan birinci taraf teknik çerezler ve tarayıcı yerel depolama (Local/Session Storage) alanları kullanılmaktadır.</li>
+                </ul>
+              </section>
+
+              <section className="kvkk-section">
+                <h4><span>3</span> Veri Saklama, Arşivleme ve İmha Politikası</h4>
                 <p>
-                  Sistemimizde <strong>kesinlikle üçüncü taraf reklam veya pazarlama takip çerezleri kullanılmamaktadır</strong>. Yalnızca oturum güvenliğinizi sağlamak, kimlik doğrulama belirteçlerini (JWT) saklamak ve tema tercihlerinizi hatırlamak amacıyla birinci taraf teknik çerezler ve tarayıcı yerel depolama alanları kullanılmaktadır.
+                  Sağlık Bakanlığı Biyosidal Mevzuatı ve Türk Ticaret Kanunu uyarınca, gerçekleştirilen uygulamalara ait servis formları, kimyasal tüketim kayıtları ve denetim logları <strong>10 (on) yıllık yasal zamanaşımı süresi</strong> boyunca güvenli bulut arşivinde saklanır. Yasal saklama süresinin sona ermesi veya haklı imha talebi halinde veriler uluslararası standartlara (ISO 27001) uygun olarak geri döndürülemez şekilde silinir veya anonimleştirilir.
                 </p>
               </section>
 
               <section className="kvkk-section">
-                <h4><span>3</span> Veri Saklama ve İmha Süresi</h4>
+                <h4><span>4</span> Loglama ve 5651 Sayılı Kanun Uyumu</h4>
                 <p>
-                  Biyosidal ürün kayıtları, servis formları ve denetim logları mevzuat gereği 10 (on) yıllık yasal zamanaşımı süresi boyunca güvenle arşivlenir. Süre hitamında veya yasal talep halinde veriler uluslararası veri imha standartlarına uygun olarak geri döndürülemez biçimde anonimleştirilir veya silinir.
+                  Platforma yapılan tüm erişimler, oturum açma/kapatma hareketleri, iş emri düzenlemeleri ve silme işlemleri zaman damgalı olarak denetim kütüklerinde (Audit Log) kaydedilmekte ve yetkisiz müdahalelere karşı kriptografik olarak korunmaktadır.
                 </p>
               </section>
             </div>
