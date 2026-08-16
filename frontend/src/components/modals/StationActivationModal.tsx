@@ -11,6 +11,7 @@ import {
 } from '../../services/stationActivationApi';
 import QrScannerModal from './QrScannerModal';
 import { downloadStationLabelPdf, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
+import { getCompanyBranding, getCompanyLogoObjectUrl } from '../../services/brandingApi';
 
 type Props = {
   accessToken: string;
@@ -143,6 +144,17 @@ export default function StationActivationModal({ accessToken, order, onClose, on
 
   const handleDownloadQrLabels = async () => {
     try {
+      let companyName = 'Pestneer';
+      let logoUrl: string | null = null;
+      try {
+        const branding = await getCompanyBranding(accessToken);
+        if (branding.companyName) companyName = branding.companyName;
+        if (branding.hasLogo) {
+          logoUrl = await getCompanyLogoObjectUrl(accessToken);
+        }
+      } catch {
+        // fallback
+      }
       const planToUse = sitePlan || {
         id: order.recordId,
         customerId: order.customerId,
@@ -151,7 +163,7 @@ export default function StationActivationModal({ accessToken, order, onClose, on
         branchName: order.branch,
         areaName: 'Tüm Tesis',
       };
-      await downloadStationLabelPdf(planToUse, stations, 'Pestneer İlaçlama');
+      await downloadStationLabelPdf(planToUse, stations, { companyName, logoUrl });
     } catch (qrErr) {
       setError(qrErr instanceof Error ? qrErr.message : 'QR etiketleri oluşturulamadı.');
     }

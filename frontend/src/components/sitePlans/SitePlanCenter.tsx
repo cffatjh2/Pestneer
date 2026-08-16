@@ -8,6 +8,7 @@ import {
 } from '../../services/sitePlanApi';
 import QrScannerModal from '../modals/QrScannerModal';
 import { downloadSitePlanStationLabels } from '../../utils/stationQr';
+import { getCompanyBranding, getCompanyLogoObjectUrl } from '../../services/brandingApi';
 import './sitePlanCenter.css';
 
 type Props = {
@@ -66,7 +67,18 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
 
   const downloadQrLabels = async (plan: SitePlanRecord) => {
     try {
-      await downloadSitePlanStationLabels(plan, 'Pestneer İlaçlama');
+      let companyName = 'Pestneer';
+      let logoUrl: string | null = null;
+      try {
+        const branding = await getCompanyBranding(accessToken);
+        if (branding.companyName) companyName = branding.companyName;
+        if (branding.hasLogo) {
+          logoUrl = await getCompanyLogoObjectUrl(accessToken);
+        }
+      } catch {
+        // use defaults
+      }
+      await downloadSitePlanStationLabels(plan, { companyName, logoUrl });
     } catch (qrError) {
       setError(qrError instanceof Error ? qrError.message : 'QR etiketleri oluşturulamadı.');
     }
