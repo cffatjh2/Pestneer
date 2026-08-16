@@ -300,8 +300,11 @@ static async Task<IResult> SignInAsync(
     ILoginService loginService,
     CancellationToken cancellationToken)
 {
-    var response = await loginService.SignInAsync(portal, request, cancellationToken);
-    return response is null
-        ? Results.Json(new { message = "Firma kodu, e-posta veya şifre hatalı." }, statusCode: StatusCodes.Status401Unauthorized)
-        : Results.Ok(response);
+    var result = await loginService.SignInAsync(portal, request, cancellationToken);
+    if (result.Response is not null) return Results.Ok(result.Response);
+    if (result.IsTrialExpired)
+    {
+        return Results.Json(new { message = result.ErrorMessage, isTrialExpired = true }, statusCode: StatusCodes.Status403Forbidden);
+    }
+    return Results.Json(new { message = result.ErrorMessage ?? "Firma kodu, e-posta veya şifre hatalı." }, statusCode: StatusCodes.Status401Unauthorized);
 }

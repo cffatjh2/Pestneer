@@ -21,6 +21,9 @@ public static class SystemAdministrationEndpoints
         group.MapPost("/companies", CreateCompanyAsync);
         group.MapPost("/companies/{companyId:guid}/employees", CreateEmployeeAsync);
         group.MapPost("/companies/{companyId:guid}/customers", CreateCustomerAsync);
+        group.MapPost("/companies/{companyId:guid}/convert-to-real", ConvertCompanyToRealAsync);
+        group.MapPost("/companies/{companyId:guid}/extend-trial", ExtendCompanyTrialAsync);
+        group.MapPost("/companies/{companyId:guid}/set-trial", SetCompanyTrialAsync);
         return app;
     }
 
@@ -122,10 +125,16 @@ public static class SystemAdministrationEndpoints
 
     private static async Task<IResult> GetCompaniesAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
     {
+        var now = DateTimeOffset.UtcNow;
         var companies = await dbContext.Companies.IgnoreQueryFilters().AsNoTracking().OrderBy(item => item.LegalName)
             .Select(item => new
             {
                 item.Id, item.LegalName, item.Code, item.IsActive, item.CreatedAt,
+                item.IsTrial, item.TrialStartedAt, item.TrialEndsAt,
+                isTrialExpired = item.IsTrial && item.TrialEndsAt.HasValue && item.TrialEndsAt.Value < now,
+                remainingDays = item.IsTrial && item.TrialEndsAt.HasValue
+                    ? (int)Math.Max(0, Math.Ceiling((item.TrialEndsAt.Value - now).TotalDays))
+                    : 0,
                 ownerCount = dbContext.CompanyMemberships.IgnoreQueryFilters().Count(value => value.CompanyId == item.Id && value.IsActive && value.Role == CompanyRole.Owner),
                 employeeCount = dbContext.CompanyMemberships.IgnoreQueryFilters().Count(value => value.CompanyId == item.Id && value.IsActive && value.Account.Portal == PortalType.Employee),
                 customerCount = dbContext.Customers.IgnoreQueryFilters().Count(value => value.CompanyId == item.Id && value.IsActive)
@@ -143,13 +152,65 @@ public static class SystemAdministrationEndpoints
         var normalizedEmail = request.OwnerEmail.Trim().ToUpperInvariant();
         if (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(item => item.Code == code, cancellationToken)) return Results.Conflict(new { message = "Firma kodu kullanılıyor." });
         if (await dbContext.Accounts.IgnoreQueryFilters().AnyAsync(item => item.Portal == PortalType.Owner && item.NormalizedEmail == normalizedEmail, cancellationToken)) return Results.Conflict(new { message = "Firma sahibi e-postası kullanılıyor." });
-        var company = new Company { Id = Guid.NewGuid(), LegalName = request.CompanyName.Trim(), Code = code, ReportNotificationEmail = request.OwnerEmail.Trim() };
+
+        var now = DateTimeOffset.UtcNow;
+        var isTrial = request.IsTrial;
+        var company = new Company
+        {
+            Id = Guid.NewGuid(),
+            LegalName = request.CompanyName.Trim(),
+            Code = code,
+            ReportNotificationEmail = request.OwnerEmail.Trim(),
+            IsTrial = isTrial,
+            TrialStartedAt = isTrial ? now : null,
+            TrialEndsAt = isTrial ? now.AddDays(7) : null,
+        };
         var owner = CreateAccount(request.OwnerEmail, request.OwnerName, request.OwnerPhone, request.OwnerPassword, PortalType.Owner, passwordHasher);
         dbContext.Companies.Add(company);
         dbContext.Accounts.Add(owner);
         dbContext.CompanyMemberships.Add(new CompanyMembership { Id = Guid.NewGuid(), AccountId = owner.Id, CompanyId = company.Id, Role = CompanyRole.Owner });
         await dbContext.SaveSystemAdministrationChangesAsync(company.Id, cancellationToken);
-        return Results.Created($"/api/system-control/companies/{company.Id}", new { company.Id, company.LegalName, company.Code, ownerId = owner.Id });
+        return Results.Created($"/api/system-control/companies/{company.Id}", new { company.Id, company.LegalName, company.Code, ownerId = owner.Id, company.IsTrial, company.TrialEndsAt });
+    }
+
+    private static async Task<IResult> ConvertCompanyToRealAsync(Guid companyId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var company = await dbContext.Companies.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == companyId, cancellationToken);
+        if (company is null) return Results.NotFound(new { message = "Firma bulunamadı." });
+        company.IsTrial = false;
+        company.TrialEndsAt = null;
+        company.IsActive = true;
+        await dbContext.SaveSystemAdministrationChangesAsync(companyId, cancellationToken);
+        return Results.Ok(new { message = $"{company.LegalName} firması başarıyla gerçek (süresiz) hesaba dönüştürüldü.", company.Id, company.IsTrial });
+    }
+
+    private static async Task<IResult> ExtendCompanyTrialAsync(Guid companyId, ExtendTrialRequest? request, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var company = await dbContext.Companies.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == companyId, cancellationToken);
+        if (company is null) return Results.NotFound(new { message = "Firma bulunamadı." });
+        var days = request?.Days is > 0 and <= 365 ? request.Days.Value : 7;
+        var now = DateTimeOffset.UtcNow;
+        var baseDate = company.TrialEndsAt.HasValue && company.TrialEndsAt.Value > now ? company.TrialEndsAt.Value : now;
+        company.IsTrial = true;
+        company.TrialStartedAt ??= now;
+        company.TrialEndsAt = baseDate.AddDays(days);
+        company.IsActive = true;
+        await dbContext.SaveSystemAdministrationChangesAsync(companyId, cancellationToken);
+        return Results.Ok(new { message = $"{company.LegalName} deneme süresi {days} gün uzatıldı (Yeni bitiş: {company.TrialEndsAt:dd.MM.yyyy}).", company.Id, company.IsTrial, company.TrialEndsAt });
+    }
+
+    private static async Task<IResult> SetCompanyTrialAsync(Guid companyId, SetTrialRequest? request, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var company = await dbContext.Companies.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == companyId, cancellationToken);
+        if (company is null) return Results.NotFound(new { message = "Firma bulunamadı." });
+        var days = request?.Days is > 0 and <= 365 ? request.Days.Value : 7;
+        var now = DateTimeOffset.UtcNow;
+        company.IsTrial = true;
+        company.TrialStartedAt = now;
+        company.TrialEndsAt = now.AddDays(days);
+        company.IsActive = true;
+        await dbContext.SaveSystemAdministrationChangesAsync(companyId, cancellationToken);
+        return Results.Ok(new { message = $"{company.LegalName} firması {days} günlük deneme hesabına alındı.", company.Id, company.IsTrial, company.TrialEndsAt });
     }
 
     private static async Task<IResult> CreateEmployeeAsync(Guid companyId, CreateSystemEmployeeRequest request, PesneerDbContext dbContext,
@@ -205,6 +266,8 @@ public sealed record SystemAdminLoginRequest(string Email, string Password);
 public sealed record CreateSystemAdminRequest(string Name, string Email, string Password, string? Phone);
 public sealed record ResetSystemAccountPasswordRequest(string NewPassword, string NewPasswordConfirmation);
 public sealed record SystemAccountRecord(Guid Id, string Name, string Email, string Portal, string Role);
-public sealed record CreateSystemCompanyRequest(string CompanyName, string CompanyCode, string OwnerName, string OwnerEmail, string OwnerPassword, string? OwnerPhone);
+public sealed record CreateSystemCompanyRequest(string CompanyName, string CompanyCode, string OwnerName, string OwnerEmail, string OwnerPassword, string? OwnerPhone, bool IsTrial = true);
 public sealed record CreateSystemEmployeeRequest(string Name, string Email, string Password, string? Phone, string Role, bool CanSelfSchedule);
 public sealed record CreateSystemCustomerRequest(string CustomerName, string? CustomerCode, string ContactName, string Email, string Password, string? Phone, string? Address, string? City, string? District, string? MapUrl);
+public sealed record ExtendTrialRequest(int? Days);
+public sealed record SetTrialRequest(int? Days);

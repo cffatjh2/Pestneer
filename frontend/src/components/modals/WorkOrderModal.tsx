@@ -91,12 +91,32 @@ export default function WorkOrderModal({ customers, employees = [], editingOrder
           {isEditing && <label>Saha personeli<select name="employeeAccountId" defaultValue={editingOrder?.employeeAccountId ?? ''}><option value="">Atama bekliyor</option>{employees.filter((item) => item.isActive).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
           <label>Tarih<input name="date" type="date" defaultValue={initialDate} required /></label><label>Saat<input name="time" type="time" defaultValue={initialTime} required /></label>
           <label>Tahmini süre<select name="durationMinutes" defaultValue={String(editingOrder?.durationMinutes ?? 60)}><option value="30">30 dakika</option><option value="45">45 dakika</option><option value="60">1 saat</option><option value="90">1,5 saat</option><option value="120">2 saat</option></select></label>
-          {!isEditing && <label>Tekrar düzeni<select value={recurrenceType} onChange={(event) => setRecurrenceType(event.target.value)}><option value="Once">Tek seferlik</option><option value="Weekly">Haftalık</option><option value="Monthly">Aylık</option><option value="Manual">Manuel tarihler</option></select></label>}
-          {!isEditing && (recurrenceType === 'Weekly' || recurrenceType === 'Monthly') && <label>Tekrar sayısı<input name="occurrenceCount" type="number" min="2" max={recurrenceType === 'Weekly' ? 52 : 24} defaultValue="4" /></label>}
-          {!isEditing && recurrenceType === 'Manual' && <label className="form-field-wide">Ek tarihler<textarea name="manualDates" placeholder="Tarihleri virgülle ayırın" required /></label>}
+          {!isEditing && <label>Tekrar düzeni<select value={recurrenceType} onChange={(event) => setRecurrenceType(event.target.value)}><option value="Once">Tek seferlik</option><option value="Monthly">Aylık (12 Aylık Periyot)</option><option value="Weekly">Haftalık (52 Haftalık Periyot)</option><option value="Manual">Manuel tarihler</option></select></label>}
+          {!isEditing && (recurrenceType === 'Weekly' || recurrenceType === 'Monthly') && (
+            <label>
+              {recurrenceType === 'Monthly' ? 'Tekrar sayısı (Ay)' : 'Tekrar sayısı (Hafta)'}
+              <input
+                name="occurrenceCount"
+                type="number"
+                min="2"
+                max={recurrenceType === 'Weekly' ? 104 : 60}
+                key={recurrenceType}
+                defaultValue={recurrenceType === 'Monthly' ? 12 : 52}
+              />
+            </label>
+          )}
+          {!isEditing && recurrenceType === 'Manual' && <label className="form-field-wide">Ek tarihler<textarea name="manualDates" placeholder="Tarihleri virgülle ayırın (Örn: 2026-09-15, 2026-10-15)" required /></label>}
           {isEditing && <label>Durum<select name="status" defaultValue={editingOrder?.technicalStatus ?? 'Planned'}><option value="Planned">Planlandı</option><option value="Cancelled">İptal</option></select></label>}
           <label className="form-field-wide">Operasyon notu<textarea name="notes" defaultValue={editingOrder?.notes} maxLength={1000} placeholder="Erişim bilgisi, özel talimat veya şube notu..." /></label>
         </div>
+        {!isEditing && (recurrenceType === 'Monthly' || recurrenceType === 'Weekly') && (
+          <div className="batch-order-summary" style={{ marginTop: '8px' }}>
+            <CalendarRange size={18} />
+            <span>
+              <strong>12 Aylık Takvim Projeksiyonu:</strong> {recurrenceType === 'Monthly' ? 'Seçtiğiniz tarihin gününe göre (örn. her ayın 3\'ü) 12 ay boyunca takvime otomatik iş emri tanımlanır.' : 'Her 7 günde bir olmak üzere 52 hafta boyunca takvime iş emri tanımlanır.'} Rutin işleri personel farklı günlerde de esnek olarak başlatabilir.
+            </span>
+          </div>
+        )}
         {!isEditing && selectedBranchIds.length > 0 && <div className="batch-order-summary"><CalendarRange size={18} /><span><strong>{selectedBranchIds.length} şube</strong> seçildi. Tekrar düzenine göre her tarih ve şube için bağımsız iş emri oluşur.</span></div>}
         {error && <div className="modal-form-error" role="alert">{error}</div>}
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button" disabled={isSubmitting || selectedBranchIds.length === 0}>{isSubmitting ? 'Kaydediliyor…' : isEditing ? 'Değişiklikleri Kaydet' : 'Planı Oluştur'} <ArrowUpRight size={17} /></button></div>

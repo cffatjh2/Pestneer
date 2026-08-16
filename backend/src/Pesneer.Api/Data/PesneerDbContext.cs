@@ -66,6 +66,7 @@ public class PesneerDbContext(
             entity.Property(company => company.LogoContentType).HasMaxLength(80);
             entity.Property(company => company.LogoFileName).HasMaxLength(240);
             entity.Property(company => company.ReportNotificationEmail).HasMaxLength(320);
+            entity.Property(company => company.IsTrial).HasDefaultValue(false);
             entity.Property(company => company.VisionEnabled).HasDefaultValue(true);
             entity.Property(company => company.VisionReviewRequired).HasDefaultValue(true);
             entity.Property(company => company.VisionPreferredModel).HasMaxLength(16).HasDefaultValue("Auto");

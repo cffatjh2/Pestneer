@@ -31,6 +31,9 @@ public sealed class Company
     public required string LegalName { get; set; }
     public required string Code { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool IsTrial { get; set; } = false;
+    public DateTimeOffset? TrialStartedAt { get; set; }
+    public DateTimeOffset? TrialEndsAt { get; set; }
     public byte[]? LogoData { get; set; }
     public string? LogoContentType { get; set; }
     public string? LogoFileName { get; set; }

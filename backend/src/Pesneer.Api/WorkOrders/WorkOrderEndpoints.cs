@@ -429,6 +429,15 @@ public static class WorkOrderEndpoints
         if (workOrder is null) return Results.NotFound(new { message = "Atanmış iş emri bulunamadı." });
         if (workOrder.Status is "Completed" or "Cancelled" or "Skipped") return Results.Conflict(new { message = "Kapanmış ziyaret tekrar başlatılamaz." });
 
+        if (string.Equals(workOrder.RecurrenceType, "Once", StringComparison.OrdinalIgnoreCase))
+        {
+            var scheduledDate = DateOnly.FromDateTime(workOrder.ScheduledAt.LocalDateTime.Date);
+            if (scheduledDate != today)
+            {
+                return Results.Conflict(new { message = $"Tek seferlik iş emirleri yalnızca planlandığı tarihte ({scheduledDate:dd.MM.yyyy}) başlatılabilir." });
+            }
+        }
+
         if (!workOrder.VisitSessions.Any(item => item.EmployeeAccountId == companyContext.AccountId.Value && item.Status == "Active"))
         {
             var visitSession = new WorkOrderVisitSession
@@ -592,14 +601,18 @@ public static class WorkOrderEndpoints
         }).ToArray();
     }
 
-    private static IReadOnlyList<DateOnly>? BuildScheduleDates(CreateWorkOrdersRequest request) => request.RecurrenceType switch
+    private static IReadOnlyList<DateOnly>? BuildScheduleDates(CreateWorkOrdersRequest request)
     {
-        "Once" => [request.Date],
-        "Weekly" when request.OccurrenceCount is >= 2 and <= 52 => Enumerable.Range(0, request.OccurrenceCount.Value).Select(index => request.Date.AddDays(index * 7)).ToArray(),
-        "Monthly" when request.OccurrenceCount is >= 2 and <= 24 => Enumerable.Range(0, request.OccurrenceCount.Value).Select(index => request.Date.AddMonths(index)).ToArray(),
-        "Manual" when request.ManualDates is { Count: >= 1 and <= 60 } => request.ManualDates.Append(request.Date).Distinct().ToArray(),
-        _ => null
-    };
+        var count = request.OccurrenceCount;
+        return request.RecurrenceType switch
+        {
+            "Once" => [request.Date],
+            "Weekly" => Enumerable.Range(0, count is >= 2 and <= 104 ? count.Value : 52).Select(index => request.Date.AddDays(index * 7)).ToArray(),
+            "Monthly" => Enumerable.Range(0, count is >= 2 and <= 60 ? count.Value : 12).Select(index => request.Date.AddMonths(index)).ToArray(),
+            "Manual" when request.ManualDates is { Count: >= 1 and <= 60 } => request.ManualDates.Append(request.Date).Distinct().OrderBy(d => d).ToArray(),
+            _ => null
+        };
+    }
 
     private static WorkOrderStatusHistory NewHistory(Guid companyId, Guid workOrderId, Guid accountId, string? fromStatus, string toStatus, string note) => new()
     {

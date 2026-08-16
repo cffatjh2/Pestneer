@@ -1,12 +1,29 @@
 import { apiFetch } from './apiBase';
 
 export type SystemAdminSession = { accessToken: string; expiresAt: string; user: { id: string; displayName: string; email: string } };
-export type SystemCompany = { id: string; legalName: string; code: string; isActive: boolean; createdAt: string; ownerCount: number; employeeCount: number; customerCount: number };
+export type SystemCompany = {
+  id: string;
+  legalName: string;
+  code: string;
+  isActive: boolean;
+  isTrial: boolean;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  isTrialExpired: boolean;
+  remainingDays: number;
+  createdAt: string;
+  ownerCount: number;
+  employeeCount: number;
+  customerCount: number;
+};
 export type SystemAccount = { id: string; name: string; email: string; portal: 'Owner' | 'Employee' | 'Customer' | 'SystemAdmin'; role: string };
 
 export const loginSystemAdmin = (email: string, password: string) => request<SystemAdminSession>('/api/system-control/auth/login', undefined, { method: 'POST', body: JSON.stringify({ email, password }) });
 export const getSystemCompanies = (token: string) => request<SystemCompany[]>('/api/system-control/companies', token);
 export const createSystemCompany = (token: string, input: Record<string, unknown>) => request('/api/system-control/companies', token, { method: 'POST', body: JSON.stringify(input) });
+export const convertCompanyToReal = (token: string, companyId: string) => request<{ message: string; id: string; isTrial: boolean }>(`/api/system-control/companies/${companyId}/convert-to-real`, token, { method: 'POST' });
+export const extendCompanyTrial = (token: string, companyId: string, days = 7) => request<{ message: string; id: string; isTrial: boolean; trialEndsAt: string }>(`/api/system-control/companies/${companyId}/extend-trial`, token, { method: 'POST', body: JSON.stringify({ days }) });
+export const setCompanyTrial = (token: string, companyId: string, days = 7) => request<{ message: string; id: string; isTrial: boolean; trialEndsAt: string }>(`/api/system-control/companies/${companyId}/set-trial`, token, { method: 'POST', body: JSON.stringify({ days }) });
 export const createSystemEmployee = (token: string, companyId: string, input: Record<string, unknown>) => request(`/api/system-control/companies/${companyId}/employees`, token, { method: 'POST', body: JSON.stringify(input) });
 export const createSystemCustomer = (token: string, companyId: string, input: Record<string, unknown>) => request(`/api/system-control/companies/${companyId}/customers`, token, { method: 'POST', body: JSON.stringify(input) });
 export const createSystemAdmin = (token: string, input: Record<string, unknown>) => request('/api/system-control/admins', token, { method: 'POST', body: JSON.stringify(input) });

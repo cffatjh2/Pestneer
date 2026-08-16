@@ -66,6 +66,12 @@ export default function TaskDetailModal({
   const mapQuery = order?.branchAddress || task.branchName || task.customerName || '';
   const mapUrl = order?.branchMapUrl || (mapQuery ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}` : undefined);
 
+  const isOrderPlanned = order?.technicalStatus === 'Planned';
+  const orderDate = order?.date ? new Date(order.date) : null;
+  const isScheduledToday = orderDate ? isSameDate(orderDate, new Date()) : false;
+  const isRoutine = !!(order?.recurrenceType && order.recurrenceType !== 'Once');
+  const canStartWork = !isOrderPlanned || isRoutine || isScheduledToday;
+
   return (
     <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Görev ve İş Emri Detayı">
       <div className="modal work-order-detail-modal task-detail-modal">
@@ -217,6 +223,29 @@ export default function TaskDetailModal({
           </div>
         )}
 
+        {isWorkOrder && order && order.technicalStatus === 'Planned' && !canStartWork && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              margin: '14px 0 6px',
+              padding: '12px 14px',
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: '10px',
+              color: '#92400e',
+              fontSize: '12px',
+              lineHeight: '1.5',
+            }}
+          >
+            <AlertTriangle size={18} style={{ flex: '0 0 auto', color: '#d97706' }} />
+            <span>
+              <strong>Tek Seferlik İş Emri:</strong> Bu iş yalnızca planlandığı tarihte ({order.date}) başlatılabilir. Rutin (haftalık/aylık) iş emirleri ise saha esnekliği gereği farklı günlerde de başlatılabilir.
+            </span>
+          </div>
+        )}
+
         {/* Modal Actions */}
         <div className="modal-actions">
           {mapUrl && (
@@ -238,8 +267,14 @@ export default function TaskDetailModal({
             </button>
           )}
           {order && onOpenWorkOrderInPanel && (
-            <button type="button" className="primary-button" onClick={() => onOpenWorkOrderInPanel(order)}>
-              <ArrowUpRight size={16} /> {order.technicalStatus === 'Planned' ? 'İşe Başla / Müşteriyi Aç' : 'İş Emirlerimde Gör'}
+            <button
+              type="button"
+              className="primary-button"
+              disabled={order.technicalStatus === 'Planned' && !canStartWork}
+              title={order.technicalStatus === 'Planned' && !canStartWork ? 'Tek seferlik işler sadece planlandığı gün başlatılabilir' : undefined}
+              onClick={() => onOpenWorkOrderInPanel(order)}
+            >
+              <ArrowUpRight size={16} /> {order.technicalStatus === 'Planned' ? (canStartWork ? 'İşe Başla / Müşteriyi Aç' : 'Plan Gününde Başlatılabilir') : 'İş Emirlerimde Gör'}
             </button>
           )}
           <button type="button" className="secondary-button" onClick={onClose}>
@@ -249,6 +284,10 @@ export default function TaskDetailModal({
       </div>
     </div>
   );
+}
+
+function isSameDate(d1: Date, d2: Date) {
+  return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
 
 function AuthorizedPhoto({ photo, token }: { photo: WorkOrderPhoto; token: string }) {
