@@ -282,14 +282,17 @@ public sealed class GoogleEmailConnectionService(
             .Append("Content-Type: text/html; charset=utf-8\r\n")
             .Append("Content-Transfer-Encoding: base64\r\n\r\n")
             .Append(WrapBase64(Encoding.UTF8.GetBytes(email.HtmlBody))).Append("\r\n");
-        if (email.AttachmentData is { Length: > 0 })
+        foreach (var attachment in email.Attachments)
         {
-            var fileName = email.AttachmentName.Replace("\"", string.Empty);
-            builder.Append("--").Append(boundary).Append("\r\n")
-                .Append("Content-Type: ").Append(email.AttachmentContentType).Append("; name=\"").Append(fileName).Append("\"\r\n")
-                .Append("Content-Disposition: attachment; filename=\"").Append(fileName).Append("\"\r\n")
-                .Append("Content-Transfer-Encoding: base64\r\n\r\n")
-                .Append(WrapBase64(email.AttachmentData)).Append("\r\n");
+            if (attachment.Data is { Length: > 0 })
+            {
+                var fileName = attachment.Name.Replace("\"", string.Empty);
+                builder.Append("--").Append(boundary).Append("\r\n")
+                    .Append("Content-Type: ").Append(attachment.ContentType).Append("; name=\"").Append(fileName).Append("\"\r\n")
+                    .Append("Content-Disposition: attachment; filename=\"").Append(fileName).Append("\"\r\n")
+                    .Append("Content-Transfer-Encoding: base64\r\n\r\n")
+                    .Append(WrapBase64(attachment.Data)).Append("\r\n");
+            }
         }
         builder.Append("--").Append(boundary).Append("--\r\n");
         return Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(builder.ToString()));

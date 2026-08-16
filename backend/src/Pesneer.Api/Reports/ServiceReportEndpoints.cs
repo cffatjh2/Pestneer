@@ -51,8 +51,8 @@ public static class ServiceReportEndpoints
             return Results.NotFound(new { message = "Hizmet raporu bulunamadı." });
 
         var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == report.CompanyId, cancellationToken);
-        var pdf = AuditPackageRenderer.RenderServiceReport(report, company);
-        return Results.File(pdf, "application/pdf", $"{report.ReportNumber}.pdf");
+        var pdf = AuditPackageRenderer.RenderOfficialEk1Form(report, company);
+        return Results.File(pdf, "application/pdf", $"{report.ReportNumber}_EK1.pdf");
     }
 
     private static async Task<IResult> GetByWorkOrderAsync(Guid workOrderId, PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)

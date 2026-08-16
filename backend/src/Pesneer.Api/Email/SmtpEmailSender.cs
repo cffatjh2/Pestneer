@@ -6,15 +6,56 @@ using Microsoft.Extensions.Options;
 
 namespace Pesneer.Api.Email;
 
-public sealed record OutboundEmail(
-    Guid CompanyId,
-    string DeliveryKey,
-    string Recipient,
-    string Subject,
-    string HtmlBody,
-    string AttachmentName,
-    string AttachmentContentType,
-    byte[]? AttachmentData);
+public sealed record EmailAttachment(
+    string Name,
+    string ContentType,
+    byte[] Data);
+
+public sealed record OutboundEmail
+{
+    public Guid CompanyId { get; init; }
+    public string DeliveryKey { get; init; } = string.Empty;
+    public string Recipient { get; init; } = string.Empty;
+    public string Subject { get; init; } = string.Empty;
+    public string HtmlBody { get; init; } = string.Empty;
+    public IReadOnlyList<EmailAttachment> Attachments { get; init; } = [];
+
+    public string AttachmentName => Attachments.FirstOrDefault()?.Name ?? string.Empty;
+    public string AttachmentContentType => Attachments.FirstOrDefault()?.ContentType ?? "application/pdf";
+    public byte[]? AttachmentData => Attachments.FirstOrDefault()?.Data;
+
+    public OutboundEmail(
+        Guid companyId,
+        string deliveryKey,
+        string recipient,
+        string subject,
+        string htmlBody,
+        IReadOnlyList<EmailAttachment> attachments)
+    {
+        CompanyId = companyId;
+        DeliveryKey = deliveryKey;
+        Recipient = recipient;
+        Subject = subject;
+        HtmlBody = htmlBody;
+        Attachments = attachments;
+    }
+
+    public OutboundEmail(
+        Guid companyId,
+        string deliveryKey,
+        string recipient,
+        string subject,
+        string htmlBody,
+        string attachmentName,
+        string attachmentContentType,
+        byte[]? attachmentData)
+        : this(companyId, deliveryKey, recipient, subject, htmlBody,
+            attachmentData is { Length: > 0 }
+                ? [new EmailAttachment(attachmentName, attachmentContentType, attachmentData)]
+                : [])
+    {
+    }
+}
 
 public sealed record EmailSenderStatus(
     bool IsConfigured,
@@ -100,6 +141,7 @@ public sealed class ReliableEmailSender(
         using var request = new HttpRequestMessage(HttpMethod.Post, "emails");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
         request.Headers.TryAddWithoutValidation("Idempotency-Key", email.DeliveryKey);
+        var attachmentList = email.Attachments.Where(a => a.Data is { Length: > 0 }).ToList();
         request.Content = JsonContent.Create(new
         {
             from = $"{options.FromName} <{EffectiveFromAddress}>",
@@ -107,8 +149,8 @@ public sealed class ReliableEmailSender(
             subject = email.Subject,
             html = email.HtmlBody,
             reply_to = string.IsNullOrWhiteSpace(options.ReplyTo) ? null : options.ReplyTo,
-            attachments = email.AttachmentData is { Length: > 0 }
-                ? new[] { new { filename = email.AttachmentName, content = Convert.ToBase64String(email.AttachmentData) } }
+            attachments = attachmentList.Count > 0
+                ? attachmentList.Select(a => new { filename = a.Name, content = Convert.ToBase64String(a.Data) }).ToArray()
                 : null
         });
         using var response = await client.SendAsync(request, cancellationToken);
@@ -130,10 +172,13 @@ public sealed class ReliableEmailSender(
         message.To.Add(new MailAddress(email.Recipient));
         if (!string.IsNullOrWhiteSpace(options.ReplyTo) && MailAddress.TryCreate(options.ReplyTo, out var replyTo))
             message.ReplyToList.Add(replyTo);
-        if (email.AttachmentData is { Length: > 0 })
+        foreach (var attachment in email.Attachments)
         {
-            var attachmentStream = new MemoryStream(email.AttachmentData, writable: false);
-            message.Attachments.Add(new Attachment(attachmentStream, email.AttachmentName, email.AttachmentContentType));
+            if (attachment.Data is { Length: > 0 })
+            {
+                var attachmentStream = new MemoryStream(attachment.Data, writable: false);
+                message.Attachments.Add(new Attachment(attachmentStream, attachment.Name, attachment.ContentType));
+            }
         }
 
         using var client = new SmtpClient(options.Host, options.Port)

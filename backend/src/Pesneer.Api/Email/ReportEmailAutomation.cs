@@ -149,11 +149,17 @@ public sealed class ReportEmailDispatcher(
                     .AsSplitQuery().SingleAsync(item => item.Id == delivery.ServiceReportId, cancellationToken);
                 var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == delivery.CompanyId, cancellationToken);
                 var location = report.WorkOrder.CustomerBranch?.Name ?? "Merkez / Genel";
-                var subject = $"{report.ReportNumber} · {report.WorkOrder.Customer.LegalName} / {location} saha raporu";
+                var subject = $"{report.ReportNumber} · {report.WorkOrder.Customer.LegalName} / {location} EK-1 Biyosidal Saha Raporu";
                 var body = BuildBody(company, report, location);
-                var pdf = AuditPackageRenderer.RenderServiceReport(report, company);
+                var ek1Pdf = AuditPackageRenderer.RenderOfficialEk1Form(report, company);
+                var summaryPdf = AuditPackageRenderer.RenderServiceReport(report, company);
+                var attachments = new List<EmailAttachment>
+                {
+                    new($"EK-1_Biyosidal_Islem_Formu_{report.ReportNumber}.pdf", "application/pdf", ek1Pdf),
+                    new($"Saha_Uygulama_Raporu_{report.ReportNumber}.pdf", "application/pdf", summaryPdf)
+                };
                 await emailSender.SendAsync(new OutboundEmail(delivery.CompanyId, $"pestneer-report-{delivery.Id:N}",
-                    delivery.RecipientEmail, subject, body, $"{report.ReportNumber}.pdf", "application/pdf", pdf), cancellationToken);
+                    delivery.RecipientEmail, subject, body, attachments), cancellationToken);
                 delivery.Status = "Sent";
                 delivery.SentAt = DateTimeOffset.UtcNow;
                 delivery.NextAttemptAt = null;
@@ -179,8 +185,8 @@ public sealed class ReportEmailDispatcher(
         return $"""
             <div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#18324b">
               <div style="border-bottom:3px solid #10a37f;padding:18px 0"><strong style="font-size:20px">{Safe(company.LegalName)}</strong></div>
-              <h2 style="margin:24px 0 8px">Saha uygulama raporu tamamlandı</h2>
-              <p>{Safe(report.WorkOrder.Customer.LegalName)} · {Safe(location)} için oluşturulan imzalı saha raporu ekte PDF olarak sunulmuştur.</p>
+              <h2 style="margin:24px 0 8px">EK-1 Biyosidal Uygulama Formu ve Saha Raporu Tamamlandı</h2>
+              <p>{Safe(report.WorkOrder.Customer.LegalName)} · {Safe(location)} için oluşturulan <strong>Resmi EK-1 Biyosidal Ürün Uygulama İşlem Formu</strong> ve <strong>Saha Uygulama Raporu</strong> ekte PDF olarak sunulmuştur.</p>
               <table style="width:100%;border-collapse:collapse;background:#f4f8fb;margin:20px 0">
                 <tr><td style="padding:10px">Rapor no</td><td style="padding:10px"><strong>{Safe(report.ReportNumber)}</strong></td></tr>
                 <tr><td style="padding:10px">İş emri</td><td style="padding:10px">{Safe(report.WorkOrder.Number)}</td></tr>
