@@ -44,7 +44,72 @@ public static class StationActivationEndpoints
         var workOrder = await WorkOrderQuery(db).SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
         if (workOrder is null || !CanAccess(workOrder, context)) return Results.NotFound(new { message = "İş emri bulunamadı." });
         var activation = await Query(db).SingleOrDefaultAsync(item => item.WorkOrderId == workOrderId, cancellationToken);
-        return activation is null ? Results.Ok(null) : Results.Ok(ToResponse(activation));
+        if (activation is not null) return Results.Ok(ToResponse(activation));
+
+        // If no activation exists for this work order, inherit defined stations from the latest customer activation
+        var previousActivation = await Query(db)
+            .Where(item => item.WorkOrder.CustomerId == workOrder.CustomerId &&
+                           (workOrder.CustomerBranchId == null || item.WorkOrder.CustomerBranchId == workOrder.CustomerBranchId))
+            .OrderByDescending(item => item.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (previousActivation is not null)
+        {
+            var previousStations = StationActivationData.Deserialize(previousActivation.StationsJson);
+            if (previousStations.Count > 0)
+            {
+                var templateStations = previousStations.Select(s => s with
+                {
+                    DeviceStatus = "Unchecked",
+                    HasActivity = false,
+                    CaughtCount = 0,
+                    TargetPest = null,
+                    ActivityType = null,
+                    InaccessibilityReason = null,
+                    Notes = null,
+                    PestObservations = null,
+                    BaitGelCompleted = false,
+                    StickyPlateChanged = false,
+                    StationCleaned = false,
+                    StationRelocated = false,
+                    StationReplaced = false,
+                    LockCheckDone = false,
+                    LabelRenewed = false,
+                    AppliedProductName = null,
+                    AppliedAmount = null,
+                    AppliedUnit = null,
+                    ReplacementProductName = null,
+                    ReplacementQuantity = null,
+                    ReplacementUnit = null
+                }).ToList();
+
+                var templateResponse = new StationActivationResponse(
+                    Guid.Empty,
+                    workOrder.Id,
+                    workOrder.Number,
+                    "",
+                    "Draft",
+                    workOrder.CustomerId,
+                    workOrder.Customer.LegalName,
+                    workOrder.CustomerBranchId,
+                    workOrder.CustomerBranch?.Name ?? "Merkez / Genel",
+                    workOrder.ScheduledAt,
+                    workOrder.AssignedEmployeeAccount?.DisplayName ?? "Atanmış Personel",
+                    null,
+                    templateStations.Count,
+                    0,
+                    0,
+                    0,
+                    0,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    templateStations
+                );
+                return Results.Ok(templateResponse);
+            }
+        }
+
+        return Results.Ok(null);
     }
 
     private static async Task<IResult> UpsertAsync(Guid workOrderId, UpsertStationActivationRequest request, PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
@@ -66,7 +131,6 @@ public static class StationActivationEndpoints
             };
             db.StationActivations.Add(activation);
         }
-        if (activation.Status == "Finalized" && context.Portal == PortalType.Employee) return Results.Conflict(new { message = "Onaylanan aktivasyon listesi yalnızca firma sahibi tarafından düzenlenebilir." });
 
         activation.StationsJson = StationActivationData.Serialize(request.Stations);
         activation.Notes = Clean(request.Notes, 3000);

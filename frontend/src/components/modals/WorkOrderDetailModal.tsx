@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Camera, CheckCircle2, Clock3, Download, FileText, Lightbulb, MapPin, Pencil, Share2, UserRound, X } from 'lucide-react';
+import { Camera, CheckCircle2, ClipboardCheck, Clock3, Download, FileText, Lightbulb, MapPin, Pencil, Share2, UserRound, X } from 'lucide-react';
 import type { WorkOrder, WorkOrderPhoto } from '../../types';
 import { shareOrDownloadFile } from '../../utils/shareUtils';
 import { apiFetch } from '../../services/apiBase';
 
-type Props = { order: WorkOrder; accessToken: string; onClose: () => void; onEdit?: () => void };
+type Props = { order: WorkOrder; accessToken: string; onClose: () => void; onEdit?: () => void; onOpenStations?: () => void };
 
-export default function WorkOrderDetailModal({ order, accessToken, onClose, onEdit }: Props) {
+export default function WorkOrderDetailModal({ order, accessToken, onClose, onEdit, onOpenStations }: Props) {
   const handleShareOrder = async () => {
     await shareOrDownloadFile({
       title: `${order.id} - ${order.client}`,
@@ -21,7 +21,12 @@ export default function WorkOrderDetailModal({ order, accessToken, onClose, onEd
     <div className="work-detail-grid"><section><h3><FileText size={17} /> Operasyon özeti</h3><dl><div><dt>İş türü</dt><dd>{visitLabel(order.visitType)}</dd></div><div><dt>Tekrar</dt><dd>{recurrenceLabel(order.recurrenceType)}</dd></div><div><dt>Durum</dt><dd>{order.status}</dd></div><div><dt>Not</dt><dd>{order.notes || '—'}</dd></div></dl></section><section><h3><CheckCircle2 size={17} /> Saha kapanışı</h3><p>{order.completionNote || 'Çalışan henüz saha kapanış açıklaması girmedi.'}</p>{order.recommendation && <div className="work-recommendation"><Lightbulb size={17} /><span>{order.recommendation}</span></div>}</section></div>
     {order.photos.length > 0 && <section className="work-photo-section"><h3><Camera size={17} /> Saha fotoğrafları</h3><div>{order.photos.map((photo) => <AuthorizedPhoto key={photo.id} photo={photo} token={accessToken} />)}</div></section>}
     <section className="work-history"><h3>İşlem geçmişi</h3>{order.history.length > 0 ? order.history.map((item) => <article key={item.id}><span /><div><strong>{statusLabel(item.toStatus)}</strong><small>{item.note} · {item.changedBy}</small></div><time>{formatDateTime(item.occurredAt)}</time></article>) : <p>Henüz işlem geçmişi bulunmuyor.</p>}</section>
-    <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => void handleShareOrder()}><Share2 size={16} /> Paylaş</button><button className="secondary-button" onClick={onClose}>Kapat</button>{onEdit && order.technicalStatus !== 'Completed' && order.technicalStatus !== 'InProgress' && <button className="primary-button" onClick={onEdit}><Pencil size={16} /> İş Emrini Düzenle</button>}</div>
+    <div className="modal-actions">
+      <button type="button" className="secondary-button" onClick={() => void handleShareOrder()}><Share2 size={16} /> Paylaş</button>
+      {onOpenStations && <button type="button" className="secondary-button" onClick={onOpenStations}><ClipboardCheck size={16} /> İstasyon Monitörleri</button>}
+      <button className="secondary-button" onClick={onClose}>Kapat</button>
+      {onEdit && order.technicalStatus !== 'Completed' && order.technicalStatus !== 'InProgress' && <button className="primary-button" onClick={onEdit}><Pencil size={16} /> İş Emrini Düzenle</button>}
+    </div>
   </div></div>;
 }
 

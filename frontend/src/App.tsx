@@ -36,6 +36,7 @@ const RequestCenter = lazy(() => import('./pages/RequestCenter'));
 const CommercialManagement = lazy(() => import('./pages/CommercialManagement'));
 const WorkOrderModal = lazy(() => import('./components/modals/WorkOrderModal'));
 const WorkOrderDetailModal = lazy(() => import('./components/modals/WorkOrderDetailModal'));
+const StationActivationModal = lazy(() => import('./components/modals/StationActivationModal'));
 const CustomerBranchModal = lazy(() => import('./components/modals/CustomerBranchModal'));
 const CustomerPortal = lazy(() => import('./portals/CustomerPortal'));
 const QualityComplianceHub = lazy(() => import('./components/compliance/QualityComplianceHub'));
@@ -57,6 +58,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
+  const [stationModalOrder, setStationModalOrder] = useState<WorkOrder | null>(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [reopenOrderAfterCustomer, setReopenOrderAfterCustomer] = useState(false);
   const [activeReport, setActiveReport] = useState<ServiceReport | null>(null);
@@ -188,7 +190,8 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
 
       {isNewOrderModalOpen && <WorkOrderModal customers={customers} employees={employees} onClose={() => setIsNewOrderModalOpen(false)} onManageCustomers={() => openCustomerManagement(true)} onCreate={handleCreateOrder} />}
       {editingOrder && <WorkOrderModal customers={customers} employees={employees} editingOrder={editingOrder} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} />}
-      {selectedOrder && <WorkOrderDetailModal order={selectedOrder} accessToken={session.accessToken} onClose={() => setSelectedOrder(null)} onEdit={() => { setEditingOrder(selectedOrder); setSelectedOrder(null); }} />}
+      {selectedOrder && <WorkOrderDetailModal order={selectedOrder} accessToken={session.accessToken} onClose={() => setSelectedOrder(null)} onEdit={() => { setEditingOrder(selectedOrder); setSelectedOrder(null); }} onOpenStations={() => { setStationModalOrder(selectedOrder); setSelectedOrder(null); }} />}
+      {stationModalOrder && <StationActivationModal accessToken={session.accessToken} order={stationModalOrder} onClose={() => setStationModalOrder(null)} />}
       {isCustomerModalOpen && <CustomerBranchModal customers={customers} onClose={() => { setIsCustomerModalOpen(false); setReopenOrderAfterCustomer(false); }} onSubmit={handleCustomerBranches} />}
       {toastMessage && <div className="toast"><AlertCircle size={20} />{toastMessage}</div>}
     </div>

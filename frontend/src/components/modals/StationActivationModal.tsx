@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Ban, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, Plus, Save, Search, Trash2, Wrench, X } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, Pencil, Plus, Save, Search, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getServiceReportCatalog, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
 import { getSitePlans } from '../../services/sitePlanApi';
@@ -65,7 +65,8 @@ export default function StationActivationModal({ accessToken, order, onClose, on
   const [searchQuery, setSearchQuery] = useState('');
   const [multiSelect, setMultiSelect] = useState<Set<number>>(new Set());
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
-  const readOnly = record?.status === 'Finalized';
+  const [isEditing, setIsEditing] = useState(false);
+  const readOnly = record?.status === 'Finalized' && !isEditing;
 
   useEffect(() => {
     let active = true;
@@ -248,7 +249,21 @@ export default function StationActivationModal({ accessToken, order, onClose, on
       </div>
       <label className="activation-general-note">Aktivasyon genel notu<textarea value={notes} disabled={readOnly} onChange={(event) => setNotes(event.target.value)} placeholder="Tur özeti, değişiklikler ve takip notları…" /></label>
       {error && <div className="modal-form-error"><AlertTriangle />{error}</div>}
-      <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Kapat</button>{record?.status === 'Finalized' && <button type="button" className="secondary-button" onClick={() => void download()}><FileDown /> PDF</button>}{!readOnly && <><button type="button" className="secondary-button" disabled={saving} onClick={() => void save(false)}><Save /> Taslak Kaydet</button><button type="button" className="primary-button" disabled={saving} onClick={() => void save(true)}><Check /> Aktivasyonu Onayla</button></>}</div>
+      <div className="modal-actions">
+        <button type="button" className="secondary-button" onClick={onClose}>Kapat</button>
+        {record?.status === 'Finalized' && !isEditing && (
+          <>
+            <button type="button" className="secondary-button" onClick={() => void download()}><FileDown /> PDF</button>
+            <button type="button" className="primary-button" onClick={() => setIsEditing(true)}><Pencil /> İstasyonları Düzenle</button>
+          </>
+        )}
+        {(!record || record.status !== 'Finalized' || isEditing) && (
+          <>
+            <button type="button" className="secondary-button" disabled={saving} onClick={() => void save(false)}><Save /> Taslak Kaydet</button>
+            <button type="button" className="primary-button" disabled={saving} onClick={() => void save(true)}><Check /> {isEditing ? 'Güncellemeleri Onayla' : 'Aktivasyonu Onayla'}</button>
+          </>
+        )}
+      </div>
     </>}
 
     {/* ── Toplu İstasyon Ekleme Modal ── */}
