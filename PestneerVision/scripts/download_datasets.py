@@ -11,16 +11,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+import requests
+
+
 def download(url: str, destination: Path, expected_size: int) -> None:
-    if destination.exists() and destination.stat().st_size == expected_size:
+    if destination.exists() and (destination.stat().st_size == expected_size or expected_size == 0):
         print(f"Hazır: {destination.name}")
         return
     partial = destination.with_suffix(destination.suffix + ".part")
-    print(f"İndiriliyor: {destination.name}")
-    with urllib.request.urlopen(url) as response, partial.open("wb") as output:
-        shutil.copyfileobj(response, output, 1024 * 1024)
-    if partial.stat().st_size != expected_size:
-        raise RuntimeError(f"Dosya boyutu doğrulanamadı: {destination.name}")
+    print(f"İndiriliyor: {destination.name} ({url})")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        "Accept": "*/*",
+    }
+    with requests.get(url, headers=headers, stream=True, timeout=60) as response:
+        response.raise_for_status()
+        with partial.open("wb") as output:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    output.write(chunk)
+    if expected_size > 0 and partial.stat().st_size != expected_size:
+        raise RuntimeError(f"Dosya boyutu doğrulanamadı: {destination.name} (Alınan: {partial.stat().st_size}, Beklenen: {expected_size})")
     partial.replace(destination)
 
 

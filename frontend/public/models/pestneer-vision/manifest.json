@@ -1,28 +1,28 @@
-{
-  "version": "1.1.0",
-  "inputSize": 640,
-  "tileSize": 1280,
-  "tileOverlap": 192,
-  "confidenceThreshold": 0.2,
-  "nmsThreshold": 0.45,
-  "classes": [
-    "fly",
-    "bee_wasp",
-    "moth_butterfly",
-    "beetle",
-    "cockroach",
-    "grasshopper_cricket",
-    "termite",
-    "other_insect"
-  ],
-  "models": {
-    "pVision": {
-      "url": "/models/pestneer-vision/pestneer-pvision-v1.onnx",
-      "preferredRuntime": "wasm"
-    },
-    "pLens": {
-      "url": "/models/pestneer-vision/pestneer-plens-v1.onnx",
-      "preferredRuntime": "webgpu"
-    }
-  }
+﻿{
+    "version":  "2.0.0",
+    "confidenceThreshold":  0.18,
+    "tileOverlap":  192,
+    "classes":  [
+                    "fly",
+                    "bee_wasp",
+                    "moth_butterfly",
+                    "beetle",
+                    "cockroach",
+                    "grasshopper_cricket",
+                    "termite",
+                    "other_insect"
+                ],
+    "nmsThreshold":  0.45,
+    "inputSize":  640,
+    "models":  {
+                   "pVision":  {
+                                   "preferredRuntime":  "wasm",
+                                   "url":  "/models/pestneer-vision/pestneer-pvision-v1.onnx"
+                               },
+                   "pLens":  {
+                                 "preferredRuntime":  "webgpu",
+                                 "url":  "/models/pestneer-vision/pestneer-plens-v1.onnx"
+                             }
+               },
+    "tileSize":  1280
 }

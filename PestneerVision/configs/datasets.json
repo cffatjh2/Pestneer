@@ -31,6 +31,28 @@
       ]
     },
     {
+      "key": "pest_sticky_traps",
+      "title": "Pest Sticky Traps: a dataset for Whitefly Pest Population Density Estimation in Chromotropic Sticky Traps",
+      "doi": "10.5281/zenodo.7801239",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "enabledForCommercialTraining": true,
+      "files": [
+        ["pest-sticky-traps.zip", "https://zenodo.org/records/7801239/files/pest-sticky-traps.zip?download=1", 143996529]
+      ]
+    },
+    {
+      "key": "bmsb_sticky_traps",
+      "title": "Image Dataset of Brown Marmorated Stink Bug (BMSB) on Sticky Traps",
+      "doi": "10.5281/zenodo.14051319",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "enabledForCommercialTraining": true,
+      "files": [
+        ["DatasetV2.zip", "https://zenodo.org/records/14051319/files/DatasetV2.zip?download=1", 135286891]
+      ]
+    },
+    {
       "key": "ip102",
       "title": "IP102",
       "license": "Academic use only",
