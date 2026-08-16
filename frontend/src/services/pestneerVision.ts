@@ -3,6 +3,9 @@ import * as ortWasm from 'onnxruntime-web';
 import * as ortWebGpu from 'onnxruntime-web/webgpu';
 import type { VisionModelPreference } from './pestneerVisionApi';
 
+ortWasm.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+ortWebGpu.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+
 type ModelKey = 'pVision' | 'pLens';
 type Manifest = {
   version: string;
