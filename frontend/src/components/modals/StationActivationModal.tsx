@@ -366,9 +366,48 @@ function statusLabel(value: string) {
 }
 
 function CatalogSelect({ label, value, options, labels, disabled, className, onChange }: { label: string; value: string; options: string[]; labels?: Record<string, string>; disabled: boolean; className?: string; onChange: (value: string) => void }) {
-  const isOther = value.startsWith('Diğer: ');
+  const isOtherPrefix = value.startsWith('Diğer: ') || value.startsWith('Diğer:');
+  const isExactOther = value === 'Diğer' || value === '__other__';
   const known = options.includes(value);
-  return <label className={className}>{label}<select value={isOther || (!known && value) ? '__other__' : value} disabled={disabled} onChange={(event) => onChange(event.target.value === '__other__' ? 'Diğer: ' : event.target.value)}><option value="">Seçiniz</option>{options.map((option) => <option key={option} value={option}>{labels?.[option] ?? option}</option>)}<option value="__other__">Diğer</option></select>{(isOther || (!known && value)) && <input value={isOther ? value.slice(7) : value} disabled={disabled} onChange={(event) => onChange(`Diğer: ${event.target.value}`)} placeholder="Manuel açıklama" />}</label>;
+  const isOther = isOtherPrefix || isExactOther || (!known && Boolean(value));
+  const otherText = isOtherPrefix ? value.replace(/^Diğer:\s*/, '') : (isExactOther ? '' : (!known && value ? value : ''));
+
+  return (
+    <label className={className}>
+      {label}
+      <select
+        value={isOther ? '__other__' : value}
+        disabled={disabled}
+        onChange={(event) => {
+          const val = event.target.value;
+          if (val === '__other__') {
+            onChange(otherText.trim() ? `Diğer: ${otherText.trim()}` : 'Diğer');
+          } else {
+            onChange(val);
+          }
+        }}
+      >
+        <option value="">Seçiniz</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {labels?.[option] ?? option}
+          </option>
+        ))}
+        <option value="__other__">Diğer</option>
+      </select>
+      {isOther && (
+        <input
+          value={otherText}
+          disabled={disabled}
+          onChange={(event) => {
+            const text = event.target.value;
+            onChange(text.trim() ? `Diğer: ${text}` : 'Diğer');
+          }}
+          placeholder="Manuel açıklama (opsiyonel)"
+        />
+      )}
+    </label>
+  );
 }
 
 function CountSelect({ label, value, disabled, className, onChange }: { label: string; value: number; disabled: boolean; className?: string; onChange: (value: number) => void }) {

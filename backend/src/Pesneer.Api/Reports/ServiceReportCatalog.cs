@@ -43,9 +43,21 @@ public static class ServiceReportCatalog
 
     public static readonly string[] ProductUnits = ["Litre", "Mililitre", "Kilogram", "Gram", "Adet", "Tüp", "Kutu", "Paket"];
 
-    public static bool IsKnownOrOther(string? value, IReadOnlyCollection<string> catalog) =>
-        string.IsNullOrWhiteSpace(value) || catalog.Contains(value.Trim(), StringComparer.OrdinalIgnoreCase) ||
-        value.Trim().StartsWith("Diğer: ", StringComparison.OrdinalIgnoreCase);
+    public static bool IsKnownOrOther(string? value, IReadOnlyCollection<string> catalog)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        var trimmed = value.Trim();
+        return catalog.Contains(trimmed, StringComparer.OrdinalIgnoreCase) ||
+               trimmed.Equals("Diğer", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("Diger", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("Other", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Diğer:", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Diğer: ", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Diger:", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Diger: ", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Other:", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Other: ", StringComparison.OrdinalIgnoreCase);
+    }
 
     public static bool IsKnownList(string? value, IReadOnlyCollection<string> catalog) =>
         string.IsNullOrWhiteSpace(value) || value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

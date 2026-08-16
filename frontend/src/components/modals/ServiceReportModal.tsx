@@ -563,8 +563,46 @@ function DropdownMultiSelect({
 }
 
 function CatalogSelectField({ label, options, value, disabled, onChange }: { label: string; options: string[]; value: string; disabled: boolean; onChange: (value: string) => void }) {
-  const known = options.includes(value); const isOther = value.startsWith('Diğer: '); const other = isOther ? value.slice(7) : (!known ? value : '');
-  return <label className="report-control">{label}<select value={known ? value : other ? '__other__' : ''} disabled={disabled} onChange={(event) => onChange(event.target.value === '__other__' ? 'Diğer: ' : event.target.value)}><option value="">Seçiniz</option>{options.map((item) => <option key={item}>{item}</option>)}<option value="__other__">Diğer</option></select>{(isOther || other) && <input value={other} disabled={disabled} onChange={(event) => onChange(`Diğer: ${event.target.value}`)} placeholder="Manuel değer" />}</label>;
+  const isOtherPrefix = value.startsWith('Diğer: ') || value.startsWith('Diğer:');
+  const isExactOther = value === 'Diğer' || value === '__other__';
+  const known = options.includes(value);
+  const isOther = isOtherPrefix || isExactOther || (!known && Boolean(value));
+  const otherText = isOtherPrefix ? value.replace(/^Diğer:\s*/, '') : (isExactOther ? '' : (!known && value ? value : ''));
+
+  return (
+    <label className="report-control">
+      {label}
+      <select
+        value={isOther ? '__other__' : value}
+        disabled={disabled}
+        onChange={(event) => {
+          const val = event.target.value;
+          if (val === '__other__') {
+            onChange(otherText.trim() ? `Diğer: ${otherText.trim()}` : 'Diğer');
+          } else {
+            onChange(val);
+          }
+        }}
+      >
+        <option value="">Seçiniz</option>
+        {options.map((item) => (
+          <option key={item} value={item}>{item}</option>
+        ))}
+        <option value="__other__">Diğer</option>
+      </select>
+      {isOther && (
+        <input
+          value={otherText}
+          disabled={disabled}
+          onChange={(event) => {
+            const text = event.target.value;
+            onChange(text.trim() ? `Diğer: ${text}` : 'Diğer');
+          }}
+          placeholder="Manuel değer (opsiyonel)"
+        />
+      )}
+    </label>
+  );
 }
 
 function PhotoCapture({ photos, existingPhotos, readOnly, onChange }: { photos: ReportPhotoUpload[]; existingPhotos: ServiceReportRecord['photos']; readOnly: boolean; onChange: Dispatch<SetStateAction<ReportPhotoUpload[]>> }) {
