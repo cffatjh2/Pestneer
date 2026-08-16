@@ -172,12 +172,120 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
       {report && <div className={`employee-report-state ${report.status.toLowerCase()}`}><FileCheck2 size={16} /><span>{report.status === 'Finalized' ? `Rapor onaylandı · ${report.totalStations} istasyon · ${riskLabel(report.riskLevel)} risk` : 'Saha raporu taslak olarak kaydedildi'}</span></div>}
       {order.assignments.length > 1 && <div className="employee-work-team"><strong>Saha ekibi</strong><span>{order.assignments.map((item) => item.employeeName).join(' · ')}</span></div>}{activeTeam.length > 0 && <div className="employee-work-team is-live"><strong>Aktif ekip</strong><span>{activeTeam.map((item) => item.employeeName).join(' · ')}</span></div>}{order.customerDurationMinutes && <div className="employee-work-team"><strong>Müşteride süre</strong><span>{formatDuration(order.customerDurationMinutes)} · toplam ekip emeği {formatDuration(order.totalLaborMinutes)}</span></div>}
       <div className="employee-work-card-actions">
-        {order.technicalStatus === 'Planned' && <div className="employee-action-buttons"><button className="role-primary-button" disabled={!isShiftActive} title={!isShiftActive ? 'İşlemlere başlamak için önce mesainizi başlatmalısınız.' : 'İlaçlamayı Başlat'} onClick={() => void start(order)}><Play size={16} /> İşe Başla (İlaçlamayı Başlat)</button></div>}
-        {order.technicalStatus === 'Paused' && <div className="employee-action-buttons"><button className="role-primary-button" disabled={!isShiftActive} onClick={() => void start(order)}><Play size={16} /> Ziyarete Devam Et</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
-        {order.technicalStatus === 'InProgress' && hasCompletedPart && !hasActiveSession && <><span className="work-completed-label"><CheckCircle2 size={15} /> Saha payınız tamamlandı</span><div className="employee-action-buttons"><button className="employee-report-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setReporting(order)}><FilePlus2 size={16} /> EK-1 formunu aç</button></div></>}
-        {order.technicalStatus === 'InProgress' && !hasActiveSession && !hasCompletedPart && <div className="employee-action-buttons"><button className="role-primary-button" disabled={!isShiftActive} onClick={() => void start(order)}><Play size={16} /> Devam Eden Ziyarete Katıl</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
-        {order.technicalStatus === 'InProgress' && hasActiveSession && <div className="employee-action-buttons"><button className="role-primary-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setReporting(order)}><FilePlus2 size={16} /> {report ? 'EK-1 formunu aç' : 'EK-1 formu oluştur'}</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
-        {order.technicalStatus === 'Completed' && <><span className="work-completed-label"><CheckCircle2 size={15} /> Tamamlandı</span><div className="employee-action-buttons"><button className="employee-report-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setReporting(order)}><FilePlus2 size={16} /> {report ? 'EK-1 formunu görüntüle' : 'EK-1 formu oluştur'}</button></div></>}
+        {order.technicalStatus === 'Planned' && (
+          <div className="employee-action-buttons is-full">
+            <button
+              type="button"
+              className="emp-btn emp-btn-primary"
+              disabled={!isShiftActive}
+              title={!isShiftActive ? 'İşlemlere başlamak için önce mesainizi başlatmalısınız.' : 'İlaçlamayı Başlat'}
+              onClick={() => void start(order)}
+            >
+              <Play size={16} /> İşe Başla (İlaçlamayı Başlat)
+            </button>
+          </div>
+        )}
+        {order.technicalStatus === 'Paused' && (
+          <div className="employee-action-buttons">
+            <button
+              type="button"
+              className="emp-btn emp-btn-primary"
+              disabled={!isShiftActive}
+              onClick={() => void start(order)}
+            >
+              <Play size={16} /> Ziyarete Devam Et
+            </button>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setVisitActionOrder(order)}
+            >
+              <SlidersHorizontal size={16} /> Ziyaret İşlemleri
+            </button>
+          </div>
+        )}
+        {order.technicalStatus === 'InProgress' && hasCompletedPart && !hasActiveSession && (
+          <div className="employee-action-buttons">
+            <span className="work-completed-label"><CheckCircle2 size={15} /> Saha Payınız Tamamlandı</span>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setActivationOrder(order)}
+            >
+              <FileCheck2 size={16} /> İstasyon Monitörleri
+            </button>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setReporting(order)}
+            >
+              <FilePlus2 size={16} /> EK-1 Formunu Aç
+            </button>
+          </div>
+        )}
+        {order.technicalStatus === 'InProgress' && !hasActiveSession && !hasCompletedPart && (
+          <div className="employee-action-buttons">
+            <button
+              type="button"
+              className="emp-btn emp-btn-primary"
+              disabled={!isShiftActive}
+              onClick={() => void start(order)}
+            >
+              <Play size={16} /> Devam Eden Ziyarete Katıl
+            </button>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setVisitActionOrder(order)}
+            >
+              <SlidersHorizontal size={16} /> Ziyaret İşlemleri
+            </button>
+          </div>
+        )}
+        {order.technicalStatus === 'InProgress' && hasActiveSession && (
+          <div className="employee-action-buttons">
+            <button
+              type="button"
+              className="emp-btn emp-btn-primary"
+              onClick={() => setActivationOrder(order)}
+            >
+              <FileCheck2 size={16} /> İstasyon Monitörleri
+            </button>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setReporting(order)}
+            >
+              <FilePlus2 size={16} /> {report ? 'EK-1 Formunu Aç' : 'EK-1 Formu Oluştur'}
+            </button>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setVisitActionOrder(order)}
+            >
+              <SlidersHorizontal size={16} /> Ziyaret İşlemleri
+            </button>
+          </div>
+        )}
+        {order.technicalStatus === 'Completed' && (
+          <div className="employee-action-buttons">
+            <span className="work-completed-label"><CheckCircle2 size={15} /> Tamamlandı</span>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setActivationOrder(order)}
+            >
+              <FileCheck2 size={16} /> İstasyon Monitörleri
+            </button>
+            <button
+              type="button"
+              className="emp-btn emp-btn-secondary"
+              onClick={() => setReporting(order)}
+            >
+              <FilePlus2 size={16} /> {report ? 'EK-1 Formunu Görüntüle' : 'EK-1 Formu Oluştur'}
+            </button>
+          </div>
+        )}
       </div></article>; })}</div>}
     {selfModal && <WorkOrderModal customers={options.customers} selfSchedule onClose={() => setSelfModal(false)} onCreate={selfSchedule} />}{completing && <WorkOrderCompletionModal order={completing} onClose={() => setCompleting(null)} onSubmit={complete} />}
     {reporting && <ServiceReportModal accessToken={accessToken} order={reporting} existing={reportByOrder.get(reporting.recordId)} previousReport={previousReport} companyName={companyName} operatorName={operatorName} vehicleStockItems={vehicleStock?.items} readOnly={reportByOrder.get(reporting.recordId)?.status === 'Finalized'} onClose={() => setReporting(null)} onSave={saveReport} onAddManualStock={addManualStock} />}
