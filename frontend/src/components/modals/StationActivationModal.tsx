@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Ban, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, Pencil, Plus, QrCode, Save, ScanLine, Search, Trash2, Wrench, X } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
-import { getServiceReportCatalog, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
+import { getServiceReportCatalog, type ReportPestObservationInput, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
 import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
 import {
   downloadStationActivationPdf,
@@ -10,6 +10,7 @@ import {
   type StationActivationRecord,
 } from '../../services/stationActivationApi';
 import QrScannerModal from './QrScannerModal';
+import PestneerVisionAnalyzer from '../vision/PestneerVisionAnalyzer';
 import { downloadStationLabelPdf, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
 import { getCompanyBranding, getCompanyLogoObjectUrl } from '../../services/brandingApi';
 
@@ -72,7 +73,22 @@ export default function StationActivationModal({ accessToken, order, onClose, on
   const [scannerOpen, setScannerOpen] = useState(false);
   const [sitePlan, setSitePlan] = useState<SitePlanRecord | null>(null);
   const [qrNotice, setQrNotice] = useState<string | null>(null);
+  const [visionOpen, setVisionOpen] = useState(false);
   const readOnly = record?.status === 'Finalized' && !isEditing;
+
+  const handleVisionApply = (observations: ReportPestObservationInput[], summary: { total: number; dominantPest: string }) => {
+    const autoNotes = `PestneerVision AI Sayımı: ${observations.map((o) => `${o.approvedCount} ${o.pestName}`).join(', ')}`;
+    update({
+      deviceStatus: 'Activity',
+      hasActivity: true,
+      activityType: 'Capture',
+      targetPest: observations[0]?.pestName ?? summary.dominantPest,
+      caughtCount: summary.total,
+      notes: current?.notes ? `${current.notes} · ${autoNotes}` : autoNotes,
+      stickyPlateChanged: true,
+    });
+    setVisionOpen(false);
+  };
 
   useEffect(() => {
     let active = true;
@@ -306,11 +322,23 @@ export default function StationActivationModal({ accessToken, order, onClose, on
         {!readOnly && <button type="button" className="activation-add" onClick={() => { setStations((items) => [...items, blankStation()]); setSelected(stations.length); }}><Plus /> İstasyon ekle</button>}
       </aside>
         {current && <main>
-          <div className="activation-fields">
-            <label>İstasyon numarası<input value={current.deviceNumber} disabled={readOnly} onChange={(event) => update({ deviceNumber: event.target.value.toUpperCase() })} /></label>
-            <label>Konum / alan<input value={current.area} disabled={readOnly} onChange={(event) => update({ area: event.target.value })} /></label>
-            <CatalogSelect label="Ekipman türü" value={equipmentCatalogValue(current.deviceType, catalog.equipmentTypes)} options={catalog.equipmentTypes} disabled={readOnly} onChange={(value) => update({ deviceType: value.startsWith('Diğer: ') ? value : value.split(' - ')[0] })} />
+          <div className="activation-station-top-bar">
+            <div className="activation-fields" style={{ flex: 1, marginBottom: 0 }}>
+              <label>İstasyon numarası<input value={current.deviceNumber} disabled={readOnly} onChange={(event) => update({ deviceNumber: event.target.value.toUpperCase() })} /></label>
+              <label>Konum / alan<input value={current.area} disabled={readOnly} onChange={(event) => update({ area: event.target.value })} /></label>
+              <CatalogSelect label="Ekipman türü" value={equipmentCatalogValue(current.deviceType, catalog.equipmentTypes)} options={catalog.equipmentTypes} disabled={readOnly} onChange={(value) => update({ deviceType: value.startsWith('Diğer: ') ? value : value.split(' - ')[0] })} />
+            </div>
+            <button
+              type="button"
+              className="activation-vision-btn"
+              disabled={readOnly}
+              onClick={() => setVisionOpen(true)}
+              title="Fotoğraftan yapay zeka ile otomatik böcek ve sinek say"
+            >
+              <BrainCircuit size={16} /> 📷 Pestneer Vision ile Say (AI)
+            </button>
           </div>
+
           <div className="inspection-status-grid">
             <Status active={current.deviceStatus === 'Activity'} icon={<Activity />} label="Aktivite var" disabled={readOnly} onClick={() => choose('Activity')} />
             <Status active={current.deviceStatus === 'NoActivity'} icon={<CheckCircle2 />} label="Aktivite yok" disabled={readOnly} onClick={() => choose('NoActivity')} />
@@ -333,10 +361,21 @@ export default function StationActivationModal({ accessToken, order, onClose, on
           </div>}
 
           {current.deviceStatus === 'Activity' && <div className="activation-activity-panel">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <strong style={{ fontSize: '13px', color: '#047857' }}>Aktivite ve Zararlı Detayları</strong>
+              <button
+                type="button"
+                className="activation-vision-mini-btn"
+                disabled={readOnly}
+                onClick={() => setVisionOpen(true)}
+              >
+                <BrainCircuit size={14} /> 📷 Fotoğraf Çek & AI ile Say
+              </button>
+            </div>
             <div className="activation-fields">
               <CatalogSelect label="Zararlı türü" value={current.targetPest ?? ''} options={catalog.pestTypes} disabled={readOnly} onChange={(value) => update({ targetPest: value })} />
               <CatalogSelect label="Aktivite bulgusu" value={current.activityType ?? ''} options={catalog.activityTypes} labels={activityLabels} disabled={readOnly} onChange={(value) => update({ activityType: value })} />
-              <CountSelect label="Görülen / yakalanan adet" value={current.caughtCount || 0} disabled={readOnly} onChange={(count) => update({ caughtCount: count })} />
+              <CountSelect label="Görülen / yakalanan adet (+ / −)" value={current.caughtCount || 0} disabled={readOnly} onChange={(count) => update({ caughtCount: count })} />
             </div>
           </div>}
           {current.deviceStatus === 'Inaccessible' && <CatalogSelect className="activation-wide" label="Ulaşılamama nedeni" value={current.inaccessibilityReason ?? ''} options={catalog.inaccessibilityReasons} disabled={readOnly} onChange={(value) => update({ inaccessibilityReason: value })} />}
@@ -371,6 +410,32 @@ export default function StationActivationModal({ accessToken, order, onClose, on
 
     {/* ── Canlı QR Tarayıcı Modal ── */}
     {scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onScan={handleQrScan} />}
+
+    {/* ── Pestneer Vision Yapay Zeka Sayım Modal ── */}
+    {visionOpen && (
+      <div className="nested-modal-layer">
+        <div className="modal vision-analyzer-modal">
+          <div className="modal-header">
+            <div>
+              <p className="eyebrow">PESTNEER VISION · YAPAY ZEKA ZARARLI SAYIMI</p>
+              <h2>İstasyon {current?.deviceNumber || ''} — Yapışkan Kart Analizi</h2>
+              <p>Fotoğrafı yükleyin, sayılan zararlıları + / − butonlarıyla veya yazarak düzenleyip istasyona aktarın.</p>
+            </div>
+            <button type="button" className="icon-button" onClick={() => setVisionOpen(false)}><X /></button>
+          </div>
+          <div className="vision-modal-inner" style={{ padding: '0 24px 20px', maxHeight: '78vh', overflowY: 'auto' }}>
+            <PestneerVisionAnalyzer
+              accessToken={accessToken}
+              disabled={readOnly}
+              onApply={handleVisionApply}
+            />
+          </div>
+          <div className="modal-actions" style={{ padding: '14px 24px' }}>
+            <button type="button" className="secondary-button" onClick={() => setVisionOpen(false)}>Vazgeç / Kapat</button>
+          </div>
+        </div>
+      </div>
+    )}
   </div></div>;
 }
 
@@ -485,30 +550,55 @@ function CatalogSelect({ label, value, options, labels, disabled, className, onC
   );
 }
 
-function CountSelect({ label, value, disabled, className, onChange }: { label: string; value: number; disabled: boolean; className?: string; onChange: (value: number) => void }) {
-  const isCustom = value > 10;
+function CountSelect({
+  label,
+  value,
+  disabled,
+  className,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  disabled: boolean;
+  className?: string;
+  onChange: (value: number) => void;
+}) {
   return (
-    <label className={className}>
-      {label}
-      <select
-        value={value === 0 ? '' : isCustom ? '__custom__' : String(value)}
-        disabled={disabled}
-        onChange={(event) => {
-          const val = event.target.value;
-          if (val === '') onChange(0);
-          else if (val === '__custom__') onChange(value > 10 ? value : 11);
-          else onChange(Number(val));
-        }}
-      >
-        <option value="">Seçiniz (1 - 10 Adet)</option>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-          <option key={num} value={num}>
-            {num} Adet
-          </option>
-        ))}
-        <option value="__custom__">10+ (Özel Adet)</option>
-      </select>
-    </label>
+    <div className={`activation-count-stepper-wrap ${className || ''}`}>
+      <label>{label}</label>
+      <div className="activation-count-stepper">
+        <button
+          type="button"
+          className="stepper-btn minus"
+          disabled={disabled || value <= 0}
+          onClick={() => onChange(Math.max(0, value - 1))}
+          title="1 Azalt"
+        >
+          −
+        </button>
+        <input
+          type="number"
+          min="0"
+          max="99999"
+          value={value === 0 ? '' : value}
+          placeholder="0"
+          disabled={disabled}
+          onChange={(e) => {
+            const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+            onChange(val);
+          }}
+        />
+        <button
+          type="button"
+          className="stepper-btn plus"
+          disabled={disabled}
+          onClick={() => onChange(value + 1)}
+          title="1 Artır"
+        >
+          +
+        </button>
+      </div>
+    </div>
   );
 }
 
