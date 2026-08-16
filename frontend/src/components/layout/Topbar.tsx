@@ -44,7 +44,7 @@ export default function Topbar({ activeView, onMenuOpen, accessToken, onStockOpe
       </button>
 
       <div className="breadcrumb">
-        <span>Pesneer</span>
+        <span>Pestneer</span>
         <ChevronRight size={16} />
         <strong>{currentLabel}</strong>
       </div>

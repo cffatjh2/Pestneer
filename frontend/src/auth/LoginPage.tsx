@@ -211,7 +211,7 @@ export default function LoginPage({ onAuthenticated, onBack }: { onAuthenticated
           </form>
           <div className="demo-access"><span><i /> veya hızlı önizleme <i /></span><button type="button" onClick={handleDemoLogin}><SelectedRoleIcon size={17} />{selectedRole.shortLabel} demosunu aç</button><small>Demo, gerçek hesap verisi içermez.</small></div>
         </div>
-        <footer>© 2026 Pesneer <span>Gizlilik</span><span>Kullanım koşulları</span><span>Destek</span></footer>
+        <footer>© 2026 Pestneer <span>Gizlilik</span><span>Kullanım koşulları</span><span>Destek</span></footer>
       </section>
     </main>
   );

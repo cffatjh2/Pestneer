@@ -23,7 +23,7 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [editing, setEditing] = useState<{ order: WorkOrder; report?: ServiceReportRecord } | null>(null); const [preview, setPreview] = useState<ServiceReportRecord | null>(null);
   const [activationOrder, setActivationOrder] = useState<WorkOrder | null>(null);
   const [customerId, setCustomerId] = useState(''); const [branchId, setBranchId] = useState(''); const [from, setFrom] = useState(defaultFrom()); const [to, setTo] = useState(dateKey(new Date()));
-  const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pesneer_Saha_Raporu' });
+  const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pestneer_Saha_Raporu' });
 
   const load = async () => {
     setLoading(true); setError(null);

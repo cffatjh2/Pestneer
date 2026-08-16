@@ -60,7 +60,7 @@ export default function Sidebar({
   return (
     <aside className={`sidebar ${isMenuOpen ? 'sidebar-open' : ''}`}>
       <div className="brand">
-        <img src="/logo.png" alt="Pesneer" className="brand-logo" />
+        <img src="/logo.png" alt="Pestneer" className="brand-logo" />
         <div className="brand-text"><strong>Pestneer</strong><span>OPERASYON PANELİ</span></div>
         <button className="mobile-close" onClick={() => setIsMenuOpen(false)} aria-label="Menüyü kapat"><X size={20} /></button>
       </div>
