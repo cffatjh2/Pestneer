@@ -68,13 +68,13 @@ public static class SystemAdministrationEndpoints
 
         var staff = await dbContext.CompanyMemberships.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.CompanyId == companyId && item.IsActive && item.Account.IsActive)
-            .Select(item => new SystemAccountRecord(item.Account.Id, item.Account.DisplayName, item.Account.Email, item.Account.Portal.ToString(), item.Role.ToString()))
+            .Select(item => new SystemAccountRecord(item.Account.Id, item.Account.DisplayName, item.Account.Email, item.Account.PhoneNumber, item.Account.Portal.ToString(), item.Role.ToString(), item.Account.HasAcceptedTerms, item.Account.CreatedAt))
             .ToListAsync(cancellationToken);
         var customers = await dbContext.CustomerMemberships.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.CompanyId == companyId && item.IsActive && item.Account.IsActive)
-            .Select(item => new SystemAccountRecord(item.Account.Id, item.Account.DisplayName, item.Account.Email, item.Account.Portal.ToString(), item.Role.ToString()))
+            .Select(item => new SystemAccountRecord(item.Account.Id, item.Account.DisplayName, item.Account.Email, item.Account.PhoneNumber, item.Account.Portal.ToString(), item.Role.ToString(), item.Account.HasAcceptedTerms, item.Account.CreatedAt))
             .ToListAsync(cancellationToken);
-        return Results.Ok(staff.Concat(customers).DistinctBy(item => item.Id).OrderBy(item => item.Portal).ThenBy(item => item.Name));
+        return Results.Ok(staff.Concat(customers).DistinctBy(item => item.Id).OrderBy(item => item.Portal == "Owner" ? 0 : item.Portal == "Employee" ? 1 : 2).ThenBy(item => item.Name));
     }
 
     private static async Task<IResult> ResetAnyAccountPasswordAsync(Guid accountId, ResetSystemAccountPasswordRequest request,
@@ -94,7 +94,7 @@ public static class SystemAdministrationEndpoints
         var admins = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.Portal == PortalType.SystemAdmin && item.IsActive)
             .OrderBy(item => item.DisplayName)
-            .Select(item => new SystemAccountRecord(item.Id, item.DisplayName, item.Email, item.Portal.ToString(), "SystemAdmin"))
+            .Select(item => new SystemAccountRecord(item.Id, item.DisplayName, item.Email, item.PhoneNumber, item.Portal.ToString(), "SystemAdmin", item.HasAcceptedTerms, item.CreatedAt))
             .ToListAsync(cancellationToken);
         return Results.Ok(admins);
     }
@@ -131,10 +131,23 @@ public static class SystemAdministrationEndpoints
             {
                 item.Id, item.LegalName, item.Code, item.IsActive, item.CreatedAt,
                 item.IsTrial, item.TrialStartedAt, item.TrialEndsAt,
+                item.ReportNotificationEmail,
                 isTrialExpired = item.IsTrial && item.TrialEndsAt.HasValue && item.TrialEndsAt.Value < now,
                 remainingDays = item.IsTrial && item.TrialEndsAt.HasValue
                     ? (int)Math.Max(0, Math.Ceiling((item.TrialEndsAt.Value - now).TotalDays))
                     : 0,
+                ownerName = dbContext.CompanyMemberships.IgnoreQueryFilters()
+                    .Where(m => m.CompanyId == item.Id && m.IsActive && m.Role == CompanyRole.Owner)
+                    .Select(m => m.Account.DisplayName)
+                    .FirstOrDefault(),
+                ownerEmail = dbContext.CompanyMemberships.IgnoreQueryFilters()
+                    .Where(m => m.CompanyId == item.Id && m.IsActive && m.Role == CompanyRole.Owner)
+                    .Select(m => m.Account.Email)
+                    .FirstOrDefault(),
+                ownerPhone = dbContext.CompanyMemberships.IgnoreQueryFilters()
+                    .Where(m => m.CompanyId == item.Id && m.IsActive && m.Role == CompanyRole.Owner)
+                    .Select(m => m.Account.PhoneNumber)
+                    .FirstOrDefault(),
                 ownerCount = dbContext.CompanyMemberships.IgnoreQueryFilters().Count(value => value.CompanyId == item.Id && value.IsActive && value.Role == CompanyRole.Owner),
                 employeeCount = dbContext.CompanyMemberships.IgnoreQueryFilters().Count(value => value.CompanyId == item.Id && value.IsActive && value.Account.Portal == PortalType.Employee),
                 customerCount = dbContext.Customers.IgnoreQueryFilters().Count(value => value.CompanyId == item.Id && value.IsActive)
@@ -265,7 +278,7 @@ public static class SystemAdministrationEndpoints
 public sealed record SystemAdminLoginRequest(string Email, string Password);
 public sealed record CreateSystemAdminRequest(string Name, string Email, string Password, string? Phone);
 public sealed record ResetSystemAccountPasswordRequest(string NewPassword, string NewPasswordConfirmation);
-public sealed record SystemAccountRecord(Guid Id, string Name, string Email, string Portal, string Role);
+public sealed record SystemAccountRecord(Guid Id, string Name, string Email, string? Phone, string Portal, string Role, bool HasAcceptedTerms = false, DateTimeOffset? CreatedAt = null);
 public sealed record CreateSystemCompanyRequest(string CompanyName, string CompanyCode, string OwnerName, string OwnerEmail, string OwnerPassword, string? OwnerPhone, bool IsTrial = true);
 public sealed record CreateSystemEmployeeRequest(string Name, string Email, string Password, string? Phone, string Role, bool CanSelfSchedule);
 public sealed record CreateSystemCustomerRequest(string CustomerName, string? CustomerCode, string ContactName, string Email, string Password, string? Phone, string? Address, string? City, string? District, string? MapUrl);

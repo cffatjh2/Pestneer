@@ -11,12 +11,25 @@ export type SystemCompany = {
   trialEndsAt?: string | null;
   isTrialExpired: boolean;
   remainingDays: number;
+  ownerName?: string | null;
+  ownerEmail?: string | null;
+  ownerPhone?: string | null;
+  reportNotificationEmail?: string | null;
   createdAt: string;
   ownerCount: number;
   employeeCount: number;
   customerCount: number;
 };
-export type SystemAccount = { id: string; name: string; email: string; portal: 'Owner' | 'Employee' | 'Customer' | 'SystemAdmin'; role: string };
+export type SystemAccount = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  portal: 'Owner' | 'Employee' | 'Customer' | 'SystemAdmin';
+  role: string;
+  hasAcceptedTerms?: boolean;
+  createdAt?: string | null;
+};
 
 export const loginSystemAdmin = (email: string, password: string) => request<SystemAdminSession>('/api/system-control/auth/login', undefined, { method: 'POST', body: JSON.stringify({ email, password }) });
 export const getSystemCompanies = (token: string) => request<SystemCompany[]>('/api/system-control/companies', token);

@@ -62,14 +62,14 @@ export default function SystemAdminPage() {
   }, [session?.accessToken]);
 
   useEffect(() => {
-    if (!session || mode !== 'reset') return;
+    if (!session) return;
     const companyAccounts = selectedCompanyId
       ? getSystemCompanyAccounts(session.accessToken, selectedCompanyId)
       : Promise.resolve<SystemAccount[]>([]);
     Promise.all([companyAccounts, getSystemAdmins(session.accessToken)])
       .then(([companyItems, adminItems]) => setAccounts([...adminItems, ...companyItems]))
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Hesaplar yüklenemedi.'));
-  }, [session?.accessToken, selectedCompanyId, mode]);
+  }, [session?.accessToken, selectedCompanyId]);
 
   if (!session) {
     return (
@@ -264,6 +264,11 @@ export default function SystemAdminPage() {
                     <strong>{company.legalName}</strong>
                     <small>{company.code}</small>
                   </div>
+                  {company.ownerEmail && (
+                    <div style={{ fontSize: '11px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      ✉️ {company.ownerEmail}
+                    </div>
+                  )}
                   <div className="system-admin-company-badge-row">
                     {!company.isTrial ? (
                       <span className="trial-badge real">
@@ -290,17 +295,17 @@ export default function SystemAdminPage() {
 
         <section className="system-admin-form">
           <nav className="system-admin-nav-tabs">
-            <button className={mode === 'company' ? 'active' : ''} onClick={() => setMode('company')}>
-              <Building2 size={16} /> Yeni firma
-            </button>
             <button className={mode === 'license' ? 'active' : ''} onClick={() => setMode('license')} disabled={!selectedCompanyId}>
-              <CalendarClock size={16} /> Lisans & Deneme
+              <Building2 size={16} /> Firma Verileri & Lisans
+            </button>
+            <button className={mode === 'company' ? 'active' : ''} onClick={() => setMode('company')}>
+              <Plus size={16} /> Yeni firma
             </button>
             <button className={mode === 'employee' ? 'active' : ''} onClick={() => setMode('employee')} disabled={!selectedCompanyId}>
-              <UserPlus size={16} /> Personel
+              <UserPlus size={16} /> Personel Ekle
             </button>
             <button className={mode === 'customer' ? 'active' : ''} onClick={() => setMode('customer')} disabled={!selectedCompanyId}>
-              <Store size={16} /> Müşteri
+              <Store size={16} /> Müşteri Ekle
             </button>
             <button className={mode === 'reset' ? 'active' : ''} onClick={() => setMode('reset')} disabled={!selectedCompanyId}>
               <KeyRound size={16} /> Şifre sıfırla
@@ -318,6 +323,7 @@ export default function SystemAdminPage() {
 
           {mode === 'license' && selectedCompany && (
             <div className="system-admin-license-panel">
+              {/* 1. Kapsamlı Firma Detay & İletişim Bilgileri Kartı */}
               <div className="license-card">
                 <div className="license-header">
                   <div>
@@ -340,6 +346,37 @@ export default function SystemAdminPage() {
                 </div>
 
                 <div className="license-info-grid">
+                  <div>
+                    <label>Firma Sahibi / Yetkili</label>
+                    <strong>{selectedCompany.ownerName || 'Belirtilmedi'}</strong>
+                  </div>
+                  <div>
+                    <label>Firma Sahibi Giriş E-Postası</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <strong style={{ color: '#38bdf8' }}>{selectedCompany.ownerEmail || 'Belirtilmedi'}</strong>
+                      {selectedCompany.ownerEmail && (
+                        <button
+                          type="button"
+                          className="copy-mini-btn"
+                          title="E-postayı Kopyala"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedCompany.ownerEmail!);
+                            setNotice(`${selectedCompany.ownerEmail} kopyalandı.`);
+                          }}
+                        >
+                          Kopyala
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label>Firma Telefonu</label>
+                    <strong>{selectedCompany.ownerPhone || 'Belirtilmedi'}</strong>
+                  </div>
+                  <div>
+                    <label>Rapor Bildirim E-postası</label>
+                    <strong style={{ color: '#94a3b8' }}>{selectedCompany.reportNotificationEmail || selectedCompany.ownerEmail || 'Belirtilmedi'}</strong>
+                  </div>
                   <div>
                     <label>Hesap Tipi</label>
                     <strong>{selectedCompany.isTrial ? '1 Haftalık Demo / Deneme' : 'Gerçek Hesap (Süresiz)'}</strong>
@@ -366,6 +403,10 @@ export default function SystemAdminPage() {
                       </div>
                     </>
                   )}
+                  <div>
+                    <label>Kayıt Tarihi</label>
+                    <strong>{new Date(selectedCompany.createdAt).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</strong>
+                  </div>
                 </div>
 
                 <div className="license-retention-notice">
@@ -406,17 +447,117 @@ export default function SystemAdminPage() {
                   )}
                 </div>
               </div>
+
+              {/* 2. Firmaya Bağlı Kayıtlı Hesaplar & Personeller Tablosu */}
+              <div className="system-admin-accounts-section" style={{ marginTop: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '15px', color: '#f1f5f9', margin: 0 }}>
+                    🏢 {selectedCompany.legalName} — Kayıtlı Personel ve Kullanıcı Hesapları ({accounts.filter(a => a.portal !== 'SystemAdmin').length})
+                  </h3>
+                  <button
+                    type="button"
+                    className="copy-mini-btn"
+                    onClick={() => setMode('employee')}
+                  >
+                    + Yeni Personel Ekle
+                  </button>
+                </div>
+
+                <div className="system-admin-table-wrapper" style={{ overflowX: 'auto', background: '#081d30', border: '1px solid #153853', borderRadius: '12px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px', color: '#cbd5e1' }}>
+                    <thead>
+                      <tr style={{ background: '#0c2439', borderBottom: '1px solid #1a3d5c', color: '#94a3b8' }}>
+                        <th style={{ padding: '10px 14px' }}>Ad Soyad</th>
+                        <th style={{ padding: '10px 14px' }}>Giriş E-postası</th>
+                        <th style={{ padding: '10px 14px' }}>Telefon</th>
+                        <th style={{ padding: '10px 14px' }}>Yetki / Rol</th>
+                        <th style={{ padding: '10px 14px' }}>KVKK Onayı</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right' }}>İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accounts.filter(a => a.portal !== 'SystemAdmin').length === 0 ? (
+                        <tr>
+                          <td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                            Bu firmaya ait henüz kayıtlı personel veya müşteri hesabı bulunmuyor.
+                          </td>
+                        </tr>
+                      ) : (
+                        accounts.filter(a => a.portal !== 'SystemAdmin').map((account) => (
+                          <tr key={account.id} style={{ borderBottom: '1px solid #0e2b44' }}>
+                            <td style={{ padding: '10px 14px', fontWeight: '700', color: '#f8fafc' }}>
+                              {account.name}
+                            </td>
+                            <td style={{ padding: '10px 14px', color: '#38bdf8' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span>{account.email}</span>
+                                <button
+                                  type="button"
+                                  className="copy-mini-btn"
+                                  title="Kopyala"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(account.email);
+                                    setNotice(`${account.email} kopyalandı.`);
+                                  }}
+                                >
+                                  Kopyala
+                                </button>
+                              </div>
+                            </td>
+                            <td style={{ padding: '10px 14px', color: '#94a3b8' }}>
+                              {account.phone || '—'}
+                            </td>
+                            <td style={{ padding: '10px 14px' }}>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                background: account.portal === 'Owner' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                                color: account.portal === 'Owner' ? '#fbbf24' : '#38bdf8',
+                                border: account.portal === 'Owner' ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(56, 189, 248, 0.3)',
+                              }}>
+                                {portalLabel(account.portal)} · {account.role}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 14px' }}>
+                              {account.hasAcceptedTerms ? (
+                                <span style={{ color: '#34d399', fontWeight: '700' }}>✓ Onaylandı</span>
+                              ) : (
+                                <span style={{ color: '#f59e0b', fontSize: '11px' }}>⏳ Bekliyor</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                className="copy-mini-btn"
+                                style={{ background: '#102a41', borderColor: '#23445e', color: '#e2e8f0' }}
+                                onClick={() => {
+                                  setMode('reset');
+                                }}
+                              >
+                                🔑 Şifre Sıfırla
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
           {(mode === 'employee' || mode === 'customer') && (
             <div className="system-admin-target">
-              Hedef firma: <strong>{companies.find((item) => item.id === selectedCompanyId)?.legalName}</strong>
+              Hedef firma: <strong>{companies.find((item) => item.id === selectedCompanyId)?.legalName}</strong> ({companies.find((item) => item.id === selectedCompanyId)?.code})
             </div>
           )}
           {mode === 'reset' && (
             <div className="system-admin-target">
-              Firma hesapları ve Pestneer sistem yöneticileri listelenir. Firma sahipleri sistem yöneticisi değildir.
+              Firma hesapları ve Pestneer sistem yöneticileri listelenir. Seçtiğiniz hesaba anında yeni geçici şifre atayabilirsiniz.
             </div>
           )}
 
