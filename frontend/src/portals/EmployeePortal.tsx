@@ -219,6 +219,9 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
             accountId={session.user.id}
             companyName={session.company.name}
             operatorName={session.user.name}
+            isShiftActive={status === 'working'}
+            onStartShift={() => runAttendanceAction(() => startShift(session.accessToken))}
+            onNavigateToOperations={() => setActiveTab('operations')}
             onSessionExpired={onLogout}
           />
         ) : activeTab === 'tasks' ? (
@@ -228,6 +231,7 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
             reports={reports}
             loading={isLoading}
             accessToken={session.accessToken}
+            isShiftActive={status === 'working'}
             onNavigateToWorkOrders={() => setActiveTab('workOrders')}
             onOpenStations={(order) => setTaskActivationOrder(order)}
             onOpenReport={(order) => setTaskReportingOrder(order)}
@@ -444,6 +448,7 @@ function Tasks({
   reports,
   loading,
   accessToken,
+  isShiftActive = true,
   onNavigateToWorkOrders,
   onOpenStations,
   onOpenReport,
@@ -453,6 +458,7 @@ function Tasks({
   reports: ServiceReportRecord[];
   loading: boolean;
   accessToken: string;
+  isShiftActive?: boolean;
   onNavigateToWorkOrders: () => void;
   onOpenStations?: (order: WorkOrder) => void;
   onOpenReport?: (order: WorkOrder) => void;
@@ -608,6 +614,7 @@ function Tasks({
           order={selectedOrder}
           report={selectedReport}
           accessToken={accessToken}
+          isShiftActive={isShiftActive}
           onClose={() => setSelectedTask(null)}
           onOpenWorkOrderInPanel={(order) => {
             setSelectedTask(null);

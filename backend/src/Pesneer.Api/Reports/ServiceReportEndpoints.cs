@@ -9,6 +9,7 @@ using Pesneer.Api.Email;
 using Pesneer.Api.WorkOrders;
 using Pesneer.Api.StationActivations;
 using Pesneer.Api.Audits;
+using Pesneer.Api.FieldOperations;
 
 namespace Pesneer.Api.Reports;
 
@@ -113,6 +114,24 @@ public static class ServiceReportEndpoints
         if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
         var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
         if (workOrder is null || !CanAccess(workOrder, companyContext)) return Results.NotFound(new { message = "İş emri bulunamadı." });
+
+        if (companyContext.Portal == PortalType.Employee)
+        {
+            var nowTime = DateTimeOffset.UtcNow;
+            var today = WorkforceCalculations.Today(nowTime);
+            var shift = await dbContext.WorkShifts.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.EmployeeAccountId == companyContext.AccountId.Value && item.WorkDate == today, cancellationToken);
+            if (shift is null || shift.Status != WorkShiftStatus.Working)
+            {
+                return Results.Conflict(new { message = "Saha raporu işlemi için önce mesainizi başlatmanız gerekir." });
+            }
+
+            if (workOrder.Status == "Planned")
+            {
+                return Results.Conflict(new { message = "Müşteri ziyareti ve iş başlatılmadan önce EK-1 raporu düzenlenemez." });
+            }
+        }
+
         var participantIds = workOrder.Assignments.Select(item => item.EmployeeAccountId)
             .Concat(workOrder.AssignedEmployeeAccountId.HasValue ? [workOrder.AssignedEmployeeAccountId.Value] : [])
             .Distinct().ToArray();

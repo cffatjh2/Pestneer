@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
+using Pesneer.Api.FieldOperations;
 using Pesneer.Api.WeatherRisk;
 
 namespace Pesneer.Api.WorkOrders;
@@ -412,18 +413,27 @@ public static class WorkOrderEndpoints
         ICompanyContext companyContext,
         CancellationToken cancellationToken)
     {
-        if (!companyContext.AccountId.HasValue) return Results.Forbid();
+        if (!companyContext.AccountId.HasValue || !companyContext.CompanyId.HasValue) return Results.Forbid();
+
+        var now = DateTimeOffset.UtcNow;
+        var today = WorkforceCalculations.Today(now);
+        var shift = await dbContext.WorkShifts.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.EmployeeAccountId == companyContext.AccountId.Value && item.WorkDate == today, cancellationToken);
+        if (shift is null || shift.Status != WorkShiftStatus.Working)
+        {
+            return Results.Conflict(new { message = "İşlemlere başlamak için önce mesainizi başlatmanız (İşe Başladım) gerekir." });
+        }
+
         var workOrder = await WorkOrderQuery(dbContext).SingleOrDefaultAsync(item => item.Id == workOrderId &&
             (item.AssignedEmployeeAccountId == companyContext.AccountId.Value || item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value)), cancellationToken);
         if (workOrder is null) return Results.NotFound(new { message = "Atanmış iş emri bulunamadı." });
         if (workOrder.Status is "Completed" or "Cancelled" or "Skipped") return Results.Conflict(new { message = "Kapanmış ziyaret tekrar başlatılamaz." });
 
-        var now = DateTimeOffset.UtcNow;
         if (!workOrder.VisitSessions.Any(item => item.EmployeeAccountId == companyContext.AccountId.Value && item.Status == "Active"))
         {
             var visitSession = new WorkOrderVisitSession
             {
-                Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId!.Value, WorkOrderId = workOrder.Id,
+                Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, WorkOrderId = workOrder.Id,
                 EmployeeAccountId = companyContext.AccountId.Value, Status = "Active", StartedAt = now
             };
             dbContext.WorkOrderVisitSessions.Add(visitSession);
@@ -431,7 +441,7 @@ public static class WorkOrderEndpoints
         var previousStatus = workOrder.Status;
         workOrder.Status = "InProgress";
         workOrder.StartedAt ??= now;
-        AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId!.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, "InProgress", "Personel ziyaret oturumunu başlattı."));
+        AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, "InProgress", "Personel ziyaret oturumunu başlattı."));
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(ToResponse(workOrder));
     }

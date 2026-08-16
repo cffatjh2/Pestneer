@@ -27,6 +27,7 @@ type Props = {
   order?: WorkOrder | null;
   report?: ServiceReportRecord | null;
   accessToken: string;
+  isShiftActive?: boolean;
   onClose: () => void;
   onOpenWorkOrderInPanel?: (order: WorkOrder) => void;
   onOpenStations?: (order: WorkOrder) => void;
@@ -38,6 +39,7 @@ export default function TaskDetailModal({
   order,
   report,
   accessToken,
+  isShiftActive = true,
   onClose,
   onOpenWorkOrderInPanel,
   onOpenStations,
@@ -225,19 +227,19 @@ export default function TaskDetailModal({
           <button type="button" className="secondary-button" onClick={() => void handleShare()}>
             <Share2 size={16} /> Paylaş
           </button>
-          {order && onOpenStations && (
+          {order && onOpenStations && order.technicalStatus !== 'Planned' && (
             <button type="button" className="secondary-button" onClick={() => onOpenStations(order)}>
               <ClipboardCheck size={16} /> İstasyon Monitörleri
             </button>
           )}
-          {order && onOpenReport && (
+          {order && onOpenReport && order.technicalStatus !== 'Planned' && (
             <button type="button" className="secondary-button" onClick={() => onOpenReport(order)}>
               <FileCheck2 size={16} /> {report ? 'EK-1 Formu Görüntüle' : 'EK-1 Formu Oluştur'}
             </button>
           )}
           {order && onOpenWorkOrderInPanel && (
             <button type="button" className="primary-button" onClick={() => onOpenWorkOrderInPanel(order)}>
-              <ArrowUpRight size={16} /> İş Emirlerimde Gör
+              <ArrowUpRight size={16} /> {order.technicalStatus === 'Planned' ? 'İşe Başla / Müşteriyi Aç' : 'İş Emirlerimde Gör'}
             </button>
           )}
           <button type="button" className="secondary-button" onClick={onClose}>

@@ -13,9 +13,18 @@ import { CustomerPortalSessionExpiredError, getEmployeeEmergencyRequests, update
 import { createVehicleStockCheck, FieldSessionExpiredError, getLatestVehicleStock, type VehicleStockCheck } from '../services/fieldOperationsApi';
 import { cacheFieldWorkspace, getCachedFieldWorkspace, listQueuedFieldActions, listQueuedReports, onFieldSyncChange, queueFieldAction, queueReportSubmission, removeLocalReportDraft, removeQueuedFieldAction, removeQueuedReport, toFiles, updateQueuedFieldAction, updateQueuedReport, type QueuedFieldAction, type QueuedReportSubmission } from '../services/offlineFieldStore';
 
-type Props = { accessToken: string; accountId: string; companyName: string; operatorName: string; onSessionExpired: () => void };
+type Props = {
+  accessToken: string;
+  accountId: string;
+  companyName: string;
+  operatorName: string;
+  isShiftActive?: boolean;
+  onStartShift?: () => Promise<void>;
+  onNavigateToOperations?: () => void;
+  onSessionExpired: () => void;
+};
 
-export default function EmployeeWorkOrdersPanel({ accessToken, accountId, companyName, operatorName, onSessionExpired }: Props) {
+export default function EmployeeWorkOrdersPanel({ accessToken, accountId, companyName, operatorName, isShiftActive = true, onStartShift, onNavigateToOperations, onSessionExpired }: Props) {
   const [orders, setOrders] = useState<WorkOrder[]>([]); const [reports, setReports] = useState<ServiceReportRecord[]>([]); const [options, setOptions] = useState<EmployeePlanningOptions>({ canSelfSchedule: false, customers: [] });
   const [emergencyRequests, setEmergencyRequests] = useState<EmergencyRequestRecord[]>([]);
   const [vehicleStock, setVehicleStock] = useState<VehicleStockCheck | null>(null);
@@ -70,10 +79,40 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
   }, [accessToken, onSessionExpired, refreshQueue]);
   useEffect(() => { void load(); void refreshQueue(); const syncChanged = onFieldSyncChange(() => void refreshQueue()); const online = () => { setOfflineMode(false); void syncQueue(); }; const offline = () => setOfflineMode(true); const serviceWorkerMessage = (event: MessageEvent) => { if (event.data === 'PESTNEER_SYNC') void syncQueue(); }; window.addEventListener('online', online); window.addEventListener('offline', offline); navigator.serviceWorker?.addEventListener('message', serviceWorkerMessage); const timer = window.setInterval(() => void syncQueue(), 30_000); return () => { syncChanged(); window.removeEventListener('online', online); window.removeEventListener('offline', offline); navigator.serviceWorker?.removeEventListener('message', serviceWorkerMessage); window.clearInterval(timer); }; }, [accessToken, syncQueue, refreshQueue]);
   const replace = (updated: WorkOrder) => setOrders((current) => current.map((item) => item.recordId === updated.recordId ? updated : item));
-  const start = async (order: WorkOrder) => { try { const updated = await startEmployeeWorkOrder(accessToken, order.recordId); replace(updated); setActivationOrder(updated); } catch (actionError) { if (actionError instanceof WorkOrderSessionExpiredError) return onSessionExpired(); if (!navigator.onLine || actionError instanceof TypeError) { await queueFieldAction({ workOrderId: order.recordId, kind: 'Start' }); const local = { ...order, technicalStatus: 'InProgress', status: 'Sahada' as const, startedAt: new Date().toISOString() }; replace(local); setOfflineMode(true); await refreshQueue(); setActivationOrder(local); return; } setError(actionError instanceof Error ? actionError.message : 'İş başlatılamadı.'); } };
+  const start = async (order: WorkOrder) => {
+    if (!isShiftActive) {
+      setError('İşlemlere ve müşteri ziyaretine başlayabilmek için lütfen önce mesainizi başlatın (İşe Başladım).');
+      return;
+    }
+    try {
+      const updated = await startEmployeeWorkOrder(accessToken, order.recordId);
+      replace(updated);
+      setActivationOrder(updated);
+    } catch (actionError) {
+      if (actionError instanceof WorkOrderSessionExpiredError) return onSessionExpired();
+      if (!navigator.onLine || actionError instanceof TypeError) {
+        await queueFieldAction({ workOrderId: order.recordId, kind: 'Start' });
+        const local = { ...order, technicalStatus: 'InProgress', status: 'Sahada' as const, startedAt: new Date().toISOString() };
+        replace(local);
+        setOfflineMode(true);
+        await refreshQueue();
+        setActivationOrder(local);
+        return;
+      }
+      setError(actionError instanceof Error ? actionError.message : 'İş başlatılamadı.');
+    }
+  };
   const complete = async (note: string, recommendation: string, photos: File[]) => { if (!completing) return; replace(await completeEmployeeWorkOrder(accessToken, completing.recordId, note, recommendation, photos)); setCompleting(null); };
   const changeVisit = async (action: VisitAction, reason?: string) => { if (!visitActionOrder) return; const order = visitActionOrder; try { replace(await changeEmployeeVisitState(accessToken, order.recordId, action, reason)); } catch (actionError) { if (actionError instanceof WorkOrderSessionExpiredError) return onSessionExpired(); if (!navigator.onLine || actionError instanceof TypeError) { await queueFieldAction({ workOrderId: order.recordId, kind: 'VisitState', action, reason }); replace(applyLocalVisitState(order, action)); setOfflineMode(true); await refreshQueue(); } else throw actionError; } finally { setVisitActionOrder(null); } };
-  const selfSchedule = async (input: CreateWorkOrdersInput) => { const created = await selfScheduleWorkOrders(accessToken, input); setOrders((current) => [...current, ...created].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))); setSelfModal(false); };
+  const selfSchedule = async (input: CreateWorkOrdersInput) => {
+    if (!isShiftActive) {
+      setError('İş planlamak için önce mesainizi başlatmanız gerekmektedir.');
+      return;
+    }
+    const created = await selfScheduleWorkOrders(accessToken, input);
+    setOrders((current) => [...current, ...created].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)));
+    setSelfModal(false);
+  };
   const saveReport = async (input: UpsertServiceReportInput, photos: ReportPhotoUpload[]) => { if (!reporting) return; try { const saved = await saveServiceReport(accessToken, reporting.recordId, input); try { await uploadServiceReportPhotos(accessToken, reporting.recordId, photos); } catch (photoError) { if (photoError instanceof ReportNetworkError) await queueReportSubmission(reporting.recordId, { ...input, baseUpdatedAt: saved.updatedAt }, photos, saved); else throw photoError; } setReports((current) => [saved, ...current.filter((item) => item.id !== saved.id)]); setVehicleStock(await getLatestVehicleStock(accessToken)); setReporting(null); if (input.finalize) await load(); } catch (saveError) { if (saveError instanceof ReportNetworkError || !navigator.onLine) { await queueReportSubmission(reporting.recordId, input, photos); setOfflineMode(true); setReporting(null); await refreshQueue(); return; } throw saveError; } };
   const addManualStock = async (input: { productName: string; quantity: number; unit: string }) => {
     const normalizedName = input.productName.toLocaleUpperCase('tr-TR');
@@ -104,7 +143,27 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
     .filter((item) => item.workOrderId !== reporting.recordId && item.customerId === reporting.customerId && (item.branchId ?? '') === (reporting.branchId ?? ''))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] : undefined;
 
-  return <section className="role-surface employee-work-orders-page"><div className="role-section-title"><div><p>SAHA PROGRAMI</p><h2>İş Emirlerim</h2></div><div className="employee-work-actions"><button onClick={() => setRouteOpen(true)}><Route size={16} /> Günün Rotası</button>{options.canSelfSchedule && <button onClick={() => setSelfModal(true)}><CalendarPlus size={16} /> Kendime İş Planla</button>}<button className="icon-button" onClick={() => void load()}><RefreshCw size={16} /></button></div></div>
+  return <section className="role-surface employee-work-orders-page"><div className="role-section-title"><div><p>SAHA PROGRAMI</p><h2>İş Emirlerim</h2></div><div className="employee-work-actions"><button onClick={() => setRouteOpen(true)}><Route size={16} /> Günün Rotası</button>{options.canSelfSchedule && <button disabled={!isShiftActive} onClick={() => isShiftActive ? setSelfModal(true) : setError('İş planlamak için önce mesainizi başlatmanız gerekmektedir.')}><CalendarPlus size={16} /> Kendime İş Planla</button>}<button className="icon-button" onClick={() => void load()}><RefreshCw size={16} /></button></div></div>
+    {!isShiftActive && (
+      <section className="field-shift-warning">
+        <div>
+          <Clock3 size={20} />
+          <span>
+            <strong>Mesainiz Henüz Başlatılmadı</strong>
+            <small>Müşteri ziyareti ve ilaçlama işlemlerine başlayabilmek için önce mesainizi açmalısınız.</small>
+          </span>
+        </div>
+        {onStartShift ? (
+          <button onClick={() => void onStartShift()}>
+            <Play size={15} /> İşe Başladım (Mesaiyi Başlat)
+          </button>
+        ) : onNavigateToOperations ? (
+          <button onClick={onNavigateToOperations}>
+            <Play size={15} /> Günlük Operasyona Git
+          </button>
+        ) : null}
+      </section>
+    )}
     {(offlineMode || queuedReports.length > 0 || queuedActions.length > 0) && <section className={`field-sync-banner ${offlineMode ? 'offline' : 'online'}`}><div>{offlineMode ? <CloudOff size={20} /> : <Cloud size={20} />}<span><strong>{offlineMode ? 'Çevrimdışı saha modu · Cihaza kaydoldu' : 'Senkronizasyon bekliyor'}</strong><small>{offlineMode ? `${queuedReports.length + queuedActions.length} işlem bu cihazda güvende; internet geldiğinde otomatik gönderilir.` : `${queuedReports.length + queuedActions.length} kayıt sunucuya gönderilecek.`}</small></span></div><button disabled={offlineMode} onClick={() => void syncQueue()}><RefreshCw size={15} /> Şimdi eşitle</button></section>}
     {queuedReports.filter((item) => item.status === 'conflict').map((item) => <section className="field-sync-conflict" key={item.id}><AlertCircle size={19} /><div><strong>Aynı rapor başka bir cihazda değiştirildi</strong><span>Sunucudaki kayıt ile bu cihazdaki taslak farklı. Hangi sürümün korunacağını seçin.</span></div><button onClick={() => void resolveConflict(item, false)}>Sunucudakini kullan</button><button className="danger" onClick={() => void resolveConflict(item, true)}>Bu cihazdakini koru</button></section>)}
     {options.canSelfSchedule && <div className="self-schedule-permission"><Sparkles size={17} /><span>Firma sahibi, kendi iş programınızı oluşturma yetkisini etkinleştirdi.</span></div>}{error && <div className="field-operation-error"><AlertCircle size={16} /><span>{error}</span></div>}
@@ -113,9 +172,10 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
       {report && <div className={`employee-report-state ${report.status.toLowerCase()}`}><FileCheck2 size={16} /><span>{report.status === 'Finalized' ? `Rapor onaylandı · ${report.totalStations} istasyon · ${riskLabel(report.riskLevel)} risk` : 'Saha raporu taslak olarak kaydedildi'}</span></div>}
       {order.assignments.length > 1 && <div className="employee-work-team"><strong>Saha ekibi</strong><span>{order.assignments.map((item) => item.employeeName).join(' · ')}</span></div>}{activeTeam.length > 0 && <div className="employee-work-team is-live"><strong>Aktif ekip</strong><span>{activeTeam.map((item) => item.employeeName).join(' · ')}</span></div>}{order.customerDurationMinutes && <div className="employee-work-team"><strong>Müşteride süre</strong><span>{formatDuration(order.customerDurationMinutes)} · toplam ekip emeği {formatDuration(order.totalLaborMinutes)}</span></div>}
       <div className="employee-work-card-actions">
-        {['Planned','Paused'].includes(order.technicalStatus) && <div className="employee-action-buttons"><button className="role-primary-button" onClick={() => void start(order)}><Play size={16} /> {order.technicalStatus === 'Paused' ? 'Ziyarete Devam Et' : 'Müşteriyi Başlat'}</button><button className="employee-report-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
+        {order.technicalStatus === 'Planned' && <div className="employee-action-buttons"><button className="role-primary-button" disabled={!isShiftActive} title={!isShiftActive ? 'İşlemlere başlamak için önce mesainizi başlatmalısınız.' : 'İlaçlamayı Başlat'} onClick={() => void start(order)}><Play size={16} /> İşe Başla (İlaçlamayı Başlat)</button></div>}
+        {order.technicalStatus === 'Paused' && <div className="employee-action-buttons"><button className="role-primary-button" disabled={!isShiftActive} onClick={() => void start(order)}><Play size={16} /> Ziyarete Devam Et</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
         {order.technicalStatus === 'InProgress' && hasCompletedPart && !hasActiveSession && <><span className="work-completed-label"><CheckCircle2 size={15} /> Saha payınız tamamlandı</span><div className="employee-action-buttons"><button className="employee-report-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setReporting(order)}><FilePlus2 size={16} /> EK-1 formunu aç</button></div></>}
-        {order.technicalStatus === 'InProgress' && !hasActiveSession && !hasCompletedPart && <div className="employee-action-buttons"><button className="role-primary-button" onClick={() => void start(order)}><Play size={16} /> Devam Eden Ziyarete Katıl</button><button className="employee-report-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
+        {order.technicalStatus === 'InProgress' && !hasActiveSession && !hasCompletedPart && <div className="employee-action-buttons"><button className="role-primary-button" disabled={!isShiftActive} onClick={() => void start(order)}><Play size={16} /> Devam Eden Ziyarete Katıl</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
         {order.technicalStatus === 'InProgress' && hasActiveSession && <div className="employee-action-buttons"><button className="role-primary-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setReporting(order)}><FilePlus2 size={16} /> {report ? 'EK-1 formunu aç' : 'EK-1 formu oluştur'}</button><button className="employee-report-button" onClick={() => setVisitActionOrder(order)}><SlidersHorizontal size={16} /> Ziyaret işlemleri</button></div>}
         {order.technicalStatus === 'Completed' && <><span className="work-completed-label"><CheckCircle2 size={15} /> Tamamlandı</span><div className="employee-action-buttons"><button className="employee-report-button" onClick={() => setActivationOrder(order)}><FileCheck2 size={16} /> İstasyon monitörleri</button><button className="employee-report-button" onClick={() => setReporting(order)}><FilePlus2 size={16} /> {report ? 'EK-1 formunu görüntüle' : 'EK-1 formu oluştur'}</button></div></>}
       </div></article>; })}</div>}
