@@ -245,26 +245,7 @@ export default function StationActivationModal({ accessToken, order, onClose, on
             <div className="activation-fields">
               <CatalogSelect label="Zararlı türü" value={current.targetPest ?? ''} options={catalog.pestTypes} disabled={readOnly} onChange={(value) => update({ targetPest: value })} />
               <CatalogSelect label="Aktivite bulgusu" value={current.activityType ?? ''} options={catalog.activityTypes} labels={activityLabels} disabled={readOnly} onChange={(value) => update({ activityType: value })} />
-              <CountSelect label="Görülen / yakalanan adet (Seçmeli)" value={current.caughtCount || 0} disabled={readOnly} onChange={(count) => update({ caughtCount: count })} />
-            </div>
-            <div className="activation-count-field">
-              <div className="activation-quick-count-header">
-                <strong>Hızlı Seçim (1-10 Tek Tık)</strong>
-                {current.caughtCount > 0 && <span className="activation-current-count-badge">Seçilen: <strong>{current.caughtCount > 10 ? `${current.caughtCount} (10+)` : `${current.caughtCount} Adet`}</strong></span>}
-              </div>
-              <div className="activation-quick-counts">
-                {catalog.quickCounts.map((count) => (
-                  <button type="button" key={count} disabled={readOnly} className={current.caughtCount === count ? 'active' : ''} onClick={() => update({ caughtCount: current.caughtCount === count ? 0 : count })}>
-                    {count}
-                  </button>
-                ))}
-                <button type="button" disabled={readOnly} className={current.caughtCount > 10 ? 'active' : ''} onClick={() => update({ caughtCount: current.caughtCount > 10 ? 0 : 11 })}>
-                  10+
-                </button>
-              </div>
-              {current.caughtCount > 10 && (
-                <input type="number" min="11" value={current.caughtCount} disabled={readOnly} onChange={(event) => update({ caughtCount: Math.max(1, Number(event.target.value)) })} placeholder="Özel adet girin (örn. 15)" aria-label="Özel aktivite adedi" />
-              )}
+              <CountSelect label="Görülen / yakalanan adet" value={current.caughtCount || 0} disabled={readOnly} onChange={(count) => update({ caughtCount: count })} />
             </div>
           </div>}
           {current.deviceStatus === 'Inaccessible' && <CatalogSelect className="activation-wide" label="Ulaşılamama nedeni" value={current.inaccessibilityReason ?? ''} options={catalog.inaccessibilityReasons} disabled={readOnly} onChange={(value) => update({ inaccessibilityReason: value })} />}

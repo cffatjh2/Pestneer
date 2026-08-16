@@ -23,7 +23,7 @@ export default function WorkOrderDetailModal({ order, accessToken, onClose, onEd
     <section className="work-history"><h3>İşlem geçmişi</h3>{order.history.length > 0 ? order.history.map((item) => <article key={item.id}><span /><div><strong>{statusLabel(item.toStatus)}</strong><small>{item.note} · {item.changedBy}</small></div><time>{formatDateTime(item.occurredAt)}</time></article>) : <p>Henüz işlem geçmişi bulunmuyor.</p>}</section>
     <div className="modal-actions">
       <button type="button" className="secondary-button" onClick={() => void handleShareOrder()}><Share2 size={16} /> Paylaş</button>
-      {onOpenStations && <button type="button" className="secondary-button" onClick={onOpenStations}><ClipboardCheck size={16} /> İstasyon Monitörleri</button>}
+      {onOpenStations && order.technicalStatus !== 'Planned' && <button type="button" className="secondary-button" onClick={onOpenStations}><ClipboardCheck size={16} /> İstasyon Monitörleri</button>}
       <button className="secondary-button" onClick={onClose}>Kapat</button>
       {onEdit && order.technicalStatus !== 'Completed' && order.technicalStatus !== 'InProgress' && <button className="primary-button" onClick={onEdit}><Pencil size={16} /> İş Emrini Düzenle</button>}
     </div>
