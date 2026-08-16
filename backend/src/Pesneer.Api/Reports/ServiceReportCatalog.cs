@@ -14,7 +14,7 @@ public static class ServiceReportCatalog
     ["Sighting", "Capture", "Droppings", "Gnawing", "Track", "Nest", "Other"];
 
     public static readonly string[] EquipmentTypes =
-    ["M - Dış alan kemirgen istasyonu", "C - İç alan canlı yakalama istasyonu", "E - Sinek cihazı", "G - Güvenlik monitörü", "B - Böcek monitörü"];
+    ["R - Dış alan yemli istasyon", "C - İç alan canlı yakalama istasyonu", "E - Sinek cihazı", "G - Güve monitörü", "B - Böcek monitörü"];
 
     public static readonly string[] InaccessibilityReasons =
     ["Alan kilitliydi", "Üretim devam ediyordu", "Müşteri erişime izin vermedi", "İstasyonun önü kapalıydı", "İş güvenliği nedeniyle erişilemedi", "İstasyon yerinde bulunamadı"];

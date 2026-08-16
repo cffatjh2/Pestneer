@@ -19,10 +19,10 @@ type Props = {
 };
 
 const defaultEquipmentTypes: SitePlanEquipmentType[] = [
+  { id: 'outside-rodent', code: 'R', name: 'Dış Alan Yemli İstasyon', color: '#2563EB', shape: 'square' },
   { id: 'inside-live-trap', code: 'C', name: 'İç Alan Canlı Yakalama İstasyonu', color: '#F59E0B', shape: 'circle' },
-  { id: 'outside-rodent', code: 'M', name: 'Dış Alan Kemirgen İstasyonu', color: '#2563EB', shape: 'square' },
   { id: 'fly-device', code: 'E', name: 'Elektrikli Sinek Yakalama Cihazı', color: '#DC2626', shape: 'star' },
-  { id: 'safety-monitor', code: 'G', name: 'Güven Monitörü', color: '#7C3AED', shape: 'hexagon' },
+  { id: 'moth-monitor', code: 'G', name: 'Güve Monitörü', color: '#7C3AED', shape: 'hexagon' },
   { id: 'insect-monitor', code: 'B', name: 'Böcek Monitörü', color: '#10A37F', shape: 'diamond' },
 ];
 

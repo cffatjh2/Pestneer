@@ -74,7 +74,7 @@ try {
 
     $plan = Invoke-RestMethod 'http://127.0.0.1:5105/api/site-plans/' -Method Post -ContentType 'application/json; charset=utf-8' -Headers $ownerHeaders -Body (@{
         customerId = $customer.id; branchId = $branches[0].id; title = 'Zararlı Mücadelesi Ekipman Yerleşim Planı'; areaName = 'Üretim ve dış alan'; fieldGuide = 'BRCGS / Saha Kılavuzu'; revisionNote = 'İlk yayın';
-        canvas = @{ width = 1200; height = 720; equipmentTypes = @(@{ id = 'mouse'; code = 'M'; name = 'Dış Alan İstasyonu'; color = '#2563eb'; shape = 'square' }); elements = @(@{ id = 'station-1'; type = 'station'; x = 100; y = 100; width = 36; height = 36; rotation = 0; text = $null; stroke = '#102A43'; fill = '#FFFFFF'; strokeWidth = 2; equipmentTypeId = 'mouse'; stationNumber = 'M-01'; qrCode = 'PST-TEST-M01' }) }
+        canvas = @{ width = 1200; height = 720; equipmentTypes = @(@{ id = 'mouse'; code = 'R'; name = 'Dış Alan Yemli İstasyon'; color = '#2563eb'; shape = 'square' }); elements = @(@{ id = 'station-1'; type = 'station'; x = 100; y = 100; width = 36; height = 36; rotation = 0; text = $null; stroke = '#102A43'; fill = '#FFFFFF'; strokeWidth = 2; equipmentTypeId = 'mouse'; stationNumber = 'R-01'; qrCode = 'PST-TEST-R01' }) }
     } | ConvertTo-Json -Depth 8)
     if ($plan.canvas.elements[0].qrCode -ne 'PST-TEST-M01') { throw 'İstasyon QR eşleştirmesi kroki kaydında korunmadı.' }
 

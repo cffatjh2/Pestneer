@@ -39,7 +39,7 @@ const blankStation = (): ReportStationInput => ({
 const fallbackCatalog: ServiceReportCatalog = {
   pestTypes: ['Ev faresi', 'Tarla faresi', 'Norveç sıçanı', 'Çatı sıçanı', 'Alman hamamböceği', 'Doğu hamamböceği', 'Amerikan hamamböceği', 'Karasinek', 'Sirke sineği', 'Lağım sineği', 'Sivrisinek', 'Güve', 'Karınca'],
   activityTypes: ['Sighting', 'Capture', 'Droppings', 'Gnawing', 'Track', 'Nest', 'Other'],
-  equipmentTypes: ['M - Dış alan kemirgen istasyonu', 'C - İç alan canlı yakalama istasyonu', 'E - Sinek cihazı', 'G - Güvenlik monitörü', 'B - Böcek monitörü'],
+  equipmentTypes: ['R - Dış alan yemli istasyon', 'C - İç alan canlı yakalama istasyonu', 'E - Sinek cihazı', 'G - Güve monitörü', 'B - Böcek monitörü'],
   inaccessibilityReasons: ['Alan kilitliydi', 'Üretim devam ediyordu', 'Müşteri erişime izin vermedi', 'İstasyonun önü kapalıydı', 'İş güvenliği nedeniyle erişilemedi', 'İstasyon yerinde bulunamadı'],
   residenceTypes: [], workTypes: [], safetyMeasures: [], applicationMethods: [], productUnits: [], quickCounts: [1,2,3,4,5,6,7,8,9,10],
 };
