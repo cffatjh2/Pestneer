@@ -241,7 +241,32 @@ export default function StationActivationModal({ accessToken, order, onClose, on
             </div>
           </div>}
 
-          {current.deviceStatus === 'Activity' && <div className="activation-activity-panel"><div className="activation-fields"><CatalogSelect label="Zararlı türü" value={current.targetPest ?? ''} options={catalog.pestTypes} disabled={readOnly} onChange={(value) => update({ targetPest: value })} /><CatalogSelect label="Aktivite bulgusu" value={current.activityType ?? ''} options={catalog.activityTypes} labels={activityLabels} disabled={readOnly} onChange={(value) => update({ activityType: value })} /></div><div className="activation-count-field"><strong>Görülen / yakalanan adet</strong><div className="activation-quick-counts">{catalog.quickCounts.map((count) => <button type="button" key={count} disabled={readOnly} className={current.caughtCount === count ? 'active' : ''} onClick={() => update({ caughtCount: current.caughtCount === count ? 0 : count })}>{count}</button>)}<button type="button" disabled={readOnly} className={current.caughtCount > 10 ? 'active' : ''} onClick={() => update({ caughtCount: current.caughtCount > 10 ? 0 : 11 })}>10+</button></div>{current.caughtCount > 10 && <input type="number" min="11" value={current.caughtCount} disabled={readOnly} onChange={(event) => update({ caughtCount: Number(event.target.value) })} aria-label="Özel aktivite adedi" />}</div></div>}
+          {current.deviceStatus === 'Activity' && <div className="activation-activity-panel">
+            <div className="activation-fields">
+              <CatalogSelect label="Zararlı türü" value={current.targetPest ?? ''} options={catalog.pestTypes} disabled={readOnly} onChange={(value) => update({ targetPest: value })} />
+              <CatalogSelect label="Aktivite bulgusu" value={current.activityType ?? ''} options={catalog.activityTypes} labels={activityLabels} disabled={readOnly} onChange={(value) => update({ activityType: value })} />
+              <CountSelect label="Görülen / yakalanan adet (Seçmeli)" value={current.caughtCount || 0} disabled={readOnly} onChange={(count) => update({ caughtCount: count })} />
+            </div>
+            <div className="activation-count-field">
+              <div className="activation-quick-count-header">
+                <strong>Hızlı Seçim (1-10 Tek Tık)</strong>
+                {current.caughtCount > 0 && <span className="activation-current-count-badge">Seçilen: <strong>{current.caughtCount > 10 ? `${current.caughtCount} (10+)` : `${current.caughtCount} Adet`}</strong></span>}
+              </div>
+              <div className="activation-quick-counts">
+                {catalog.quickCounts.map((count) => (
+                  <button type="button" key={count} disabled={readOnly} className={current.caughtCount === count ? 'active' : ''} onClick={() => update({ caughtCount: current.caughtCount === count ? 0 : count })}>
+                    {count}
+                  </button>
+                ))}
+                <button type="button" disabled={readOnly} className={current.caughtCount > 10 ? 'active' : ''} onClick={() => update({ caughtCount: current.caughtCount > 10 ? 0 : 11 })}>
+                  10+
+                </button>
+              </div>
+              {current.caughtCount > 10 && (
+                <input type="number" min="11" value={current.caughtCount} disabled={readOnly} onChange={(event) => update({ caughtCount: Math.max(1, Number(event.target.value)) })} placeholder="Özel adet girin (örn. 15)" aria-label="Özel aktivite adedi" />
+              )}
+            </div>
+          </div>}
           {current.deviceStatus === 'Inaccessible' && <CatalogSelect className="activation-wide" label="Ulaşılamama nedeni" value={current.inaccessibilityReason ?? ''} options={catalog.inaccessibilityReasons} disabled={readOnly} onChange={(value) => update({ inaccessibilityReason: value })} />}
           {current.deviceStatus !== 'Unchecked' && <label className="activation-wide">İstasyon açıklaması<textarea value={current.notes ?? ''} disabled={readOnly} onChange={(event) => update({ notes: event.target.value })} placeholder="Yapılan işlem, değişim veya saha notu…" /></label>}
           {!readOnly && stations.length > 1 && <button type="button" className="activation-remove" onClick={() => { setStations((items) => items.filter((_, index) => index !== selected)); setSelected(Math.max(0, selected - 1)); }}><Trash2 /> İstasyonu kaldır</button>}
@@ -344,6 +369,33 @@ function CatalogSelect({ label, value, options, labels, disabled, className, onC
   const isOther = value.startsWith('Diğer: ');
   const known = options.includes(value);
   return <label className={className}>{label}<select value={isOther || (!known && value) ? '__other__' : value} disabled={disabled} onChange={(event) => onChange(event.target.value === '__other__' ? 'Diğer: ' : event.target.value)}><option value="">Seçiniz</option>{options.map((option) => <option key={option} value={option}>{labels?.[option] ?? option}</option>)}<option value="__other__">Diğer</option></select>{(isOther || (!known && value)) && <input value={isOther ? value.slice(7) : value} disabled={disabled} onChange={(event) => onChange(`Diğer: ${event.target.value}`)} placeholder="Manuel açıklama" />}</label>;
+}
+
+function CountSelect({ label, value, disabled, className, onChange }: { label: string; value: number; disabled: boolean; className?: string; onChange: (value: number) => void }) {
+  const isCustom = value > 10;
+  return (
+    <label className={className}>
+      {label}
+      <select
+        value={value === 0 ? '' : isCustom ? '__custom__' : String(value)}
+        disabled={disabled}
+        onChange={(event) => {
+          const val = event.target.value;
+          if (val === '') onChange(0);
+          else if (val === '__custom__') onChange(value > 10 ? value : 11);
+          else onChange(Number(val));
+        }}
+      >
+        <option value="">Seçiniz (1 - 10 Adet)</option>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+          <option key={num} value={num}>
+            {num} Adet
+          </option>
+        ))}
+        <option value="__custom__">10+ (Özel Adet)</option>
+      </select>
+    </label>
+  );
 }
 
 function equipmentCatalogValue(value: string, options: string[]) {
