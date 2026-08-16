@@ -275,6 +275,9 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
                     ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "IsTrial" boolean NOT NULL DEFAULT false;
                     ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "TrialStartedAt" timestamp with time zone;
                     ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "TrialEndsAt" timestamp with time zone;
+                    ALTER TABLE "Accounts" ADD COLUMN IF NOT EXISTS "HasAcceptedTerms" boolean NOT NULL DEFAULT false;
+                    ALTER TABLE "Accounts" ADD COLUMN IF NOT EXISTS "TermsAcceptedAt" timestamp with time zone;
+                    ALTER TABLE "Accounts" ADD COLUMN IF NOT EXISTS "TermsAcceptedVersion" text;
                 """);
             }
             return;

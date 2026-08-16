@@ -65,7 +65,7 @@ public sealed class LoginService(
             token.ExpiresAt,
             portal.ToString().ToLowerInvariant(),
             new CompanySummary(company.Id, company.LegalName, company.Code),
-            new UserSummary(account.Id, account.DisplayName, account.Email, role.ToString()),
+            new UserSummary(account.Id, account.DisplayName, account.Email, role.ToString(), account.HasAcceptedTerms, account.TermsAcceptedAt),
             customerId,
             customerBranchId);
         return new LoginResult(response);

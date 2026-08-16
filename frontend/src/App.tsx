@@ -7,6 +7,7 @@ import Topbar from './components/layout/Topbar';
 import LoginPage from './auth/LoginPage';
 import type { AuthenticatedSession } from './auth/types';
 import LandingPage from './marketing/LandingPage';
+import KvkkConsentModal from './components/modals/KvkkConsentModal';
 import { getEmployees, SessionExpiredError, type EmployeeRecord } from './services/employeeApi';
 import {
   addCustomerBranches,
@@ -202,6 +203,16 @@ function isSystemControlPath(pathname: string) {
   return pathname.replace(/\/+$/, '') === '/pestneer-system-control-9f4c2';
 }
 
+function hasUserAcceptedTerms(user?: { id: string; hasAcceptedTerms?: boolean }): boolean {
+  if (!user) return false;
+  if (user.hasAcceptedTerms) return true;
+  if (typeof window !== 'undefined') {
+    const localAccepted = window.localStorage.getItem(`pestneer_terms_accepted_${user.id}`);
+    if (localAccepted) return true;
+  }
+  return false;
+}
+
 export default function App() {
   if (isSystemControlPath(window.location.pathname)) return <Suspense fallback={<LoadingScreen />}><SystemAdminPage /></Suspense>;
   const [session, setSession] = useState<AuthenticatedSession | null>(loadStoredSession);
@@ -225,6 +236,20 @@ export default function App() {
 
   if (!session && !isLoginVisible) return <LandingPage onLogin={() => setIsLoginVisible(true)} />;
   if (!session) return <LoginPage onAuthenticated={handleAuthenticated} onBack={() => setIsLoginVisible(false)} />;
+
+  // Zorunlu KVKK ve Kullanıcı Sözleşmesi Onay Kapısı
+  if (!hasUserAcceptedTerms(session.user)) {
+    return (
+      <KvkkConsentModal
+        session={session}
+        onAccepted={(updatedSession) => {
+          setSession(updatedSession);
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   if (session.portal === 'employee') return <Suspense fallback={<LoadingScreen />}><EmployeePortal session={session} onLogout={handleLogout} /></Suspense>;
   if (session.portal === 'customer') return <Suspense fallback={<LoadingScreen />}><CustomerPortal session={session} onLogout={handleLogout} /></Suspense>;
   return <Suspense fallback={<LoadingScreen />}><OwnerPortal session={session} onLogout={handleLogout} /></Suspense>;

@@ -69,6 +69,9 @@ public sealed class Account
     public string? PhoneNumber { get; set; }
     public required string PasswordHash { get; set; }
     public PortalType Portal { get; set; }
+    public bool HasAcceptedTerms { get; set; } = false;
+    public DateTimeOffset? TermsAcceptedAt { get; set; }
+    public string? TermsAcceptedVersion { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

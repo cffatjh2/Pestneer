@@ -20,6 +20,8 @@ export type AuthenticatedSession = {
     name: string;
     email: string;
     role: string;
+    hasAcceptedTerms?: boolean;
+    termsAcceptedAt?: string | null;
   };
   customerId?: string;
   customerBranchId?: string;

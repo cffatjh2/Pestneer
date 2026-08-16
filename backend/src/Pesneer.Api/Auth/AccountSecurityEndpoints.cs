@@ -12,11 +12,40 @@ public static class AccountSecurityEndpoints
     public static IEndpointRouteBuilder MapAccountSecurityEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPut("/api/account/password", ChangeOwnPasswordAsync).RequireAuthorization();
+        app.MapPost("/api/account/accept-terms", AcceptTermsAsync).RequireAuthorization();
 
         var ownerGroup = app.MapGroup("/api/company/account-security").RequireAuthorization("OwnerPortal");
         ownerGroup.MapGet("/accounts", GetCompanyAccountsAsync);
         ownerGroup.MapPut("/accounts/{accountId:guid}/password", ResetCompanyAccountPasswordAsync);
         return app;
+    }
+
+    private static async Task<IResult> AcceptTermsAsync(
+        ClaimsPrincipal user,
+        AcceptTermsRequest request,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var accountId = GetAccountId(user);
+        if (!accountId.HasValue) return Results.Unauthorized();
+
+        var account = await dbContext.Accounts.IgnoreQueryFilters()
+            .SingleOrDefaultAsync(item => item.Id == accountId.Value && item.IsActive, cancellationToken);
+        if (account is null) return Results.Unauthorized();
+
+        account.HasAcceptedTerms = true;
+        account.TermsAcceptedAt = DateTimeOffset.UtcNow;
+        account.TermsAcceptedVersion = string.IsNullOrWhiteSpace(request.Version) ? "2026.1" : request.Version.Trim();
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new
+        {
+            success = true,
+            hasAcceptedTerms = true,
+            termsAcceptedAt = account.TermsAcceptedAt,
+            termsAcceptedVersion = account.TermsAcceptedVersion,
+            message = "KVKK Aydınlatma Metni ve Kullanıcı Sözleşmesi başarıyla onaylandı."
+        });
     }
 
     private static async Task<IResult> ChangeOwnPasswordAsync(
