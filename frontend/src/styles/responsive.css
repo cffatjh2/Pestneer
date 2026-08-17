@@ -1,5 +1,5 @@
 /* ================================================================== */
-/*  PESNEER — Responsive Styles                                       */
+/*  PESTNEER — Responsive Styles                                      */
 /*  Tüm responsive media query'ler burada.                           */
 /* ================================================================== */
 
@@ -350,8 +350,13 @@
   .work-photo-section > div { grid-template-columns: repeat(2, 1fr); }
   .day-view-heading { align-items: stretch; flex-direction: column; }
 
+  .modal-layer {
+    padding: var(--space-3);
+  }
+
   .modal {
-    padding: var(--space-5);
+    padding: var(--space-4);
+    max-height: calc(100dvh - 16px);
     border-radius: var(--radius-xl);
   }
 

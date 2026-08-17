@@ -44,8 +44,8 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
       <div className="landing-aurora landing-aurora-one" />
       <div className="landing-aurora landing-aurora-two" />
       <header className="landing-header">
-        <a className="landing-brand" href="#top" aria-label="Pesneer ana sayfa">
-          <span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span>
+        <a className="landing-brand" href="#top" aria-label="Pestneer ana sayfa">
+          <span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="Pestneer" /></span>
           <div><strong>Pestneer</strong><small>PEST KONTROL YÖNETİM SİSTEMİ</small></div>
         </a>
         <nav aria-label="Tanıtım menüsü"><a href="#features">Özellikler</a><a href="#workflow">Nasıl çalışır?</a><a href="#security">Güvenlik</a></nav>
@@ -68,7 +68,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
           </div>
         </div>
 
-        <div className="landing-product-stage" aria-label="Pesneer operasyon paneli önizlemesi">
+        <div className="landing-product-stage" aria-label="Pestneer operasyon paneli önizlemesi">
           <div className="stage-orbit orbit-one"><i /></div><div className="stage-orbit orbit-two"><i /></div>
           <div className="product-window">
             <div className="product-window-top"><div><i /><i /><i /></div><span><ShieldCheck size={13} /> Canlı operasyon merkezi</span><em>07 AĞU 2026</em></div>
@@ -118,7 +118,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
       <section className="landing-section landing-workflow" id="workflow">
         <div className="workflow-visual">
           <div className="workflow-glow" />
-          <div className="workflow-phone"><div className="phone-speaker" /><div className="phone-brand"><span className="phone-logo"><img src="/pesneer-mark.jpeg" alt="" /></span><strong>Pestneer</strong><span>SAHA</span></div><div className="phone-greeting"><small>15 AĞUSTOS 2026</small><strong>Merhaba, Burak</strong><span>Bugün 4 görevin var</span></div><div className="phone-shift"><div><span>Çalışma süresi</span><strong>04:32:18</strong></div><button>Öğle Molası</button></div><div className="phone-job"><small>SIRADAKİ İŞ · 10:30</small><strong>Maviova Gıda</strong><span><MapPin size={11} /> Merkez Tesisi</span><button>İş emrini aç <ChevronRight size={13} /></button></div><div className="phone-home"><i /><i /><i /></div></div>
+          <div className="workflow-phone"><div className="phone-speaker" /><div className="phone-brand"><span className="phone-logo"><img src="/pesneer-mark.jpeg" alt="Pestneer" /></span><strong>Pestneer</strong><span>SAHA</span></div><div className="phone-greeting"><small>15 AĞUSTOS 2026</small><strong>Merhaba, Burak</strong><span>Bugün 4 görevin var</span></div><div className="phone-shift"><div><span>Çalışma süresi</span><strong>04:32:18</strong></div><button>Öğle Molası</button></div><div className="phone-job"><small>SIRADAKİ İŞ · 10:30</small><strong>Maviova Gıda</strong><span><MapPin size={11} /> Merkez Tesisi</span><button>İş emrini aç <ChevronRight size={13} /></button></div><div className="phone-home"><i /><i /><i /></div></div>
           <div className="workflow-scan-line" />
           <div className="workflow-badge badge-sign"><Signature size={18} /><span><strong>Dijital imza</strong><small>Sahada tamamlandı</small></span></div>
           <div className="workflow-badge badge-stock"><PackageCheck size={18} /><span><strong>Araç stoku</strong><small>Kontrol edildi</small></span></div>
@@ -131,8 +131,8 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
         <div className="security-points"><article><ShieldCheck size={20} /><span><strong>Firma bazlı izolasyon</strong><small>Şirket verileri veritabanı seviyesinde keskin biçimde ayrılır.</small></span></article><article><UsersRound size={20} /><span><strong>Üç ayrı kullanıcı portalı</strong><small>Firma sahibi, çalışan ve müşteri için özel yetki ve ekranlar.</small></span></article><article><FileCheck2 size={20} /><span><strong>Denetime hazır arşiv</strong><small>Rapor, kroki, trend, risk, ruhsat ve MSDS/GBF kayıtları yetkiye göre erişilir.</small></span></article></div>
       </section>
 
-      <section className="landing-cta"><div className="cta-orb" /><div><span><i className="cta-logo"><img src="/pesneer-mark.jpeg" alt="" /></i> PESNEER OPERASYON MERKEZİ</span><h2>Pest kontrol şirketinizi<br />geleceğe hazırlayın.</h2><p>Daha düzenli ekipler, daha hızlı saha operasyonları ve daha güçlü müşteri deneyimi.</p></div><button onClick={onLogin}>Giriş yap ve sistemi keşfet <ArrowRight size={18} /></button></section>
-      <footer className="landing-footer"><a className="landing-brand" href="#top"><span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="" /></span><div><strong>Pestneer</strong><small>OPERASYONUN GÜVENLİ MERKEZİ</small></div></a><p>© 2026 Pestneer. Pest kontrol operasyon yönetim sistemi.</p><div><a href="#features">Özellikler</a><a href="#security">Güvenlik</a><button onClick={onLogin}>Giriş Yap</button></div></footer>
+      <section className="landing-cta"><div className="cta-orb" /><div><span><i className="cta-logo"><img src="/pesneer-mark.jpeg" alt="Pestneer" /></i> PESTNEER OPERASYON MERKEZİ</span><h2>Pest kontrol şirketinizi<br />geleceğe hazırlayın.</h2><p>Daha düzenli ekipler, daha hızlı saha operasyonları ve daha güçlü müşteri deneyimi.</p></div><button onClick={onLogin}>Giriş yap ve sistemi keşfet <ArrowRight size={18} /></button></section>
+      <footer className="landing-footer"><a className="landing-brand" href="#top"><span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="Pestneer" /></span><div><strong>Pestneer</strong><small>OPERASYONUN GÜVENLİ MERKEZİ</small></div></a><p>© 2026 Pestneer. Pest kontrol operasyon yönetim sistemi.</p><div><a href="#features">Özellikler</a><a href="#security">Güvenlik</a><button onClick={onLogin}>Giriş Yap</button></div></footer>
     </main>
   );
 }

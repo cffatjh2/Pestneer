@@ -92,7 +92,7 @@ export function downloadBranchTemplate() {
 
   const workbook = utils.book_new();
   utils.book_append_sheet(workbook, worksheet, 'Şubeler');
-  writeFile(workbook, 'Pesneer_Sube_Aktarim_Sablonu.xlsx', { compression: true });
+  writeFile(workbook, 'Pestneer_Sube_Aktarim_Sablonu.xlsx', { compression: true });
 }
 
 function optionalCoordinate(row: unknown[], index: number, rowNumber: number, label: string) {

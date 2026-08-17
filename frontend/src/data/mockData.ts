@@ -68,7 +68,7 @@ export const emptyReport: ServiceReport = {
   operatorSignature: null,
 
   verificationCode: '-',
-  verificationUrl: 'https://pesneer.com/belge',
+  verificationUrl: 'https://pestneer.com/belge',
 };
 
 export const demoReport = emptyReport;

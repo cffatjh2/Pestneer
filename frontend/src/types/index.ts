@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ */
-/*  Pesneer — Tip Tanımları                                           */
+/*  Pestneer — Tip Tanımları                                          */
 /*  İleride backend API'den gelen tipler buradan dışa aktarılacak.    */
 /* ------------------------------------------------------------------ */
 

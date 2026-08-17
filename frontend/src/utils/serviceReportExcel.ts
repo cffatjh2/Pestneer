@@ -3,7 +3,7 @@ import type { ServiceReportAnalytics, ServiceReportRecord } from '../services/se
 
 export function exportServiceReportExcel(report: ServiceReportRecord) {
   const summary = utils.aoa_to_sheet([
-    ['PESNEER SAHA HİZMET RAPORU'],
+    ['PESTNEER SAHA HİZMET RAPORU'],
     ['Rapor No', report.reportNumber], ['İş Emri', report.workOrderNumber], ['Durum', report.status === 'Finalized' ? 'Onaylandı' : 'Taslak'],
     ['Müşteri', report.customerName], ['Şube', report.branchName], ['Adres', report.branchAddress], ['Uygulayıcı', report.operatorName],
     ['Uygulama Tarihi', formatDate(report.scheduledAt)], ['Hedef Zararlı', report.targetPests ?? ''], ['Uygulama Özeti', report.applicationSummary ?? ''],
@@ -39,7 +39,7 @@ export function exportTrendExcel(analytics: ServiceReportAnalytics, reports: Ser
   const details = utils.json_to_sheet(reports.map((item) => ({ 'Rapor No': item.reportNumber, Müşteri: item.customerName, Şube: item.branchName, Tarih: formatDate(item.scheduledAt), Operatör: item.operatorName, İstasyon: item.totalStations, Aktivite: item.activeStations, Yakalanan: item.totalCaught, 'Risk Seviyesi': riskLabel(item.riskLevel) })));
   details['!cols'] = [{ wch: 20 }, { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
   const workbook = utils.book_new(); utils.book_append_sheet(workbook, trend, 'Aylık Trend'); utils.book_append_sheet(workbook, pests, 'Zararlı Dağılımı'); utils.book_append_sheet(workbook, details, 'Raporlar');
-  writeFile(workbook, `Pesneer_Trend_Risk_${analytics.from}_${analytics.to}.xlsx`, { compression: true });
+  writeFile(workbook, `Pestneer_Trend_Risk_${analytics.from}_${analytics.to}.xlsx`, { compression: true });
 }
 
 const riskLabel = (value: string) => ({ Low: 'Düşük', Medium: 'Orta', High: 'Yüksek' }[value] ?? value);
