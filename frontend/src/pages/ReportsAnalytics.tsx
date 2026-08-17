@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CheckCircle2, ClipboardCheck, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, Gauge, Printer, RefreshCw, Share2, ShieldAlert, Users, X } from 'lucide-react';
+import { Activity, BarChart3, CheckCircle2, ClipboardCheck, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, FilterX, Gauge, Printer, RefreshCw, Search, Share2, ShieldAlert, Users, X } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import type { WorkOrder } from '../types';
 import ServiceReportModal from '../components/modals/ServiceReportModal';
@@ -61,11 +61,254 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
 }
 
 function ActivationsTab({ orders, activationByOrder, onOpen }: { orders: WorkOrder[]; activationByOrder: Map<string, StationActivationRecord>; onOpen: (order: WorkOrder) => void }) {
-  return <div className="surface field-report-list"><div className="analytics-section-heading"><div><p className="eyebrow">İSTASYON BAZLI SAHA KONTROLÜ</p><h2>Bağımsız aktivasyon listeleri</h2><p>İstasyon bulunan işlerde kullanılır; EK-1 biyosidal uygulama raporundan tamamen bağımsızdır.</p></div><span>{activationByOrder.size} kayıt</span></div>{orders.length === 0 ? <div className="analytics-empty"><ClipboardCheck size={31} /><strong>Aktivasyon açılabilecek iş bulunmuyor</strong></div> : <div className="field-report-grid">{orders.map((order) => { const activation = activationByOrder.get(order.recordId); return <article key={order.recordId}><div className="field-report-heading"><span className={`report-state ${activation?.status.toLowerCase() ?? 'missing'}`}>{activation?.status === 'Finalized' ? 'Onaylandı' : activation ? 'Taslak' : 'Liste yok'}</span><small>{order.id}</small></div><h3>{order.client}</h3><p>{order.branch}</p><dl><div><dt>Personel</dt><dd>{order.technician}</dd></div><div><dt>Tarih</dt><dd>{order.date}</dd></div>{activation && <><div><dt>Kontrol</dt><dd>{activation.totalStations} istasyon</dd></div><div><dt>Aktivite</dt><dd>{activation.activeStations} istasyon</dd></div></>}</dl><div className="field-report-actions"><button className="primary-button" onClick={() => onOpen(order)}><ClipboardCheck size={15} /> {activation ? 'Listeyi aç' : 'Aktivasyon oluştur'}</button></div></article>; })}</div>}</div>;
+  const [search, setSearch] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'missing' | 'draft' | 'finalized'>('all');
+  const [techFilter, setTechFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const customers = useMemo(() => Array.from(new Map(orders.map((o) => [o.customerId || o.client, { id: o.customerId || o.client, name: o.client }])).values()).sort((a, b) => a.name.localeCompare(b.name, 'tr')), [orders]);
+  const branches = useMemo(() => Array.from(new Map(orders.filter((o) => !customerFilter || o.customerId === customerFilter || o.client === customerFilter).filter((o) => o.branch).map((o) => [o.branchId || o.branch, { id: o.branchId || o.branch, name: o.branch }])).values()).sort((a, b) => a.name.localeCompare(b.name, 'tr')), [orders, customerFilter]);
+  const technicians = useMemo(() => Array.from(new Set(orders.map((o) => o.technician).filter(Boolean))).sort() as string[], [orders]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const act = activationByOrder.get(order.recordId);
+      const status = act?.status === 'Finalized' ? 'finalized' : act ? 'draft' : 'missing';
+
+      if (statusFilter !== 'all' && status !== statusFilter) return false;
+      if (customerFilter && order.customerId !== customerFilter && order.client !== customerFilter) return false;
+      if (branchFilter && order.branchId !== branchFilter && order.branch !== branchFilter) return false;
+      if (techFilter && order.technician !== techFilter) return false;
+      if (dateFrom && order.date < dateFrom) return false;
+      if (dateTo && order.date > dateTo) return false;
+
+      if (search.trim()) {
+        const q = search.trim().toLocaleLowerCase('tr-TR');
+        const text = `${order.client} ${order.branch} ${order.id} ${order.technician ?? ''}`.toLocaleLowerCase('tr-TR');
+        if (!text.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [orders, activationByOrder, statusFilter, customerFilter, branchFilter, techFilter, dateFrom, dateTo, search]);
+
+  const hasFilters = Boolean(search || customerFilter || branchFilter || statusFilter !== 'all' || techFilter || dateFrom || dateTo);
+  const clearFilters = () => { setSearch(''); setCustomerFilter(''); setBranchFilter(''); setStatusFilter('all'); setTechFilter(''); setDateFrom(''); setDateTo(''); };
+
+  return <div className="surface field-report-list">
+    <div className="analytics-section-heading">
+      <div>
+        <p className="eyebrow">İSTASYON BAZLI SAHA KONTROLÜ</p>
+        <h2>Bağımsız aktivasyon listeleri</h2>
+        <p>İstasyon bulunan işlerde kullanılır; EK-1 biyosidal uygulama raporundan tamamen bağımsızdır.</p>
+      </div>
+      <span>{filteredOrders.length} / {orders.length} iş emri</span>
+    </div>
+
+    {/* Filter Toolbar */}
+    <div className="surface document-filter-panel" style={{ margin: '0 0 18px 0' }}>
+      <label className="document-search">
+        <span>Arama</span>
+        <i><Search size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Müşteri, şube, iş emri veya personel…" /></i>
+      </label>
+      <label>
+        Müşteri
+        <select value={customerFilter} onChange={(e) => { setCustomerFilter(e.target.value); setBranchFilter(''); }}>
+          <option value="">Tüm Müşteriler</option>
+          {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </label>
+      <label>
+        Şube
+        <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}>
+          <option value="">Tüm Şubeler</option>
+          {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      </label>
+      <label>
+        Liste Durumu
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
+          <option value="all">Tüm Durumlar</option>
+          <option value="missing">Liste Bekliyor</option>
+          <option value="draft">Taslak</option>
+          <option value="finalized">Onaylandı</option>
+        </select>
+      </label>
+      <label>
+        Personel
+        <select value={techFilter} onChange={(e) => setTechFilter(e.target.value)}>
+          <option value="">Tüm Personel</option>
+          {technicians.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </label>
+      <label>
+        Başlangıç
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+      </label>
+      <label>
+        Bitiş
+        <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
+      </label>
+      <div className="document-filter-summary">
+        <span><strong>{filteredOrders.length}</strong> / {orders.length} kayıt</span>
+        <button type="button" disabled={!hasFilters} onClick={clearFilters}><FilterX size={15} /> Temizle</button>
+      </div>
+    </div>
+
+    {filteredOrders.length === 0 ? (
+      <div className="analytics-empty"><ClipboardCheck size={31} /><strong>Filtrelere uygun aktivasyon işi bulunamadı</strong><span>Filtreleri temizleyerek tüm işleri listeleyebilirsiniz.</span></div>
+    ) : (
+      <div className="field-report-grid">
+        {filteredOrders.map((order) => {
+          const activation = activationByOrder.get(order.recordId);
+          return <article key={order.recordId}>
+            <div className="field-report-heading">
+              <span className={`report-state ${activation?.status.toLowerCase() ?? 'missing'}`}>{activation?.status === 'Finalized' ? 'Onaylandı' : activation ? 'Taslak' : 'Liste yok'}</span>
+              <small>{order.id}</small>
+            </div>
+            <h3>{order.client}</h3>
+            <p>{order.branch}</p>
+            <dl>
+              <div><dt>Personel</dt><dd>{order.technician}</dd></div>
+              <div><dt>Tarih</dt><dd>{order.date}</dd></div>
+              {activation && <><div><dt>Kontrol</dt><dd>{activation.totalStations} istasyon</dd></div><div><dt>Aktivite</dt><dd>{activation.activeStations} istasyon</dd></div></>}
+            </dl>
+            <div className="field-report-actions">
+              <button className="primary-button" onClick={() => onOpen(order)}><ClipboardCheck size={15} /> {activation ? 'Listeyi aç' : 'Aktivasyon oluştur'}</button>
+            </div>
+          </article>;
+        })}
+      </div>
+    )}
+  </div>;
 }
 
 function ReportsTab({ orders, reportByOrder, onEdit, onPreview }: { orders: WorkOrder[]; reportByOrder: Map<string, ServiceReportRecord>; onEdit: (order: WorkOrder, report?: ServiceReportRecord) => void; onPreview: (report: ServiceReportRecord) => void }) {
-  return <div className="surface field-report-list"><div className="analytics-section-heading"><div><p className="eyebrow">UYGULAMA KAYITLARI</p><h2>Saha hizmet raporları</h2></div><span>{orders.length} raporlanabilir iş</span></div>{orders.length === 0 ? <div className="analytics-empty"><FileText size={31} /><strong>Raporlanabilir saha işi bulunmuyor</strong><span>İş başlatıldığında veya tamamlandığında rapor formu burada açılır.</span></div> : <div className="field-report-grid">{orders.map((order) => { const report = reportByOrder.get(order.recordId); return <article key={order.recordId}><div className="field-report-heading"><span className={`report-state ${report?.status.toLowerCase() ?? 'missing'}`}>{report?.status === 'Finalized' ? 'Onaylandı' : report ? 'Taslak' : 'Rapor bekliyor'}</span><small>{order.id}</small></div><h3>{order.client}</h3><p>{order.branch}</p><dl><div><dt>Uygulayıcı</dt><dd>{order.technician}</dd></div><div><dt>Tarih</dt><dd>{order.date}</dd></div>{report && <><div><dt>İstasyon</dt><dd>{report.activeStations}/{report.totalStations} aktif</dd></div><div><dt>Risk</dt><dd><span className={`risk-chip risk-${report.riskLevel.toLowerCase()}`}>{riskLabel(report.riskLevel)}</span></dd></div></>}</dl><div className="field-report-actions">{report && <button onClick={() => onPreview(report)}><FileText size={15} /> Görüntüle</button>}<button className="primary-button" onClick={() => onEdit(order, report)}>{report ? <FileText size={15} /> : <FilePlus2 size={15} />}{report ? 'Düzenle' : 'Rapor oluştur'}</button></div></article>; })}</div>}</div>;
+  const [search, setSearch] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'missing' | 'draft' | 'finalized'>('all');
+  const [techFilter, setTechFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const customers = useMemo(() => Array.from(new Map(orders.map((o) => [o.customerId || o.client, { id: o.customerId || o.client, name: o.client }])).values()).sort((a, b) => a.name.localeCompare(b.name, 'tr')), [orders]);
+  const branches = useMemo(() => Array.from(new Map(orders.filter((o) => !customerFilter || o.customerId === customerFilter || o.client === customerFilter).filter((o) => o.branch).map((o) => [o.branchId || o.branch, { id: o.branchId || o.branch, name: o.branch }])).values()).sort((a, b) => a.name.localeCompare(b.name, 'tr')), [orders, customerFilter]);
+  const technicians = useMemo(() => Array.from(new Set(orders.map((o) => o.technician).filter(Boolean))).sort() as string[], [orders]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const report = reportByOrder.get(order.recordId);
+      const status = report?.status === 'Finalized' ? 'finalized' : report ? 'draft' : 'missing';
+
+      if (statusFilter !== 'all' && status !== statusFilter) return false;
+      if (customerFilter && order.customerId !== customerFilter && order.client !== customerFilter) return false;
+      if (branchFilter && order.branchId !== branchFilter && order.branch !== branchFilter) return false;
+      if (techFilter && order.technician !== techFilter) return false;
+      if (dateFrom && order.date < dateFrom) return false;
+      if (dateTo && order.date > dateTo) return false;
+
+      if (search.trim()) {
+        const q = search.trim().toLocaleLowerCase('tr-TR');
+        const text = `${order.client} ${order.branch} ${order.id} ${order.technician ?? ''} ${report?.reportNumber ?? ''}`.toLocaleLowerCase('tr-TR');
+        if (!text.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [orders, reportByOrder, statusFilter, customerFilter, branchFilter, techFilter, dateFrom, dateTo, search]);
+
+  const hasFilters = Boolean(search || customerFilter || branchFilter || statusFilter !== 'all' || techFilter || dateFrom || dateTo);
+  const clearFilters = () => { setSearch(''); setCustomerFilter(''); setBranchFilter(''); setStatusFilter('all'); setTechFilter(''); setDateFrom(''); setDateTo(''); };
+
+  return <div className="surface field-report-list">
+    <div className="analytics-section-heading">
+      <div>
+        <p className="eyebrow">UYGULAMA KAYITLARI</p>
+        <h2>Saha hizmet raporları (EK-1)</h2>
+        <p>Biyosidal uygulama raporlarını müşteri, şube, durum veya tarihe göre filtreleyin.</p>
+      </div>
+      <span>{filteredOrders.length} / {orders.length} raporlanabilir iş</span>
+    </div>
+
+    {/* Filter Toolbar */}
+    <div className="surface document-filter-panel" style={{ margin: '0 0 18px 0' }}>
+      <label className="document-search">
+        <span>Arama</span>
+        <i><Search size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Müşteri, şube, iş emri, rapor no…" /></i>
+      </label>
+      <label>
+        Müşteri
+        <select value={customerFilter} onChange={(e) => { setCustomerFilter(e.target.value); setBranchFilter(''); }}>
+          <option value="">Tüm Müşteriler</option>
+          {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </label>
+      <label>
+        Şube
+        <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}>
+          <option value="">Tüm Şubeler</option>
+          {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      </label>
+      <label>
+        Rapor Durumu
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
+          <option value="all">Tüm Durumlar</option>
+          <option value="missing">Rapor Bekliyor</option>
+          <option value="draft">Taslak</option>
+          <option value="finalized">Onaylandı</option>
+        </select>
+      </label>
+      <label>
+        Uygulayıcı
+        <select value={techFilter} onChange={(e) => setTechFilter(e.target.value)}>
+          <option value="">Tüm Personel</option>
+          {technicians.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </label>
+      <label>
+        Başlangıç
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+      </label>
+      <label>
+        Bitiş
+        <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
+      </label>
+      <div className="document-filter-summary">
+        <span><strong>{filteredOrders.length}</strong> / {orders.length} kayıt</span>
+        <button type="button" disabled={!hasFilters} onClick={clearFilters}><FilterX size={15} /> Temizle</button>
+      </div>
+    </div>
+
+    {filteredOrders.length === 0 ? (
+      <div className="analytics-empty"><FileText size={31} /><strong>Filtrelere uygun saha hizmet raporu bulunamadı</strong><span>Filtreleri temizleyerek tüm işleri listeleyebilirsiniz.</span></div>
+    ) : (
+      <div className="field-report-grid">
+        {filteredOrders.map((order) => {
+          const report = reportByOrder.get(order.recordId);
+          return <article key={order.recordId}>
+            <div className="field-report-heading">
+              <span className={`report-state ${report?.status.toLowerCase() ?? 'missing'}`}>{report?.status === 'Finalized' ? 'Onaylandı' : report ? 'Taslak' : 'Rapor bekliyor'}</span>
+              <small>{order.id}</small>
+            </div>
+            <h3>{order.client}</h3>
+            <p>{order.branch}</p>
+            <dl>
+              <div><dt>Uygulayıcı</dt><dd>{order.technician}</dd></div>
+              <div><dt>Tarih</dt><dd>{order.date}</dd></div>
+              {report && <><div><dt>İstasyon</dt><dd>{report.activeStations}/{report.totalStations} aktif</dd></div><div><dt>Risk</dt><dd><span className={`risk-chip risk-${report.riskLevel.toLowerCase()}`}>{riskLabel(report.riskLevel)}</span></dd></div></>}
+            </dl>
+            <div className="field-report-actions">
+              {report && <button onClick={() => onPreview(report)}><FileText size={15} /> Görüntüle</button>}
+              <button className="primary-button" onClick={() => onEdit(order, report)}>{report ? <FileText size={15} /> : <FilePlus2 size={15} />}{report ? 'Düzenle' : 'Rapor oluştur'}</button>
+            </div>
+          </article>;
+        })}
+      </div>
+    )}
+  </div>;
 }
 
 function TrendsTab({ analytics, reports, customers, branches, customerId, branchId, from, to, onCustomer, onBranch, onFrom, onTo }: { analytics: ServiceReportAnalytics; reports: ServiceReportRecord[]; customers: { id: string; name: string }[]; branches: { id: string; name: string }[]; customerId: string; branchId: string; from: string; to: string; onCustomer: (value: string) => void; onBranch: (value: string) => void; onFrom: (value: string) => void; onTo: (value: string) => void }) {
