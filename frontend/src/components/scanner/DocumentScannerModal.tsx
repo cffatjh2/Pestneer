@@ -79,16 +79,25 @@ export default function DocumentScannerModal({ locations, inventoryItems, defaul
           throw new Error('Tarayıcınız kamera erişimini desteklemiyor.');
         }
 
-        const constraints: MediaStreamConstraints = {
-          video: {
-            facingMode: { ideal: facingMode },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-          audio: false,
-        };
+        let newStream: MediaStream;
+        try {
+          const constraints: MediaStreamConstraints = {
+            video: {
+              facingMode: { ideal: facingMode },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+            audio: false,
+          };
+          newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch {
+          // Fallback to simpler constraints for restrictive mobile devices
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facingMode === 'environment' ? 'environment' : 'user' },
+            audio: false,
+          });
+        }
 
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
         currentStream = newStream;
         setStream(newStream);
 
@@ -107,6 +116,7 @@ export default function DocumentScannerModal({ locations, inventoryItems, defaul
         setCameraError(err instanceof Error ? err.message : 'Kameraya erişilemedi.');
       }
     }
+
 
     if (cameraActive) {
       void startCamera();
