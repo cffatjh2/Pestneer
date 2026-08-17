@@ -12,7 +12,7 @@ const htmlContent = `<!DOCTYPE html>
 
   @page {
     size: A4;
-    margin: 14mm 12mm 14mm 12mm;
+    margin: 13mm 12mm 13mm 12mm;
   }
 
   @page :first {
@@ -29,8 +29,8 @@ const htmlContent = `<!DOCTYPE html>
     font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
     color: #1e293b;
     background: #ffffff;
-    line-height: 1.55;
-    font-size: 10.5pt;
+    line-height: 1.5;
+    font-size: 10pt;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -52,7 +52,7 @@ const htmlContent = `<!DOCTYPE html>
     height: 297mm;
     background: linear-gradient(135deg, #091e3a 0%, #0f3d4c 45%, #0d5f56 100%);
     color: #ffffff;
-    padding: 50mm 25mm 30mm 25mm;
+    padding: 45mm 25mm 25mm 25mm;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -84,18 +84,18 @@ const htmlContent = `<!DOCTYPE html>
     display: flex;
     align-items: center;
     gap: 15px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
 
   .cover-logo-box {
-    width: 60px;
-    height: 60px;
+    width: 58px;
+    height: 58px;
     background: linear-gradient(135deg, #0d9488, #14b8a6);
-    border-radius: 16px;
+    border-radius: 15px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
+    font-size: 27px;
     font-weight: 800;
     color: #ffffff;
     box-shadow: 0 10px 25px rgba(13, 148, 136, 0.4);
@@ -111,339 +111,306 @@ const htmlContent = `<!DOCTYPE html>
   }
 
   .cover-tagline {
-    font-size: 11pt;
+    font-size: 10.5pt;
     letter-spacing: 2px;
     text-transform: uppercase;
     color: #5eead4;
     font-weight: 700;
-    margin-bottom: 30px;
+    margin-bottom: 26px;
   }
 
   .cover-title {
-    font-size: 27pt;
+    font-size: 26pt;
     font-weight: 800;
     line-height: 1.2;
-    margin-bottom: 18px;
+    margin-bottom: 16px;
     color: #ffffff;
   }
 
   .cover-subtitle {
-    font-size: 13pt;
+    font-size: 12pt;
     color: #cbd5e1;
     line-height: 1.6;
-    max-width: 90%;
+    max-width: 92%;
     font-weight: 400;
-    margin-bottom: 40px;
+    margin-bottom: 35px;
   }
 
   .cover-badges {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 40px;
+    margin-bottom: 35px;
   }
 
   .cover-badge {
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 8px 16px;
+    padding: 7px 14px;
     border-radius: 30px;
-    font-size: 9.5pt;
+    font-size: 8.5pt;
     font-weight: 600;
-    color: #f1f5f9;
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .cover-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
-    padding-top: 20px;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    font-size: 9.5pt;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 18px;
+    font-size: 9pt;
     color: #94a3b8;
   }
 
-  .cover-footer strong {
-    color: #ffffff;
-    display: block;
-    font-size: 10pt;
-    margin-bottom: 3px;
-  }
-
-  /* INNER PAGES LAYOUT */
+  /* INNER PAGES HEADER / FOOTER */
   .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 2px solid #0f766e;
-    padding-bottom: 8px;
-    margin-bottom: 20px;
+    padding-bottom: 6px;
+    margin-bottom: 16px;
   }
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .header-logo {
     font-weight: 800;
+    font-size: 12pt;
     color: #0f766e;
-    font-size: 14pt;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.3px;
   }
 
   .header-category {
     font-size: 8.5pt;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
     color: #64748b;
     border-left: 1px solid #cbd5e1;
-    padding-left: 10px;
+    padding-left: 8px;
+    font-weight: 600;
   }
 
   .header-right {
-    font-size: 8.5pt;
-    font-weight: 600;
-    color: #0d9488;
-    background: #f0fdfa;
-    padding: 3px 10px;
-    border-radius: 12px;
-  }
-
-  .footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
     font-size: 8pt;
     color: #94a3b8;
-    border-top: 1px solid #e2e8f0;
-    padding-top: 6px;
+    font-weight: 500;
   }
 
   /* TYPOGRAPHY */
   h1 {
-    font-size: 18pt;
+    font-size: 17pt;
     font-weight: 800;
     color: #0f172a;
+    margin-bottom: 10px;
     letter-spacing: -0.5px;
-    margin-bottom: 12px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   h1 .section-num {
     background: #0f766e;
     color: #ffffff;
-    font-size: 11pt;
-    padding: 3px 10px;
+    width: 28px;
+    height: 28px;
     border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13pt;
     font-weight: 800;
+    flex-shrink: 0;
   }
 
   h2 {
-    font-size: 13pt;
+    font-size: 12pt;
     font-weight: 700;
-    color: #0f766e;
-    margin-top: 18px;
+    color: #1e293b;
+    margin-top: 14px;
     margin-bottom: 8px;
-    border-left: 3.5px solid #0d9488;
+    border-left: 3px solid #0f766e;
     padding-left: 8px;
   }
 
-  h3 {
-    font-size: 11pt;
-    font-weight: 700;
-    color: #1e293b;
-    margin-top: 12px;
-    margin-bottom: 6px;
-  }
-
   p {
-    margin-bottom: 10px;
+    margin-bottom: 9px;
     color: #334155;
-    text-align: justify;
+    font-size: 9.5pt;
+    line-height: 1.55;
   }
 
-  /* CARDS & CONTAINERS */
+  /* GRIDS & CARDS */
   .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
 
   .grid-3 {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 10px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
 
   .card {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 12px;
+    padding: 11px 13px;
+    position: relative;
   }
 
   .card-teal {
+    border-color: #99f6e4;
     background: #f0fdfa;
-    border: 1px solid #ccfbf1;
   }
 
   .card-blue {
-    background: #f0f9ff;
-    border: 1px solid #e0f2fe;
+    border-color: #bfdbfe;
+    background: #eff6ff;
   }
 
   .card-amber {
+    border-color: #fde68a;
     background: #fffbeb;
-    border: 1px solid #fef3c7;
   }
 
   .card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     font-weight: 700;
-    font-size: 10.5pt;
     color: #0f172a;
     margin-bottom: 6px;
+    font-size: 10pt;
   }
 
   .card-icon {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
+    font-size: 13pt;
+  }
+
+  /* STEP LIST */
+  .step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-bottom: 14px;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 9px 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  }
+
+  .step-number {
+    width: 25px;
+    height: 25px;
     background: #0f766e;
     color: #ffffff;
-    display: inline-flex;
+    border-radius: 50%;
+    display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11pt;
     font-weight: 800;
+    font-size: 9.5pt;
+    flex-shrink: 0;
+  }
+
+  .step-content strong {
+    display: block;
+    font-size: 9.5pt;
+    color: #0f172a;
+    margin-bottom: 2px;
+  }
+
+  .step-content span {
+    font-size: 8.8pt;
+    color: #475569;
+    line-height: 1.45;
   }
 
   /* CALLOUT BOXES */
   .callout {
+    border-radius: 10px;
     padding: 10px 14px;
-    border-radius: 8px;
-    margin: 12px 0;
-    font-size: 9.5pt;
+    margin: 11px 0;
     display: flex;
-    gap: 10px;
     align-items: flex-start;
+    gap: 10px;
+    font-size: 9pt;
+  }
+
+  .callout-info {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    color: #0369a1;
   }
 
   .callout-tip {
     background: #f0fdf4;
-    border-left: 4px solid #22c55e;
+    border: 1px solid #bbf7d0;
     color: #15803d;
-  }
-
-  .callout-info {
-    background: #eff6ff;
-    border-left: 4px solid #3b82f6;
-    color: #1e40af;
   }
 
   .callout-warning {
     background: #fffbeb;
-    border-left: 4px solid #f59e0b;
+    border: 1px solid #fde68a;
     color: #b45309;
   }
 
   .callout-icon {
     font-size: 13pt;
-    font-weight: 800;
-    line-height: 1;
-  }
-
-  /* STEP WIZARD LIST */
-  .step-list {
-    margin: 10px 0 14px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .step-item {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    padding: 8px 12px;
-    border-radius: 8px;
-  }
-
-  .step-number {
-    background: #0f766e;
-    color: #ffffff;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9pt;
-    font-weight: 800;
     flex-shrink: 0;
-    margin-top: 1px;
-  }
-
-  .step-content strong {
-    color: #0f172a;
-    display: block;
-    font-size: 9.5pt;
-    margin-bottom: 2px;
-  }
-
-  .step-content span {
-    font-size: 9pt;
-    color: #475569;
   }
 
   /* TABLES */
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 10px 0 14px 0;
-    font-size: 9pt;
+    margin: 9px 0 13px 0;
+    font-size: 8.8pt;
   }
 
   th, td {
-    border: 1px solid #cbd5e1;
-    padding: 7px 10px;
+    border: 1px solid #e2e8f0;
+    padding: 7px 9px;
     text-align: left;
   }
 
   th {
-    background: #0f766e;
-    color: #ffffff;
+    background: #f1f5f9;
     font-weight: 700;
-    font-size: 9pt;
+    color: #1e293b;
   }
 
   tr:nth-child(even) {
     background: #f8fafc;
   }
 
-  /* BADGES & TAGS */
+  /* BADGES */
   .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 8pt;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    font-size: 7.5pt;
     font-weight: 700;
-    text-transform: uppercase;
   }
 
   .badge-green { background: #dcfce7; color: #166534; }
@@ -457,17 +424,17 @@ const htmlContent = `<!DOCTYPE html>
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    padding: 16px 20px;
-    margin: 15px 0 20px 0;
+    padding: 14px 18px;
+    margin: 12px 0 16px 0;
   }
 
   .toc-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 0;
+    padding: 5px 0;
     border-bottom: 1px dashed #cbd5e1;
-    font-size: 9.5pt;
+    font-size: 9pt;
   }
 
   .toc-item:last-child {
@@ -493,13 +460,13 @@ const htmlContent = `<!DOCTYPE html>
 
   ul, ol {
     margin-left: 18px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     color: #334155;
-    font-size: 9.5pt;
+    font-size: 9pt;
   }
 
   li {
-    margin-bottom: 4px;
+    margin-bottom: 3px;
   }
 </style>
 </head>
@@ -521,7 +488,7 @@ const htmlContent = `<!DOCTYPE html>
 
     <div class="cover-title">KULLANICI KILAVUZU &<br>MODÜLER ÖZELLİK REHBERİ</div>
     <div class="cover-subtitle">
-      Pest kontrol firmaları, saha personelleri ve kurumsal müşteriler için tasarlanmış; operasyon, interaktif kroki, yapay zeka destekli analiz, kalite-denetim ve ticari süreçleri kapsayan uçtan uca kullanım dokümanı.
+      Pest kontrol firmaları, saha personelleri ve kurumsal müşteriler için tasarlanmış; operasyon, interaktif kroki, yerinde yapay zeka analiz motoru, kalite-denetim ve ticari süreçleri kapsayan uçtan uca kullanım dokümanı.
     </div>
 
     <div class="cover-badges">
@@ -529,17 +496,18 @@ const htmlContent = `<!DOCTYPE html>
       <div class="cover-badge">📱 Saha Personeli Mobil Portalı</div>
       <div class="cover-badge">🏢 7/24 Şeffaf Müşteri Portalı</div>
       <div class="cover-badge">🗺️ İnteraktif Kroki & QR İstasyon</div>
-      <div class="cover-badge">🔍 Pestneer Vision Yapay Zeka</div>
+      <div class="cover-badge">🧠 Pestneer Vision Yapay Zeka</div>
       <div class="cover-badge">🛡️ BRCGS / IFS / ISO 22000 Uyumlu</div>
+      <div class="cover-badge">⚖️ KVKK 8 Kategori & 2FA Güvenlik</div>
     </div>
   </div>
 
   <div class="cover-footer">
     <div>
-      <strong>Hedef Kitle:</strong> Firma Sahipleri, Saha Teknisyenleri, Operasyon Sorumluları ve Tesis Yöneticileri
+      <strong>Hedef Kitle:</strong> Firma Sahipleri, Mesul Müdürler, Saha Teknisyenleri ve Tesis Yöneticileri
     </div>
     <div style="text-align: right;">
-      <strong>Sürüm:</strong> v2.4 Enterprise Edition<br>
+      <strong>Sürüm:</strong> v2.5 Enterprise Edition<br>
       <strong>Tarih:</strong> Ağustos 2026
     </div>
   </div>
@@ -567,7 +535,7 @@ const htmlContent = `<!DOCTYPE html>
   Geleneksel kağıt formları, kaybolan servis fişlerini, Excel karmaşasını ve denetim öncesi yaşanan stresli dosya hazırlıklarını ortadan kaldırarak; <strong>Firma Yöneticisi</strong>, <strong>Saha Teknisyeni</strong> ve <strong>Hizmet Alan Müşteri</strong> arasında kesintisiz ve şeffaf bir dijital köprü kurar.
 </p>
 
-<div class="grid-3" style="margin-top: 15px;">
+<div class="grid-3" style="margin-top: 12px;">
   <div class="card card-teal">
     <div class="card-header"><span class="card-icon">👑</span> Firma Yöneticisi</div>
     <p style="font-size: 8.5pt; margin: 0;">Tüm müşteriler, sözleşmeler, araç stokları, takvim, personel mesaileri, DÖF ve kalite denetimlerinin merkezi kontrolü.</p>
@@ -583,7 +551,7 @@ const htmlContent = `<!DOCTYPE html>
 </div>
 
 <div class="toc-container">
-  <div style="font-weight: 800; font-size: 11pt; color: #0f172a; margin-bottom: 8px; border-bottom: 2px solid #0f766e; padding-bottom: 4px;">
+  <div style="font-weight: 800; font-size: 10.5pt; color: #0f172a; margin-bottom: 7px; border-bottom: 2px solid #0f766e; padding-bottom: 4px;">
     📘 REHBER İÇİNDEKİLER TABLOSU
   </div>
   <div class="toc-item"><div class="toc-title"><span class="num">Bölüm 1:</span> Platforma Genel Bakış & Çoklu Rol Mimarisi</div><div class="toc-page">Sayfa 2</div></div>
@@ -600,7 +568,7 @@ const htmlContent = `<!DOCTYPE html>
   <div class="toc-item"><div class="toc-title"><span class="num">Bölüm 12:</span> Talep Merkezi, Ekip Yönetimi & Özel Portallar Rehberi</div><div class="toc-page">Sayfa 13</div></div>
 </div>
 
-<div class="callout callout-info">
+<div class="callout callout-tip">
   <div class="callout-icon">💡</div>
   <div>
     <strong>Kullanıcı Odaklı Tasarım:</strong> Bu kılavuz teknik yazılım terimlerinden arındırılmış olup, sistemin sahada ve ofiste günlük operasyonlarda nasıl en verimli şekilde kullanılacağını adım adım anlatmaktadır.
@@ -629,7 +597,7 @@ const htmlContent = `<!DOCTYPE html>
 <div class="grid-2">
   <div class="card">
     <div class="card-header"><span class="card-icon">📊</span> Günlük İş ve Saha Sayaçları</div>
-    <ul style="font-size: 8.8pt; margin-left: 14px; margin-bottom: 0;">
+    <ul style="font-size: 8.8pt;">
       <li><strong>Bugünkü İş Emirleri:</strong> Planlanan toplam ziyaret sayısı.</li>
       <li><strong>Tamamlanan Ziyaretler:</strong> Sahadan onaylanıp raporu düşen işler.</li>
       <li><strong>Devam Eden / Yoldaki Ekipler:</strong> Sahada aktif çalışan personeller.</li>
@@ -638,7 +606,7 @@ const htmlContent = `<!DOCTYPE html>
   </div>
   <div class="card">
     <div class="card-header"><span class="card-icon">⚡</span> Akıllı Uyarı Sistemi (Alarmlar)</div>
-    <ul style="font-size: 8.8pt; margin-left: 14px; margin-bottom: 0;">
+    <ul style="font-size: 8.8pt;">
       <li><strong>Kritik Aktivite Uyarısı:</strong> Yüksek popülasyon saptanan tesisler.</li>
       <li><strong>Geciken DÖF / Terminler:</strong> Müşteri veya firma aksiyonları.</li>
       <li><strong>Kritik Stok Seviyesi:</strong> Tükenmek üzere olan biyosidal ilaçlar.</li>
@@ -681,7 +649,7 @@ const htmlContent = `<!DOCTYPE html>
 </div>
 
 <!-- ========================================================================= -->
-<!-- PAGE 4: İŞ EMİRLERİ VE SAHA UYGULAMA AKIŞI -->
+<!-- PAGE 4: İŞ EMİRLERİ VE SAHA HİZMET AKIŞI (EK-1) -->
 <!-- ========================================================================= -->
 <div class="page-break"></div>
 
@@ -696,7 +664,7 @@ const htmlContent = `<!DOCTYPE html>
 <h1><span class="section-num">3</span> İş Emirleri & Saha Hizmet Akışı (EK-1)</h1>
 
 <p>
-  Pestneer'de her ilaçlama ve kontrol faaliyeti bir <strong>İş Emri</strong> üzerinden yürütülür. İş emri oluşturulduğu anda teknisyenin mobil portalına düşer ve adım adım resmi bir hizmet raporuna (EK-1 Belgesi) dönüşür.
+  Pestneer'de her ilaçlama ve kontrol faaliyeti bir <strong>İş Emri</strong> üzerinden yürütülür. İş emri oluşturulduğu anda teknisyenin mobil portalına düşer ve adım adım resmi bir hizmet raporuna (<strong>EK-1 Belgesi</strong>) dönüşür.
 </p>
 
 <h2>Uçtan Uca Saha Ziyaret Süreci (5 Adım)</h2>
@@ -739,9 +707,9 @@ const htmlContent = `<!DOCTYPE html>
   </div>
 </div>
 
-<div class="card card-teal avoid-break">
+<div class="card card-teal" style="margin-top: 10px;">
   <div class="card-header"><span class="card-icon">📄</span> Resmi EK-1 Servis Raporunda Neler Yer Alır?</div>
-  <div class="grid-2" style="font-size: 8.8pt; margin-bottom: 0;">
+  <div class="grid-2" style="font-size: 8.5pt; margin-bottom: 0;">
     <div>
       • İlaçlama firması ruhsat & mesul müdür bilgileri<br>
       • Müşteri tesis adı, şube adresi ve yetkili kişi<br>
@@ -849,7 +817,7 @@ const htmlContent = `<!DOCTYPE html>
 <h1><span class="section-num">5</span> Pestneer Vision: Yapay Zeka ile Zararlı Analizi</h1>
 
 <p>
-  <strong>Pestneer Vision</strong>, sahada teknisyenlerin yapışkan plaka ve tuzaklardan çektiği fotoğrafları saniyeler içinde analiz eden yapay zeka destekli görüntü işleme motorudur.
+  <strong>Pestneer Vision</strong>, sahada teknisyenlerin yapışkan plaka ve tuzaklardan çektiği fotoğrafları saniyeler içinde analiz eden, tarayıcı üzerinde (WebGPU / WASM hızlandırmasıyla) çalışan yapay zeka destekli görüntü işleme motorudur.
 </p>
 
 <div class="grid-2">
@@ -863,28 +831,35 @@ const htmlContent = `<!DOCTYPE html>
   </div>
 </div>
 
-<h2>Pestneer Vision Nasıl Kullanılır?</h2>
+<h2>Pestneer Vision Nasıl Kullanılır? (4 Adım)</h2>
 
 <div class="step-list">
   <div class="step-item">
     <div class="step-number">1</div>
     <div class="step-content">
       <strong>Tuzağın Net Bir Fotoğrafını Çekin</strong>
-      <span>Saha personeli cep telefonundan EFK yapışkan levhasının veya zemin tuzağının aydınlık bir fotoğrafını sisteme yükler.</span>
+      <span>Saha personeli cep telefonundan EFK yapışkan levhasının veya zemin tuzağının aydınlık bir fotoğrafını çeker veya sisteme yükler.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">2</div>
     <div class="step-content">
       <strong>Yapay Zeka Otomatik Analiz Başlatsın</strong>
-      <span>"Görüntüyü Analiz Et" butonuna basıldığında yapay zeka her zararlının etrafına renkli kutucuklar koyarak türünü ve sayısını ekrana döker.</span>
+      <span>Yapay zeka her zararlının etrafına renkli sınırlayıcı kutucuklar (bounding box) koyarak türünü ve sayısını ekranda listeler.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">3</div>
     <div class="step-content">
+      <strong>Dokunmatik + / − Butonları ile Sayıyı Düzenleyin</strong>
+      <span>Teknisyen her tür için tek dokunuşla + veya − butonlarına basarak ya da sayı kutucuğuna dokunup doğrudan yazarak sayıları hızlıca güncelleyebilir veya manuel yeni tür ekleyebilir.</span>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-number">4</div>
+    <div class="step-content">
       <strong>Sonuçları Tek Tıkla Rapora Aktarın</strong>
-      <span>Teknisyen çıkan sonucu onayladığında; tespit edilen türler ve sayımlar doğrudan o istasyonun servis raporuna ve grafiklerine işlenir.</span>
+      <span>"İstasyona Aktar" butonuna basıldığında; onaylanan sayılar, türler ve detaylı AI döküm notu doğrudan o istasyonun servis raporuna ve grafiklerine işlenir.</span>
     </div>
   </div>
 </div>
@@ -934,6 +909,7 @@ const htmlContent = `<!DOCTYPE html>
 <ul>
   <li><strong>Sürükle & Bırak ile Güncelleme:</strong> Ertelenen veya tarihi değişen bir randevuyu tutup yeni güne bırakmanız yeterlidir.</li>
   <li><strong>Akıllı Çakışma Önleme:</strong> Aynı teknisyene aynı saatte iki farklı randevu verildiğinde sistem yöneticiyi uyarır.</li>
+  <li><strong>Akıllı Günlük Rota (Smart Route):</strong> Teknisyenin gün içindeki işlerini harita üzerinde en optimum sıraya dizer.</li>
   <li><strong>Renk Kodları ile Anında Ayrım:</strong>
     <span class="badge badge-blue">Mavi: Rutin Ziyaret</span>
     <span class="badge badge-red">Kırmızı: Acil Çağrı</span>
@@ -962,17 +938,18 @@ const htmlContent = `<!DOCTYPE html>
 </p>
 
 <div class="grid-2">
-  <div class="card card-teal">
+  <div class="card">
     <div class="card-header"><span class="card-icon">🏢</span> Ana Merkez Depo</div>
     <p style="font-size: 8.8pt;">Toptan alınan kimyasallar, ekipmanlar, istasyonlar, LOT numaraları, parti tarihleri ve son kullanma süreleriyle (SKT) kayıt altına alınır.</p>
   </div>
-  <div class="card card-blue">
+  <div class="card">
     <div class="card-header"><span class="card-icon">🚐</span> Araç / Teknisyen Depoları</div>
     <p style="font-size: 8.8pt;">Merkez depodan servis araçlarına transfer edilen ürünler teknisyenin zimmetine geçer. Sahada kullanılan miktar rapordan otomatik düşer.</p>
   </div>
 </div>
 
 <h2>Biyosidal Ürün Güvenliği ve Mevzuat Uyumu</h2>
+
 <table>
   <thead>
     <tr>
@@ -1040,32 +1017,33 @@ const htmlContent = `<!DOCTYPE html>
 </div>
 
 <h2>Sözleşme Otomasyonunun Sağladığı Avantajlar</h2>
+
 <div class="step-list">
   <div class="step-item">
     <div class="step-number">1</div>
     <div class="step-content">
-      <strong>Otomatik İş Emri Üretimi:</strong>
+      <strong>Otomatik İş Emri Üretimi</strong>
       <span>Sözleşmesi aktif olan müşterilerin aylık rutin işleri ay başında otomatik olarak takvime dökülür; iş unutulması riski biter.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">2</div>
     <div class="step-content">
-      <strong>Ücretsiz Hak / Ücretli Ayrımı:</strong>
+      <strong>Ücretsiz Hak / Ücretli Ayrımı</strong>
       <span>Müşteri acil çağrı açtığında, paketindeki ücretsiz hakkı bitmişse sistem otomatik olarak "Sözleşme Dışı Ek Hizmet" uyarısı verir.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">3</div>
     <div class="step-content">
-      <strong>Yıllık TÜFE/ÜFE Fiyat Artışı & Bitiş Uyarıları:</strong>
+      <strong>Yıllık TÜFE/ÜFE Fiyat Artışı & Bitiş Uyarıları</strong>
       <span>Sözleşme süresi dolmadan 30 gün önce sistem yenileme hatırlatması yapar ve yıllık enflasyon artış oranını hesaplar.</span>
     </div>
   </div>
 </div>
 
 <!-- ========================================================================= -->
-<!-- PAGE 10: KALİTE, UYUM VE DÖF MERKEZİ -->
+<!-- PAGE 10: KALİTE, UYUM VE DÖF -->
 <!-- ========================================================================= -->
 <div class="page-break"></div>
 
@@ -1080,31 +1058,27 @@ const htmlContent = `<!DOCTYPE html>
 <h1><span class="section-num">9</span> Kalite, Uyum & Düzeltici Faaliyetler (DÖF)</h1>
 
 <p>
-  Uluslararası gıda güvenliği standartları (BRCGS, IFS, AIB, FSSC 22000, ISO 22000), ilaçlama raporlarında yazılan tavsiyelerin havada kalmamasını, takip edilebilir bir <strong>Düzeltici ve Önleyici Faaliyet (DÖF / CAPA)</strong> akışına dönüşmesini şart koşar.
+  Uluslararası gıda güvenliği standartları (<strong>BRCGS, IFS, AIB, FSSC 22000, ISO 22000</strong>), ilaçlama raporlarında yazılan tavsiyelerin havada kalmamasını, takip edilebilir bir <strong>Düzeltici ve Önleyici Faaliyet (DÖF / CAPA)</strong> akışına dönüşmesini şart koşar.
 </p>
 
 <div class="grid-2">
-  <div class="card card-amber">
+  <div class="card">
     <div class="card-header"><span class="card-icon">⚠️</span> DÖF Yaşam Döngüsü (Kapanış Akışı)</div>
-    <p style="font-size: 8.8pt;">
-      <strong>1. Bulgu:</strong> Sahada sorun tespit edilir (Örn: Kapı altı fırça contası yırtık).<br>
-      <strong>2. Atama:</strong> Sorumlu (Müşteri / Firma) ve termin tarihi belirlenir.<br>
-      <strong>3. Aksiyon & Kanıt:</strong> Sorun giderilip "Sonrası Fotoğrafı" yüklenir.<br>
-      <strong>4. Onay:</strong> Müşteri portaldan inceleyip faaliyeti onaylar ve kapatır.
-    </p>
+    <ol style="font-size: 8.5pt; margin-left: 14px;">
+      <li><strong>Bulgu:</strong> Sahada sorun tespit edilir (Örn: Kapı contası yırtık).</li>
+      <li><strong>Atama:</strong> Sorumlu (Müşteri / Firma) ve termin tarihi belirlenir.</li>
+      <li><strong>Aksiyon & Kanıt:</strong> Sorun giderilip "Sonrası Fotoğrafı" yüklenir.</li>
+      <li><strong>Onay:</strong> Müşteri portaldan inceleyip faaliyeti onaylar ve kapatır.</li>
+    </ol>
   </div>
-  <div class="card card-teal">
+  <div class="card">
     <div class="card-header"><span class="card-icon">🎯</span> İkinci Göz Saha Denetimi (Skorlama)</div>
-    <p style="font-size: 8.8pt;">
-      Yönetici veya kalite uzmanı tamamlanmış bir işi habersiz 2. kontrole alabilir. 6 kriterde (İstasyon %25, Dozaj %20, Fotoğraf %15, İmza %15, Bütünlük %15, Zamanlama %10) puanlanır. 70 puan altı işlerde otomatik kalite düzeltmesi açılır.
-    </p>
+    <p style="font-size: 8.5pt;">Yönetici veya kalite uzmanı tamamlanmış bir işi habersiz 2. kontrole alabilir. 6 kriterde (İstasyon %25, Dozaj %20, Fotoğraf %15, İmza %15, Bütünlük %15, Zamanlama %10) puanlanır. 70 puan altı işlerde otomatik kalite düzeltmesi açılır.</p>
   </div>
 </div>
 
 <h2>Şube Sağlık Skoru Nasıl Hesaplanır? (100 Puanlık Model)</h2>
-<p style="font-size: 9pt;">
-  Pestneer, tesisin biyolojik risk durumunu 100 puandan başlayan şeffaf bir ceza puanı algoritmasıyla hesaplar:
-</p>
+<p style="font-size: 8.8pt;">Pestneer, tesisin biyolojik risk durumunu 100 puandan başlayan şeffaf bir ceza puanı algoritmasıyla hesaplar:</p>
 
 <table>
   <thead>
@@ -1163,9 +1137,9 @@ const htmlContent = `<!DOCTYPE html>
 </p>
 
 <div class="grid-2">
-  <div class="card card-teal">
+  <div class="card">
     <div class="card-header"><span class="card-icon">📋</span> Desteklenen Denetim Standartları</div>
-    <ul style="font-size: 8.8pt; margin-left: 14px; margin-bottom: 0;">
+    <ul style="font-size: 8.5pt;">
       <li><strong>BRCGS Global Food Safety:</strong> Ambalaj ve gıda standardı</li>
       <li><strong>IFS Food:</strong> Uluslararası gıda denetim standardı</li>
       <li><strong>FSSC 22000 & ISO 22000:</strong> Gıda güvenliği yönetim sistemi</li>
@@ -1173,59 +1147,58 @@ const htmlContent = `<!DOCTYPE html>
       <li><strong>EN 16636:</strong> Avrupa Pest Kontrol Hizmet Standardı</li>
     </ul>
   </div>
-  <div class="card card-blue">
+  <div class="card">
     <div class="card-header"><span class="card-icon">⚡</span> Akıllı Paket Ön Kontrolü</div>
-    <p style="font-size: 8.8pt; margin: 0;">
-      Dosya üretilmeden önce sistem otomatik denetim yapar:<br>
-      • <em>"3 nolu raporda müşteri imzası eksik!"</em><br>
-      • <em>"Teknisyen Ahmet'in biyosidal belgesi güncel değil!"</em><br>
-      • <em>"Kroki son 6 aydır revize edilmemiş!"</em><br>
-      Eksikler önceden tamamlanarak sıfır hata ile denetime girilir.
-    </p>
+    <p style="font-size: 8.5pt;">Dosya üretilmeden önce sistem otomatik denetim yapar:<br>
+    • <em>"3 nolu raporda müşteri imzası eksik!"</em><br>
+    • <em>"Teknisyen Ahmet'in biyosidal belgesi güncel değil!"</em><br>
+    • <em>"Kroki son 6 aydır revize edilmemiş!"</em><br>
+    Eksikler önceden tamamlanarak sıfır hata ile denetime girilir.</p>
   </div>
 </div>
 
 <h2>Denetim Paketinde Neler Yer Alır?</h2>
+
 <div class="step-list">
   <div class="step-item">
     <div class="step-number">1</div>
     <div class="step-content">
-      <strong>Resmi Firma ve Personel Belgeleri:</strong>
+      <strong>Resmi Firma ve Personel Belgeleri</strong>
       <span>Hizmet firması çalışma ruhsatı, Mesul Müdür belgesi, uygulayıcı teknisyen sertifikaları ve sağlık raporları.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">2</div>
     <div class="step-content">
-      <strong>Güncel İstasyon Krokisi ve Listesi:</strong>
+      <strong>Güncel İstasyon Krokisi ve Listesi</strong>
       <span>Tüm tesisin numaralı istasyon yerleşim planı, türleri, yerleri ve barkod dökümü.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">3</div>
     <div class="step-content">
-      <strong>Tarih Aralıklı EK-1 Servis Raporları:</strong>
+      <strong>Tarih Aralıklı EK-1 Servis Raporları</strong>
       <span>Seçilen dönemdeki (Örn: Son 1 yıl) tüm imzalı resmi uygulama raporları.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">4</div>
     <div class="step-content">
-      <strong>Biyosidal Ürün GBF (MSDS) ve Ruhsat Dosyaları:</strong>
+      <strong>Biyosidal Ürün GBF (MSDS) ve Ruhsat Dosyaları</strong>
       <span>Sahada kullanılan her ilacın güncel Güvenlik Bilgi Formu ve Sağlık Bakanlığı izin belgesi.</span>
     </div>
   </div>
   <div class="step-item">
     <div class="step-number">5</div>
     <div class="step-content">
-      <strong>Trend ve Popülasyon Analiz Grafikleri:</strong>
+      <strong>Trend ve Popülasyon Analiz Grafikleri</strong>
       <span>Aylık aktivite değişimleri, tür dağılımları ve DÖF kapanış oranlarını gösteren resmi denetim özet grafikleri.</span>
     </div>
   </div>
 </div>
 
 <!-- ========================================================================= -->
-<!-- PAGE 12: RAPORLAR VE ANALİTİKLER -->
+<!-- PAGE 12: RAPORLAR VE ANALİTİK -->
 <!-- ========================================================================= -->
 <div class="page-break"></div>
 
@@ -1265,7 +1238,7 @@ const htmlContent = `<!DOCTYPE html>
   </div>
 </div>
 
-<div class="callout callout-tip">
+<div class="callout callout-tip" style="margin-top: 15px;">
   <div class="callout-icon">💡</div>
   <div>
     <strong>Özelleştirilebilir Filtreler:</strong> Rapor ekranında istediğiniz müşteri, şube, tarih aralığı, zararlı türü veya personeli seçerek özel analizler üretebilir ve Excel / PDF olarak dışa aktarabilirsiniz.
@@ -1273,19 +1246,19 @@ const htmlContent = `<!DOCTYPE html>
 </div>
 
 <!-- ========================================================================= -->
-<!-- PAGE 13: TALEP, EKİP VE PORTALLAR REHBERİ -->
+<!-- PAGE 13: TALEP MERKEZİ, PORTALLAR VE GÜVENLİK -->
 <!-- ========================================================================= -->
 <div class="page-break"></div>
 
 <div class="header">
   <div class="header-left">
     <span class="header-logo">Pestneer</span>
-    <span class="header-category">Modül 11 & 12: Portallar & Ekip</span>
+    <span class="header-category">Modül 11 & 12: Portallar, Ekip & Güvenlik</span>
   </div>
   <div class="header-right">Kullanıcı Rehberi</div>
 </div>
 
-<h1><span class="section-num">12</span> Talep Merkezi, Ekip Yönetimi & Portallar</h1>
+<h1><span class="section-num">12</span> Talep Merkezi, Ekip Yönetimi & Güvenlik</h1>
 
 <h2>1. Müşteri Talep Merkezi</h2>
 <p>
@@ -1301,13 +1274,14 @@ const htmlContent = `<!DOCTYPE html>
 
 <h2>3. Özel Kullanıcı Portalları Özeti</h2>
 
-<div class="grid-2" style="margin-top: 10px;">
+<div class="grid-2" style="margin-top: 8px;">
   <div class="card card-teal">
     <div class="card-header"><span class="card-icon">📱</span> Saha Teknisyeni Portalı</div>
     <ul style="font-size: 8.5pt; margin-left: 12px; margin-bottom: 0;">
       <li>Bugünün atanmış iş rotasını sırayla görme</li>
       <li>Müşteri adresine tek tıkla harita/navigasyon açma</li>
       <li>QR kod tarayarak 3 saniyede istasyon kaydı</li>
+      <li>Pestneer Vision ile AI destekli böcek sayımı</li>
       <li>Araçtaki ilaç stoğundan anında sarfiyat düşme</li>
       <li>Müşteri yetkilisinden dokunmatik imza alma</li>
     </ul>
