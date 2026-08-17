@@ -189,6 +189,7 @@ export default function KvkkConsentModal({
                     className="kvkk-link-highlight"
                     onClick={(e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       setActiveViewerDoc('kvkk');
                     }}
                   >
@@ -212,6 +213,7 @@ export default function KvkkConsentModal({
                     className="kvkk-link-highlight"
                     onClick={(e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       setActiveViewerDoc('terms');
                     }}
                   >

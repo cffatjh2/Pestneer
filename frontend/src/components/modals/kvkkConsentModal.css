@@ -1,15 +1,38 @@
+/* ======================================================== */
+/* PESTNEER KVKK & LEGAL CONSENT MODAL - RESPONSIVE STYLES  */
+/* ======================================================== */
+
 /* Base Overlay */
 .kvkk-modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 99999;
-  background: rgba(8, 15, 28, 0.9);
+  background: rgba(8, 15, 28, 0.92);
   backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 20px;
+  padding: 24px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   animation: kvkkFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.3) transparent;
+}
+
+.kvkk-modal-overlay::-webkit-scrollbar {
+  width: 6px;
+}
+
+.kvkk-modal-overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kvkk-modal-overlay::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.25);
+  border-radius: 4px;
 }
 
 @keyframes kvkkFadeIn {
@@ -30,12 +53,36 @@
   border-radius: 20px;
   width: 100%;
   max-width: 760px;
+  margin: auto;
   box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(14, 165, 233, 0.12);
   color: #f8fafc;
-  overflow: hidden;
-  position: relative;
   display: flex;
   flex-direction: column;
+  position: relative;
+  max-height: calc(100dvh - 32px);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.3) rgba(15, 23, 42, 0.6);
+}
+
+.kvkk-modal-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.kvkk-modal-card::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.kvkk-modal-card::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.3);
+  border-radius: 4px;
+}
+
+.kvkk-modal-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.6);
 }
 
 /* Header */
@@ -43,6 +90,7 @@
   padding: 22px 26px 16px;
   background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.98) 100%);
   border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  flex-shrink: 0;
 }
 
 .kvkk-badge-row {
@@ -50,6 +98,7 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
 .kvkk-security-badge {
@@ -106,6 +155,7 @@
   padding: 10px 26px;
   background: rgba(15, 23, 42, 0.8);
   border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  flex-shrink: 0;
 }
 
 .kvkk-user-bar-left {
@@ -124,6 +174,7 @@
   font-size: 13px;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
 }
 
 .kvkk-user-bar-left strong {
@@ -146,6 +197,7 @@
   border: 1px solid rgba(6, 182, 212, 0.3);
   padding: 3px 10px;
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
 /* 3 Interactive Document Cards */
@@ -168,6 +220,8 @@
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .kvkk-doc-item-card:hover {
@@ -186,6 +240,7 @@
   display: grid;
   place-items: center;
   margin-bottom: 10px;
+  flex-shrink: 0;
 }
 
 .kvkk-doc-icon-wrap.terms {
@@ -254,6 +309,8 @@
   padding: 10px 14px;
   cursor: pointer;
   transition: all 0.18s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .kvkk-check-row:hover {
@@ -268,8 +325,11 @@
 
 .kvkk-check-row input[type="checkbox"] {
   appearance: none;
-  width: 19px;
-  height: 19px;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
   border-radius: 5px;
   border: 2px solid #475569;
   background: #1e293b;
@@ -352,6 +412,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .kvkk-status-hint {
@@ -360,6 +421,18 @@
   gap: 6px;
   font-size: 12px;
   color: #94a3b8;
+}
+
+.kvkk-error-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .kvkk-actions-group {
@@ -382,6 +455,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .kvkk-btn-logout:hover {
@@ -404,6 +479,8 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .kvkk-btn-submit:hover:not(:disabled) {
@@ -429,11 +506,14 @@
   z-index: 100000;
   background: rgba(4, 9, 18, 0.92);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   animation: kvkkFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .kvkk-reader-modal {
@@ -443,11 +523,13 @@
   width: 100%;
   max-width: 960px;
   height: 88vh;
+  max-height: calc(100dvh - 32px);
   display: flex;
   flex-direction: column;
   box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.9), 0 0 50px rgba(14, 165, 233, 0.2);
   color: #f8fafc;
   overflow: hidden;
+  margin: auto;
 }
 
 .kvkk-reader-header {
@@ -459,6 +541,7 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .kvkk-reader-title-box {
@@ -502,6 +585,8 @@
   border-radius: 7px;
   cursor: pointer;
   transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .kvkk-reader-tabs button:hover {
@@ -526,6 +611,7 @@
   place-items: center;
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .kvkk-reader-close-btn:hover {
@@ -545,6 +631,8 @@
   line-height: 1.8;
   scrollbar-width: thin;
   scrollbar-color: #38bdf8 #0b1120;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .kvkk-reader-body::-webkit-scrollbar {
@@ -649,6 +737,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .kvkk-reader-btn-done {
@@ -664,6 +753,8 @@
   align-items: center;
   gap: 7px;
   transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .kvkk-reader-btn-done:hover {
@@ -671,30 +762,222 @@
   box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
 }
 
-/* Mobile & Tablet Responsiveness */
+/* ======================================================== */
+/* 3. MOBILE & TABLET RESPONSIVENESS                        */
+/* ======================================================== */
+
 @media (max-width: 768px) {
+  .kvkk-modal-overlay {
+    padding: 12px 10px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .kvkk-modal-card {
+    border-radius: 16px;
+    max-height: calc(100dvh - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .kvkk-modal-header {
+    padding: 16px 16px 12px;
+  }
+
+  .kvkk-modal-header h2 {
+    font-size: 17px;
+    gap: 8px;
+  }
+
+  .kvkk-modal-header p {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .kvkk-user-bar {
+    padding: 8px 16px;
+  }
+
+  .kvkk-user-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .kvkk-user-bar-left strong {
+    font-size: 12px;
+  }
+
+  .kvkk-user-bar-left span {
+    font-size: 10.5px;
+  }
+
+  /* Compact Horizontal Cards on Mobile */
   .kvkk-docs-cards-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px 14px;
   }
-  .kvkk-reader-body {
-    padding: 20px 18px;
-    font-size: 13.5px;
+
+  .kvkk-doc-item-card {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 12px;
+    gap: 10px;
   }
-  .kvkk-reader-tabs {
-    width: 100%;
-    overflow-x: auto;
+
+  .kvkk-doc-icon-wrap {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    margin-bottom: 0;
+    border-radius: 8px;
   }
+
+  .kvkk-doc-item-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .kvkk-doc-item-info h4 {
+    font-size: 12.5px;
+    margin: 0 0 2px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .kvkk-doc-item-info p {
+    font-size: 11px;
+    margin: 0;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .kvkk-read-btn {
+    padding: 6px 9px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  /* Consent Section Mobile */
+  .kvkk-consent-section {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .kvkk-check-row {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .kvkk-check-row input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+  }
+
+  .kvkk-check-text {
+    font-size: 11.5px;
+    line-height: 1.45;
+  }
+
+  /* Footer Mobile */
   .kvkk-modal-footer {
+    padding: 14px 14px max(14px, env(safe-area-inset-bottom));
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
+
+  .kvkk-status-hint {
+    font-size: 11.5px;
+    justify-content: center;
+    text-align: center;
+  }
+
   .kvkk-actions-group {
     width: 100%;
     flex-direction: column-reverse;
+    gap: 8px;
+    margin-left: 0;
   }
+
   .kvkk-btn-logout,
   .kvkk-btn-submit {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
+  }
+
+  .kvkk-btn-submit {
+    font-size: 13.5px;
+  }
+
+  .kvkk-btn-logout {
+    font-size: 12px;
+  }
+
+  /* Reader Modal Mobile */
+  .kvkk-reader-overlay {
+    padding: 8px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .kvkk-reader-modal {
+    width: 100%;
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px;
+  }
+
+  .kvkk-reader-header {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .kvkk-reader-title-box h3 {
+    font-size: 14px;
+  }
+
+  .kvkk-reader-title-box small {
+    font-size: 10.5px;
+  }
+
+  .kvkk-reader-tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 3px;
+    gap: 4px;
+  }
+
+  .kvkk-reader-tabs button {
+    padding: 6px 9px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .kvkk-reader-body {
+    padding: 16px 14px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .kvkk-reader-footer {
+    padding: 10px 14px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .kvkk-reader-btn-done {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
   }
 }
