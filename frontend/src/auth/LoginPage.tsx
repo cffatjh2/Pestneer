@@ -349,7 +349,7 @@ export default function LoginPage({
                       value={companyCode}
                       onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
                       autoComplete="organization"
-                      placeholder="Örn: BIOPEST"
+                      placeholder="Örn: NOVAPEST"
                       required
                     />
                   </span>
@@ -493,7 +493,7 @@ export default function LoginPage({
                     <input
                       value={demoCompanyName}
                       onChange={(event) => handleCompanyNameChange(event.target.value)}
-                      placeholder="Örn: BioPest Çevre Sağlığı Ltd."
+                      placeholder="Örn: NovaPest Çevre Sağlığı Ltd."
                       required
                     />
                   </span>
@@ -512,7 +512,7 @@ export default function LoginPage({
                         setDemoCompanyCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''));
                         setHasEditedCode(true);
                       }}
-                      placeholder="Firma giriş etiketi (Örn: BIOPEST)"
+                      placeholder="Firma giriş etiketi (Örn: NOVAPEST)"
                       maxLength={20}
                       autoCapitalize="characters"
                       required
@@ -545,7 +545,7 @@ export default function LoginPage({
                         type="email"
                         value={demoEmail}
                         onChange={(event) => setDemoEmail(event.target.value)}
-                        placeholder="ahmet@biopest.com"
+                        placeholder="ahmet@novapest.com"
                         autoComplete="email"
                         required
                       />

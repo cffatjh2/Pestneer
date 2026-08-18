@@ -660,11 +660,11 @@ function FormFields({ mode, accounts }: { mode: Mode; accounts: SystemAccount[] 
         <>
           <label>
             Firma adı
-            <input name="companyName" placeholder="Örn: BioPest İlaçlama Ltd." required />
+            <input name="companyName" placeholder="Örn: NovaPest İlaçlama Ltd." required />
           </label>
           <label>
-            Firma kodu
-            <input name="companyCode" placeholder="Örn: BIOPEST" required />
+            Firma kodu (TAG)
+            <input name="companyCode" placeholder="Örn: NOVAPEST" required />
           </label>
           <label className="wide system-admin-check" style={{ padding: '8px 12px', background: '#0e2b44', borderRadius: '10px', marginTop: '4px' }}>
             <input name="isTrial" type="checkbox" defaultChecked />
