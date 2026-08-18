@@ -772,6 +772,12 @@ public class PesneerDbContext(
         return base.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<int> SavePublicRegistrationChangesAsync(Guid targetCompanyId, CancellationToken cancellationToken = default)
+    {
+        EnforceCompanyBoundary(targetCompanyId);
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<int> SaveReportEmailDeliveryChangesAsync(Guid targetCompanyId, CancellationToken cancellationToken = default)
     {
         var changedCompanyEntries = ChangeTracker.Entries<ICompanyScoped>()

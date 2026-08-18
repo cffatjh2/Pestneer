@@ -27,6 +27,7 @@ import type { CSSProperties } from 'react';
 
 type LandingPageProps = {
   onLogin: () => void;
+  onOpenDemo?: () => void;
 };
 
 const featureCards = [
@@ -38,7 +39,8 @@ const featureCards = [
   { icon: FileCheck2, title: 'Denetim & müşteri portalı', text: 'İmzalı PDF, trend, risk, kroki, ruhsat ve MSDS/GBF belgelerini yetkili müşterilerle güvenle paylaşın.', tone: 'emerald' },
 ];
 
-export default function LandingPage({ onLogin }: LandingPageProps) {
+export default function LandingPage({ onLogin, onOpenDemo }: LandingPageProps) {
+  const handleOpenDemo = onOpenDemo || onLogin;
   return (
     <main className="landing-page">
       <div className="landing-aurora landing-aurora-one" />
@@ -54,11 +56,13 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
 
       <section className="landing-hero" id="top">
         <div className="landing-hero-copy">
-          <div className="landing-pill"><span><Sparkles size={14} /></span> Pest kontrol operasyonlarının yeni merkezi <i /></div>
+          <div className="landing-pill"><span><Sparkles size={14} /></span> 7 Günlük Ücretsiz Demo Hesabı <i /></div>
           <h1>Saha hızlansın.<br /><span>Her kayıt kanıta dönüşsün.</span></h1>
           <p>Çevrimdışı saha turundan QR istasyon kontrolüne, araç stokundan imzalı PDF ve müşteri portalına kadar tüm operasyonunuzu tek bir profesyonel platformda yönetin.</p>
           <div className="landing-hero-actions">
-            <button className="landing-primary" onClick={onLogin}>Operasyon merkezini aç <ArrowRight size={18} /></button>
+            <button className="landing-primary" onClick={handleOpenDemo}>
+              <Sparkles size={18} /> 1 Hafta Ücretsiz Demo Başlat <ArrowRight size={18} />
+            </button>
             <a className="landing-secondary" href="#features"><span><Play size={15} fill="currentColor" /></span> Özellikleri keşfet</a>
           </div>
           <div className="landing-trust-row">

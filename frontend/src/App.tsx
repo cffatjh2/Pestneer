@@ -217,6 +217,7 @@ export default function App() {
   if (isSystemControlPath(window.location.pathname)) return <Suspense fallback={<LoadingScreen />}><SystemAdminPage /></Suspense>;
   const [session, setSession] = useState<AuthenticatedSession | null>(loadStoredSession);
   const [isLoginVisible, setIsLoginVisible] = useState(false);
+  const [initialAuthMode, setInitialAuthMode] = useState<'login' | 'demo'>('login');
 
   const handleAuthenticated = (authenticatedSession: AuthenticatedSession, rememberMe = true) => {
     window.sessionStorage.setItem('pesneer.session', JSON.stringify(authenticatedSession));
@@ -234,8 +235,29 @@ export default function App() {
     setSession(null);
   };
 
-  if (!session && !isLoginVisible) return <LandingPage onLogin={() => setIsLoginVisible(true)} />;
-  if (!session) return <LoginPage onAuthenticated={handleAuthenticated} onBack={() => setIsLoginVisible(false)} />;
+  if (!session && !isLoginVisible) {
+    return (
+      <LandingPage
+        onLogin={() => {
+          setInitialAuthMode('login');
+          setIsLoginVisible(true);
+        }}
+        onOpenDemo={() => {
+          setInitialAuthMode('demo');
+          setIsLoginVisible(true);
+        }}
+      />
+    );
+  }
+  if (!session) {
+    return (
+      <LoginPage
+        initialMode={initialAuthMode}
+        onAuthenticated={handleAuthenticated}
+        onBack={() => setIsLoginVisible(false)}
+      />
+    );
+  }
 
   // Zorunlu KVKK ve Kullanıcı Sözleşmesi Onay Kapısı
   if (!hasUserAcceptedTerms(session.user)) {

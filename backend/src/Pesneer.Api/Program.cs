@@ -222,6 +222,8 @@ auth.MapPost("/employee/login", (LoginRequest request, ILoginService loginServic
     SignInAsync(PortalType.Employee, request, loginService, cancellationToken));
 auth.MapPost("/customer/login", (LoginRequest request, ILoginService loginService, CancellationToken cancellationToken) =>
     SignInAsync(PortalType.Customer, request, loginService, cancellationToken));
+auth.MapPost("/register-demo", (DemoRegisterRequest request, ILoginService loginService, CancellationToken cancellationToken) =>
+    RegisterDemoHandlerAsync(request, loginService, cancellationToken));
 
 app.MapGet("/api/company/dashboard", async (PesneerDbContext dbContext, CancellationToken cancellationToken) =>
 {
@@ -267,10 +269,19 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
         {
             await using var scope = services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<PesneerDbContext>();
-            await db.Database.MigrateAsync();
-
-            if (db.Database.IsNpgsql())
+            if (db.Database.IsSqlite())
             {
+                await db.Database.EnsureCreatedAsync();
+                try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Companies\" ADD COLUMN \"IsTrial\" INTEGER NOT NULL DEFAULT 0;"); } catch { }
+                try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Companies\" ADD COLUMN \"TrialStartedAt\" TEXT;"); } catch { }
+                try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Companies\" ADD COLUMN \"TrialEndsAt\" TEXT;"); } catch { }
+                try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Accounts\" ADD COLUMN \"HasAcceptedTerms\" INTEGER NOT NULL DEFAULT 0;"); } catch { }
+                try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Accounts\" ADD COLUMN \"TermsAcceptedAt\" TEXT;"); } catch { }
+                try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Accounts\" ADD COLUMN \"TermsAcceptedVersion\" TEXT;"); } catch { }
+            }
+            else if (db.Database.IsNpgsql())
+            {
+                await db.Database.MigrateAsync();
                 await db.Database.ExecuteSqlRawAsync("""
                     ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "IsTrial" boolean NOT NULL DEFAULT false;
                     ALTER TABLE "Companies" ADD COLUMN IF NOT EXISTS "TrialStartedAt" timestamp with time zone;
@@ -320,4 +331,14 @@ static async Task<IResult> SignInAsync(
         return Results.Json(new { message = result.ErrorMessage, isTrialExpired = true }, statusCode: StatusCodes.Status403Forbidden);
     }
     return Results.Json(new { message = result.ErrorMessage ?? "Firma kodu, e-posta veya şifre hatalı." }, statusCode: StatusCodes.Status401Unauthorized);
+}
+
+static async Task<IResult> RegisterDemoHandlerAsync(
+    DemoRegisterRequest request,
+    ILoginService loginService,
+    CancellationToken cancellationToken)
+{
+    var result = await loginService.RegisterDemoAsync(request, cancellationToken);
+    if (result.Response is not null) return Results.Created($"/api/company/{result.Response.Company.Id}", result.Response);
+    return Results.BadRequest(new { message = result.ErrorMessage ?? "Demo hesap oluşturulamadı." });
 }
