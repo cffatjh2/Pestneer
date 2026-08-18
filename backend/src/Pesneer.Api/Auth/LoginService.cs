@@ -92,22 +92,37 @@ public sealed class LoginService(
             return new LoginResult(null, "Lütfen geçerli bir e-posta adresi girin.");
         }
 
-        var baseCode = string.IsNullOrWhiteSpace(request.CompanyCode)
-            ? GenerateCodeFromName(request.CompanyName)
-            : request.CompanyCode.Trim().ToUpperInvariant();
+        string finalCode;
+        if (!string.IsNullOrWhiteSpace(request.CompanyCode))
+        {
+            var cleanedCustomCode = GenerateCodeFromName(request.CompanyCode);
+            if (cleanedCustomCode.Length < 2)
+            {
+                return new LoginResult(null, "Firma kodu (TAG) en az 2 karakter olmalıdır.");
+            }
 
-        if (baseCode.Length < 3) baseCode = "PEST-" + baseCode;
+            if (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(c => c.Code == cleanedCustomCode, cancellationToken))
+            {
+                return new LoginResult(null, $"'{cleanedCustomCode}' firma kodu (TAG) zaten başka bir firma tarafından kullanılıyor. Lütfen farklı bir TAG belirleyin.");
+            }
+            finalCode = cleanedCustomCode;
+        }
+        else
+        {
+            var baseCode = GenerateCodeFromName(request.CompanyName);
+            if (baseCode.Length < 3) baseCode = "PEST-" + baseCode;
+
+            finalCode = baseCode;
+            var suffix = 1;
+            while (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(c => c.Code == finalCode, cancellationToken))
+            {
+                finalCode = $"{baseCode}-{suffix++}";
+            }
+        }
 
         if (await dbContext.Accounts.IgnoreQueryFilters().AnyAsync(a => a.Portal == PortalType.Owner && a.NormalizedEmail == normalizedEmail, cancellationToken))
         {
             return new LoginResult(null, "Bu e-posta adresi ile kayıtlı bir firma sahibi hesabı zaten mevcut.");
-        }
-
-        var finalCode = baseCode;
-        var suffix = 1;
-        while (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(c => c.Code == finalCode, cancellationToken))
-        {
-            finalCode = $"{baseCode}-{suffix++}";
         }
 
         var now = DateTimeOffset.UtcNow;

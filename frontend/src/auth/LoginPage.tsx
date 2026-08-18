@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Hash,
   KeyRound,
   LockKeyhole,
   Mail,
@@ -102,6 +103,8 @@ export default function LoginPage({
 
   // Demo Register State
   const [demoCompanyName, setDemoCompanyName] = useState('');
+  const [demoCompanyCode, setDemoCompanyCode] = useState('');
+  const [hasEditedCode, setHasEditedCode] = useState(false);
   const [demoFullName, setDemoFullName] = useState('');
   const [demoEmail, setDemoEmail] = useState('');
   const [demoPhone, setDemoPhone] = useState('');
@@ -109,6 +112,27 @@ export default function LoginPage({
   const [showDemoPassword, setShowDemoPassword] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
+
+  const handleCompanyNameChange = (val: string) => {
+    setDemoCompanyName(val);
+    if (!hasEditedCode) {
+      const generated = val
+        .replace(/ç/gi, 'C')
+        .replace(/ğ/gi, 'G')
+        .replace(/ı/gi, 'I')
+        .replace(/İ/gi, 'I')
+        .replace(/i/gi, 'I')
+        .replace(/ö/gi, 'O')
+        .replace(/ş/gi, 'S')
+        .replace(/ü/gi, 'U')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 18);
+      setDemoCompanyCode(generated);
+    }
+  };
 
   const selectedRole = useMemo(() => roleOptions.find((option) => option.id === portal)!, [portal]);
 
@@ -160,6 +184,7 @@ export default function LoginPage({
     try {
       const session = await registerDemo({
         companyName: demoCompanyName,
+        companyCode: demoCompanyCode.trim().toUpperCase() || undefined,
         fullName: demoFullName,
         email: demoEmail,
         phone: demoPhone,
@@ -467,11 +492,35 @@ export default function LoginPage({
                     <Building2 size={18} />
                     <input
                       value={demoCompanyName}
-                      onChange={(event) => setDemoCompanyName(event.target.value)}
+                      onChange={(event) => handleCompanyNameChange(event.target.value)}
                       placeholder="Örn: BioPest Çevre Sağlığı Ltd."
                       required
                     />
                   </span>
+                </label>
+
+                <label>
+                  <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Firma Kodu / TAG (Giriş Kodunuz)</span>
+                    <small style={{ color: '#0284c7', fontWeight: 600, fontSize: '11px' }}>Örn: BIOPEST</small>
+                  </span>
+                  <span className="login-input">
+                    <Hash size={18} />
+                    <input
+                      value={demoCompanyCode}
+                      onChange={(event) => {
+                        setDemoCompanyCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''));
+                        setHasEditedCode(true);
+                      }}
+                      placeholder="Firma giriş TAG'ı (Örn: BIOPEST)"
+                      maxLength={20}
+                      autoCapitalize="characters"
+                      required
+                    />
+                  </span>
+                  <small style={{ color: '#64748b', fontSize: '11px', marginTop: '2px', display: 'block' }}>
+                    💡 Sisteme giriş yaparken siz ve saha ekipleriniz bu firma kodunu (TAG) kullanacaksınız.
+                  </small>
                 </label>
 
                 <label>
