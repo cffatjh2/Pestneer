@@ -1,0 +1,27 @@
+name: Keep Backend Alive (Render Cold-Start Preventer)
+
+on:
+  schedule:
+    # Run every 10 minutes (UTC) in GitHub Cloud (Runs 24/7 without keeping your PC on)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions dashboard
+
+jobs:
+  ping:
+    name: Ping Render Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send Keep-Alive HTTP Request
+        run: |
+          echo "Sending keep-alive ping to https://pesneer.onrender.com/api/health..."
+          HTTP_RESPONSE=$(curl -s -o response.json -w "%{http_code}" --max-time 45 https://pesneer.onrender.com/api/health || echo "000")
+          echo "HTTP Status Code: $HTTP_RESPONSE"
+          if [ -f response.json ]; then
+            echo "Response: $(cat response.json)"
+          fi
+          if [ "$HTTP_RESPONSE" -eq 200 ]; then
+            echo "Backend is alive and healthy!"
+          else
+            echo "Warning: Response code was $HTTP_RESPONSE (Server might be spinning up or responding slowly)"
+          fi
