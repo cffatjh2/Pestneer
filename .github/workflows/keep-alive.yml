@@ -12,16 +12,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Send Keep-Alive HTTP Request
+      - name: Ping API Health Endpoint
         run: |
           echo "Sending keep-alive ping to https://pesneer.onrender.com/api/health..."
-          HTTP_RESPONSE=$(curl -s -o response.json -w "%{http_code}" --max-time 45 https://pesneer.onrender.com/api/health || echo "000")
-          echo "HTTP Status Code: $HTTP_RESPONSE"
-          if [ -f response.json ]; then
-            echo "Response: $(cat response.json)"
+          HTTP_HEALTH=$(curl -s -o response_health.json -w "%{http_code}" --max-time 45 https://pesneer.onrender.com/api/health || echo "000")
+          echo "Health HTTP Status: $HTTP_HEALTH"
+          if [ -f response_health.json ]; then
+            echo "Health Response: $(cat response_health.json)"
           fi
-          if [ "$HTTP_RESPONSE" -eq 200 ]; then
-            echo "Backend is alive and healthy!"
+
+      - name: Ping Root Endpoint
+        run: |
+          echo "Sending keep-alive ping to root https://pesneer.onrender.com..."
+          HTTP_ROOT=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 https://pesneer.onrender.com || echo "000")
+          echo "Root HTTP Status: $HTTP_ROOT"
+          if [ "$HTTP_ROOT" -eq 200 ] || [ "$HTTP_ROOT" -eq 301 ] || [ "$HTTP_ROOT" -eq 302 ]; then
+            echo "Root is alive and responding!"
           else
-            echo "Warning: Response code was $HTTP_RESPONSE (Server might be spinning up or responding slowly)"
+            echo "Warning: Root response code was $HTTP_ROOT"
           fi
