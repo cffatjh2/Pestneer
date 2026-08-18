@@ -116,7 +116,7 @@ export default function LoginPage({
   const handleCompanyNameChange = (val: string) => {
     setDemoCompanyName(val);
     if (!hasEditedCode) {
-      const generated = val
+      const words = val
         .replace(/ç/gi, 'C')
         .replace(/ğ/gi, 'G')
         .replace(/ı/gi, 'I')
@@ -126,11 +126,23 @@ export default function LoginPage({
         .replace(/ş/gi, 'S')
         .replace(/ü/gi, 'U')
         .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 18);
-      setDemoCompanyCode(generated);
+        .replace(/[^A-Z0-9\s]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if (words.length > 0) {
+        const first = words[0];
+        if (first.length >= 3) {
+          setDemoCompanyCode(first.slice(0, 14));
+        } else if (words.length > 1) {
+          setDemoCompanyCode((first + words[1]).slice(0, 14));
+        } else {
+          setDemoCompanyCode(first);
+        }
+      } else {
+        setDemoCompanyCode('');
+      }
     }
   };
 

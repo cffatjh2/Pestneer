@@ -98,26 +98,27 @@ public sealed class LoginService(
             var cleanedCustomCode = GenerateCodeFromName(request.CompanyCode);
             if (cleanedCustomCode.Length < 2)
             {
-                return new LoginResult(null, "Firma kodu (TAG) en az 2 karakter olmalıdır.");
+                return new LoginResult(null, "Firma etiketi (TAG) en az 2 karakter olmalıdır.");
             }
 
             if (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(c => c.Code == cleanedCustomCode, cancellationToken))
             {
-                return new LoginResult(null, $"'{cleanedCustomCode}' firma kodu (TAG) zaten başka bir firma tarafından kullanılıyor. Lütfen farklı bir TAG belirleyin.");
+                return new LoginResult(null, $"'{cleanedCustomCode}' firma etiketi (TAG) zaten başka bir firma tarafından kullanılıyor. Lütfen farklı bir TAG belirleyin.");
             }
             finalCode = cleanedCustomCode;
         }
         else
         {
-            var baseCode = GenerateCodeFromName(request.CompanyName);
-            if (baseCode.Length < 3) baseCode = "PEST-" + baseCode;
+            var parts = request.CompanyName.Trim().Split([' ', '-', '_', '.', ','], StringSplitOptions.RemoveEmptyEntries);
+            var candidate = parts.Length > 0 ? GenerateCodeFromName(parts[0]) : GenerateCodeFromName(request.CompanyName);
+            if (candidate.Length < 2 && parts.Length > 1) candidate = GenerateCodeFromName(parts[0] + parts[1]);
+            if (candidate.Length < 2) candidate = "PEST-" + candidate;
 
-            finalCode = baseCode;
-            var suffix = 1;
-            while (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(c => c.Code == finalCode, cancellationToken))
+            if (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(c => c.Code == candidate, cancellationToken))
             {
-                finalCode = $"{baseCode}-{suffix++}";
+                return new LoginResult(null, $"'{candidate}' firma etiketi (TAG) zaten başka bir firma tarafından kullanılıyor. Lütfen benzersiz bir TAG belirleyin.");
             }
+            finalCode = candidate;
         }
 
         if (await dbContext.Accounts.IgnoreQueryFilters().AnyAsync(a => a.Portal == PortalType.Owner && a.NormalizedEmail == normalizedEmail, cancellationToken))
