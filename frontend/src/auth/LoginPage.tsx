@@ -342,14 +342,14 @@ export default function LoginPage({
 
               <form className="login-form" onSubmit={submitLogin}>
                 <label>
-                  {portal === 'customer' ? 'Hizmet sağlayıcı firma kodu' : 'Firma kodu'}
+                  {portal === 'customer' ? 'Hizmet Sağlayıcı Firma Etiketi (TAG)' : 'Firma Etiketi (TAG)'}
                   <span className="login-input">
-                    <Building2 size={18} />
+                    <Hash size={18} />
                     <input
                       value={companyCode}
-                      onChange={(event) => setCompanyCode(event.target.value)}
+                      onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
                       autoComplete="organization"
-                      placeholder="Örn: FIRMA-KODU"
+                      placeholder="Örn: BIOPEST"
                       required
                     />
                   </span>
@@ -501,8 +501,8 @@ export default function LoginPage({
 
                 <label>
                   <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Firma Kodu / TAG (Giriş Kodunuz)</span>
-                    <small style={{ color: '#0284c7', fontWeight: 600, fontSize: '11px' }}>Örn: BIOPEST</small>
+                    <span>Firma Etiketi (TAG)</span>
+                    <small style={{ color: '#0284c7', fontWeight: 700, fontSize: '11px', background: '#e0f2fe', padding: '2px 6px', borderRadius: '4px' }}>Giriş Etiketi</small>
                   </span>
                   <span className="login-input">
                     <Hash size={18} />
@@ -512,14 +512,14 @@ export default function LoginPage({
                         setDemoCompanyCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''));
                         setHasEditedCode(true);
                       }}
-                      placeholder="Firma giriş TAG'ı (Örn: BIOPEST)"
+                      placeholder="Firma giriş etiketi (Örn: BIOPEST)"
                       maxLength={20}
                       autoCapitalize="characters"
                       required
                     />
                   </span>
-                  <small style={{ color: '#64748b', fontSize: '11px', marginTop: '2px', display: 'block' }}>
-                    💡 Sisteme giriş yaparken siz ve saha ekipleriniz bu firma kodunu (TAG) kullanacaksınız.
+                  <small style={{ color: '#64748b', fontSize: '11px', marginTop: '3px', display: 'block' }}>
+                    💡 Sisteme ve personellerinizin paneline giriş yaparken bu firma etiketi (TAG) kullanılacaktır.
                   </small>
                 </label>
 
