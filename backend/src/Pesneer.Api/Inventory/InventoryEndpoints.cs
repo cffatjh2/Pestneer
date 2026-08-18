@@ -40,11 +40,8 @@ public static class InventoryEndpoints
     {
         var now = DateTimeOffset.UtcNow;
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
-        var exitDates = await dbContext.InventoryMovements.AsNoTracking()
-            .Where(item => item.Type == "Exit")
-            .Select(item => item.OccurredAt)
-            .ToListAsync(cancellationToken);
-        var exitCount = exitDates.Count(item => item >= monthStart);
+        var exitCount = await dbContext.InventoryMovements.AsNoTracking()
+            .CountAsync(item => item.Type == "Exit" && item.OccurredAt >= monthStart, cancellationToken);
         return Results.Ok(new InventorySummaryResponse(
             exitCount,
             await dbContext.Vehicles.AsNoTracking().CountAsync(item => item.IsActive, cancellationToken),

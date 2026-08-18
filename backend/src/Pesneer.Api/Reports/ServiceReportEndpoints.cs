@@ -17,6 +17,7 @@ public static class ServiceReportEndpoints
 {
     private static readonly HashSet<string> DeviceStatuses = ["Unchecked", "NoActivity", "Activity", "Damaged", "Inaccessible", "Missing", "Replaced", "Passive", "Active"];
     private static readonly HashSet<string> ActivityTypes = ["Sighting", "Capture", "Droppings", "Gnawing", "Track", "Nest", "Other"];
+    private static readonly System.Globalization.CultureInfo TurkishCulture = new("tr-TR");
 
     public static IEndpointRouteBuilder MapServiceReportEndpoints(this IEndpointRouteBuilder app)
     {
@@ -369,15 +370,15 @@ public static class ServiceReportEndpoints
         var query = ReportQuery(dbContext).Where(item => item.Status == "Finalized");
         if (customerId.HasValue) query = query.Where(item => item.WorkOrder.CustomerId == customerId.Value);
         if (branchId.HasValue) query = query.Where(item => item.WorkOrder.CustomerBranchId == branchId.Value);
-        var reports = (await query.ToListAsync(cancellationToken))
+        var reports = await query
             .Where(item => item.WorkOrder.ScheduledAt >= fromOffset && item.WorkOrder.ScheduledAt < toOffset)
-            .ToList();
+            .ToListAsync(cancellationToken);
         var activationQuery = dbContext.StationActivations.AsNoTracking().Include(item => item.WorkOrder).Where(item => item.Status == "Finalized");
         if (customerId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerId == customerId.Value);
         if (branchId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerBranchId == branchId.Value);
-        var activations = (await activationQuery.ToListAsync(cancellationToken))
+        var activations = await activationQuery
             .Where(item => item.WorkOrder.ScheduledAt >= fromOffset && item.WorkOrder.ScheduledAt < toOffset)
-            .ToList();
+            .ToListAsync(cancellationToken);
         var sources = reports.Where(item => item.Stations.Count > 0).Select(item => new AnalyticsSource(item.WorkOrder.ScheduledAt, item.Stations.Select(station => new AnalyticsStation(
                 station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest,
                 station.PestObservations.Select(pest => new AnalyticsPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray()))
@@ -395,12 +396,12 @@ public static class ServiceReportEndpoints
         }).ToArray();
         var observationPests = allStations.SelectMany(item => item.Pests)
             .Where(item => item.Count > 0)
-            .GroupBy(item => item.Name.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .GroupBy(item => item.Name.Trim(), StringComparer.Create(TurkishCulture, true))
             .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.Count)));
         var legacyPests = allStations.Where(item => item.Pests.Count == 0 && !string.IsNullOrWhiteSpace(item.TargetPest))
-            .GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+            .GroupBy(item => item.TargetPest!.Trim(), StringComparer.Create(TurkishCulture, true))
             .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.CaughtCount)));
-        var pests = observationPests.Concat(legacyPests).GroupBy(item => item.Pest, StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
+        var pests = observationPests.Concat(legacyPests).GroupBy(item => item.Pest, StringComparer.Create(TurkishCulture, true))
             .Select(group => new PestTrendResponse(group.Key, group.Sum(item => item.TotalCaught))).OrderByDescending(item => item.TotalCaught).ToArray();
         return Results.Ok(new ServiceReportAnalyticsResponse(fromDate, toDate, sources.Length, allStations.Length, allStations.Count(item => item.HasActivity), allStations.Sum(item => item.CaughtCount), overall.ActivityRate, overall.Score, overall.Level, periods, pests));
     }
@@ -412,7 +413,6 @@ public static class ServiceReportEndpoints
         .Include(item => item.WorkOrder).ThenInclude(item => item.AssignedEmployeeAccount)
         .Include(item => item.WorkOrder).ThenInclude(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
         .Include(item => item.WorkOrder).ThenInclude(item => item.VisitSessions).ThenInclude(item => item.EmployeeAccount)
-        .Include(item => item.WorkOrder).ThenInclude(item => item.Photos)
         .Include(item => item.Stations).ThenInclude(item => item.PestObservations)
         .Include(item => item.Products).Include(item => item.EmailDeliveries).AsSplitQuery();
 

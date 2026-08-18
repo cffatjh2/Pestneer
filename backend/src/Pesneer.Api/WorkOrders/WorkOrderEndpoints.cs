@@ -304,11 +304,22 @@ public static class WorkOrderEndpoints
         var branchLookup = branches.ToDictionary(item => item.Id);
         var recurrenceGroupId = dates.Count > 1 ? Guid.NewGuid() : (Guid?)null;
         var workOrders = new List<WorkOrder>();
-        foreach (var date in dates.Order())
+
+        var sortedDates = dates.Order().ToArray();
+        var allPrefixes = sortedDates.Select(d => $"IE-{d:yyMMdd}-").Distinct().ToArray();
+        var allExistingNumbers = await dbContext.WorkOrders.AsNoTracking()
+            .Where(item => allPrefixes.Any(p => item.Number.StartsWith(p)))
+            .Select(item => item.Number)
+            .ToListAsync(cancellationToken);
+        var existingNumbersByPrefix = allPrefixes.ToDictionary(
+            pfx => pfx,
+            pfx => allExistingNumbers.Where(n => n.StartsWith(pfx)).ToList());
+
+        foreach (var date in sortedDates)
         {
             var prefix = $"IE-{date:yyMMdd}-";
-            var existingNumbers = await dbContext.WorkOrders.AsNoTracking().Where(item => item.Number.StartsWith(prefix)).Select(item => item.Number).ToListAsync(cancellationToken);
-            var nextNumber = existingNumbers.Select(item => int.TryParse(item[prefix.Length..], out var value) ? value : 0).DefaultIfEmpty(0).Max() + 1;
+            existingNumbersByPrefix.TryGetValue(prefix, out var existingNumbers);
+            var nextNumber = (existingNumbers ?? []).Select(item => int.TryParse(item[prefix.Length..], out var value) ? value : 0).DefaultIfEmpty(0).Max() + 1;
             foreach (var assignment in assignments.OrderBy(item => branchLookup[item.BranchId].Name, StringComparer.Create(TurkishCulture, true)))
             {
                 var workOrder = new WorkOrder
@@ -340,6 +351,7 @@ public static class WorkOrderEndpoints
                     });
                 }
                 workOrders.Add(workOrder);
+                existingNumbers?.Add(workOrder.Number);
             }
         }
 
@@ -569,14 +581,20 @@ public static class WorkOrderEndpoints
         CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue || !companyContext.Portal.HasValue) return Results.Forbid();
-        var photo = await dbContext.WorkOrderPhotos.AsNoTracking().Include(item => item.WorkOrder)
-            .SingleOrDefaultAsync(item => item.Id == photoId, cancellationToken);
-        if (photo is null) return Results.NotFound();
-        if (companyContext.Portal == PortalType.Employee && photo.WorkOrder.AssignedEmployeeAccountId != companyContext.AccountId.Value &&
-            !await dbContext.WorkOrderAssignments.AnyAsync(item => item.WorkOrderId == photo.WorkOrderId && item.EmployeeAccountId == companyContext.AccountId.Value, cancellationToken)) return Results.Forbid();
+        var photoMeta = await dbContext.WorkOrderPhotos.AsNoTracking()
+            .Where(item => item.Id == photoId)
+            .Select(item => new { item.Id, item.ContentType, item.FileName, item.WorkOrder.AssignedEmployeeAccountId, item.WorkOrder.CustomerId, item.WorkOrder.CustomerBranchId, item.WorkOrderId })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (photoMeta is null) return Results.NotFound();
+        if (companyContext.Portal == PortalType.Employee && photoMeta.AssignedEmployeeAccountId != companyContext.AccountId.Value &&
+            !await dbContext.WorkOrderAssignments.AnyAsync(item => item.WorkOrderId == photoMeta.WorkOrderId && item.EmployeeAccountId == companyContext.AccountId.Value, cancellationToken)) return Results.Forbid();
         if (companyContext.Portal == PortalType.Customer &&
-            (photo.WorkOrder.CustomerId != companyContext.CustomerId || companyContext.CustomerBranchId.HasValue && photo.WorkOrder.CustomerBranchId != companyContext.CustomerBranchId)) return Results.Forbid();
-        return Results.File(photo.Data, photo.ContentType, photo.FileName);
+            (photoMeta.CustomerId != companyContext.CustomerId || companyContext.CustomerBranchId.HasValue && photoMeta.CustomerBranchId != companyContext.CustomerBranchId)) return Results.Forbid();
+        var data = await dbContext.WorkOrderPhotos.AsNoTracking()
+            .Where(item => item.Id == photoId)
+            .Select(item => item.Data)
+            .SingleAsync(cancellationToken);
+        return Results.File(data, photoMeta.ContentType, photoMeta.FileName);
     }
 
     private static IQueryable<WorkOrder> WorkOrderQuery(PesneerDbContext dbContext) => dbContext.WorkOrders

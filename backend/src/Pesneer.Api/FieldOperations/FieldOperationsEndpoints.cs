@@ -7,6 +7,8 @@ namespace Pesneer.Api.FieldOperations;
 
 public static class FieldOperationsEndpoints
 {
+    private static readonly System.Globalization.CultureInfo TurkishCulture = new("tr-TR");
+
     public static IEndpointRouteBuilder MapFieldOperationsEndpoints(this IEndpointRouteBuilder app)
     {
         var employee = app.MapGroup("/api/employee/operations")
@@ -148,8 +150,8 @@ public static class FieldOperationsEndpoints
             .ToListAsync(cancellationToken);
         var products = previousProducts
             .Concat(inventoryProducts)
-            .Distinct(StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true))
-            .OrderBy(name => name, StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), false))
+            .Distinct(StringComparer.Create(TurkishCulture, true))
+            .OrderBy(name => name, StringComparer.Create(TurkishCulture, false))
             .Take(100)
             .ToList();
         return Results.Ok(products);

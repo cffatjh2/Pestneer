@@ -16,14 +16,61 @@ public sealed class HttpCompanyContext(IHttpContextAccessor httpContextAccessor)
 {
     private ClaimsPrincipal? User => httpContextAccessor.HttpContext?.User;
 
-    public Guid? AccountId => ParseGuidClaim(ClaimTypes.NameIdentifier) ?? ParseGuidClaim("sub");
-    public Guid? CompanyId => ParseGuidClaim("company_id");
-    public Guid? CustomerId => ParseGuidClaim("customer_id");
-    public Guid? CustomerBranchId => ParseGuidClaim("customer_branch_id");
+    private Guid? _accountId;
+    private bool _accountIdParsed;
+    private Guid? _companyId;
+    private bool _companyIdParsed;
+    private Guid? _customerId;
+    private bool _customerIdParsed;
+    private Guid? _customerBranchId;
+    private bool _customerBranchIdParsed;
+    private PortalType? _portal;
+    private bool _portalParsed;
 
-    public PortalType? Portal => Enum.TryParse<PortalType>(User?.FindFirstValue("portal"), true, out var portal)
-        ? portal
-        : null;
+    public Guid? AccountId
+    {
+        get
+        {
+            if (!_accountIdParsed) { _accountId = ParseGuidClaim(ClaimTypes.NameIdentifier) ?? ParseGuidClaim("sub"); _accountIdParsed = true; }
+            return _accountId;
+        }
+    }
+
+    public Guid? CompanyId
+    {
+        get
+        {
+            if (!_companyIdParsed) { _companyId = ParseGuidClaim("company_id"); _companyIdParsed = true; }
+            return _companyId;
+        }
+    }
+
+    public Guid? CustomerId
+    {
+        get
+        {
+            if (!_customerIdParsed) { _customerId = ParseGuidClaim("customer_id"); _customerIdParsed = true; }
+            return _customerId;
+        }
+    }
+
+    public Guid? CustomerBranchId
+    {
+        get
+        {
+            if (!_customerBranchIdParsed) { _customerBranchId = ParseGuidClaim("customer_branch_id"); _customerBranchIdParsed = true; }
+            return _customerBranchId;
+        }
+    }
+
+    public PortalType? Portal
+    {
+        get
+        {
+            if (!_portalParsed) { _portal = Enum.TryParse<PortalType>(User?.FindFirstValue("portal"), true, out var portal) ? portal : null; _portalParsed = true; }
+            return _portal;
+        }
+    }
 
     private Guid? ParseGuidClaim(string claimType) => Guid.TryParse(User?.FindFirstValue(claimType), out var value)
         ? value

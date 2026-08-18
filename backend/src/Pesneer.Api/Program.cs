@@ -1,8 +1,10 @@
+using System.IO.Compression;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
@@ -111,6 +113,15 @@ builder.Services.AddHttpClient("GoogleMapsResolver", client =>
 builder.Services.AddScoped<IMapLocationResolver, MapLocationResolver>();
 builder.Services.AddScoped<IWeatherService, OpenMeteoWeatherService>();
 builder.Services.AddScoped<IWeatherRiskService, WeatherRiskService>();
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/json"]);
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 builder.Services.AddProblemDetails();
 
 var allowedOrigins = (builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
@@ -200,6 +211,7 @@ await DevelopmentDataSeeder.InitializeAsync(app.Services, app.Environment);
 if (app.Environment.IsDevelopment()) app.UseDeveloperExceptionPage();
 else app.UseExceptionHandler();
 app.UseForwardedHeaders();
+app.UseResponseCompression();
 app.UseCors();
 app.UseDefaultFiles();
 var staticFileContentTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
@@ -228,12 +240,23 @@ auth.MapPost("/register-demo", (DemoRegisterRequest request, ILoginService login
 app.MapGet("/api/company/dashboard", async (PesneerDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var today = DateTimeOffset.UtcNow.Date;
-    var workOrders = dbContext.WorkOrders.AsNoTracking();
+    var tomorrow = today.AddDays(1);
+    var weekStart = today.AddDays(-7);
+    var counts = await dbContext.WorkOrders.AsNoTracking()
+        .Where(item => item.Status == "InProgress" || (item.ScheduledAt >= weekStart && item.ScheduledAt < tomorrow))
+        .GroupBy(_ => 1)
+        .Select(g => new
+        {
+            plannedWorkOrders = g.Count(item => item.ScheduledAt >= today && item.ScheduledAt < tomorrow),
+            activeOperations = g.Count(item => item.Status == "InProgress"),
+            completedThisWeek = g.Count(item => item.Status == "Completed" && item.ScheduledAt >= weekStart)
+        })
+        .SingleOrDefaultAsync(cancellationToken);
     return Results.Ok(new
     {
-        plannedWorkOrders = await workOrders.CountAsync(item => item.ScheduledAt >= today && item.ScheduledAt < today.AddDays(1), cancellationToken),
-        activeOperations = await workOrders.CountAsync(item => item.Status == "InProgress", cancellationToken),
-        completedThisWeek = await workOrders.CountAsync(item => item.Status == "Completed" && item.ScheduledAt >= today.AddDays(-7), cancellationToken)
+        plannedWorkOrders = counts?.plannedWorkOrders ?? 0,
+        activeOperations = counts?.activeOperations ?? 0,
+        completedThisWeek = counts?.completedThisWeek ?? 0
     });
 }).RequireAuthorization("CompanyStaff");
 
@@ -339,7 +362,9 @@ static string ToNpgsqlConnectionString(string databaseUrl)
             SslMode = SslMode.Require,
             Timeout = 30,
             CommandTimeout = 60,
-            Pooling = true
+            Pooling = true,
+            MinPoolSize = 2,
+            MaxPoolSize = 20
         }.ConnectionString;
     }
 
