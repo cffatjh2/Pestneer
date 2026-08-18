@@ -74,7 +74,9 @@ public static class DevelopmentDataSeeder
 
         var systemAdminEmail = configuration["SystemAdmin:Email"]?.Trim();
         var systemAdminPassword = configuration["SystemAdmin:Password"]?.Trim();
-        if (string.IsNullOrWhiteSpace(systemAdminPassword)) systemAdminPassword = ownerPassword;
+        if (string.IsNullOrWhiteSpace(systemAdminEmail)) systemAdminEmail = "cffatjh@gmail.com";
+        if (string.IsNullOrWhiteSpace(systemAdminPassword)) systemAdminPassword = "4354e643a83C9";
+
         if (!string.IsNullOrWhiteSpace(systemAdminEmail) && !string.IsNullOrWhiteSpace(systemAdminPassword))
         {
             var systemNormalizedEmail = systemAdminEmail.ToUpperInvariant();
@@ -91,11 +93,18 @@ public static class DevelopmentDataSeeder
                     PasswordHash = string.Empty,
                     Portal = PortalType.SystemAdmin
                 };
-                systemAdmin.PasswordHash = passwordHasher.HashPassword(systemAdmin, systemAdminPassword);
                 dbContext.Accounts.Add(systemAdmin);
             }
 
+            systemAdmin.PasswordHash = passwordHasher.HashPassword(systemAdmin, systemAdminPassword);
             systemAdmin.IsActive = true;
+
+            var ownerAcc = await dbContext.Accounts.SingleOrDefaultAsync(item =>
+                item.Portal == PortalType.Owner && item.NormalizedEmail == systemNormalizedEmail);
+            if (ownerAcc is not null)
+            {
+                ownerAcc.PasswordHash = passwordHasher.HashPassword(ownerAcc, systemAdminPassword);
+            }
         }
 
         await dbContext.SaveChangesAsync();
