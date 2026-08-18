@@ -81,23 +81,23 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
           <span>Personel, <strong>Firma çalışanı</strong> girişinden <strong>{companyCode}</strong> firma koduyla oturum açabilir.</span>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off" data-lpignore="true" data-form-type="other">
           <div className="form-grid employee-form-grid">
             <label>
               Ad
-              <input name="firstName" defaultValue={nameParts.firstName} autoComplete="given-name" minLength={2} maxLength={80} required />
+              <input name="firstName" defaultValue={nameParts.firstName} autoComplete="off" minLength={2} maxLength={80} placeholder="Personel adı" required />
             </label>
             <label>
               Soyad
-              <input name="lastName" defaultValue={nameParts.lastName} autoComplete="family-name" minLength={2} maxLength={80} required />
+              <input name="lastName" defaultValue={nameParts.lastName} autoComplete="off" minLength={2} maxLength={80} placeholder="Personel soyadı" required />
             </label>
             <label>
               Telefon numarası
-              <input name="phoneNumber" defaultValue={employee?.phoneNumber} type="tel" autoComplete="tel" minLength={10} maxLength={24} required />
+              <input name="phoneNumber" defaultValue={employee?.phoneNumber} type="tel" autoComplete="off" minLength={10} maxLength={24} placeholder="05XX XXX XX XX" required />
             </label>
             <label>
               E-posta adresi
-              <input name="email" defaultValue={employee?.email} type="email" autoComplete="email" maxLength={320} required />
+              <input name="email" defaultValue={employee?.email} type="email" autoComplete="new-password" data-lpignore="true" maxLength={320} placeholder="personel@firma.com" required />
             </label>
             <label className={isEditing ? '' : 'form-field-wide'}>
               Yetki / görev
@@ -124,7 +124,7 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
               {isEditing ? 'Yeni şifre (isteğe bağlı)' : 'Geçici şifre'}
               <span className="password-input-wrap">
                 <KeyRound size={17} />
-                <input name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" minLength={6} placeholder={isEditing ? 'Değişmeyecekse boş bırakın' : 'En az 6 karakter'} required={!isEditing} />
+                <input name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" data-lpignore="true" minLength={6} placeholder={isEditing ? 'Değişmeyecekse boş bırakın' : 'En az 6 karakter'} required={!isEditing} />
                 <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}>
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
@@ -134,7 +134,7 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
               {isEditing ? 'Yeni şifre tekrarı' : 'Şifre tekrarı'}
               <span className="password-input-wrap">
                 <KeyRound size={17} />
-                <input name="passwordConfirmation" type={showPassword ? 'text' : 'password'} autoComplete="new-password" minLength={6} placeholder={isEditing ? 'Yeni şifreyi tekrar girin' : 'Şifreyi tekrar girin'} required={!isEditing} />
+                <input name="passwordConfirmation" type={showPassword ? 'text' : 'password'} autoComplete="new-password" data-lpignore="true" minLength={6} placeholder={isEditing ? 'Yeni şifreyi tekrar girin' : 'Şifreyi tekrar girin'} required={!isEditing} />
               </span>
             </label>
           </div>

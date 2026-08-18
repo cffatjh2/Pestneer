@@ -713,11 +713,11 @@ function FormFields({ mode, accounts }: { mode: Mode; accounts: SystemAccount[] 
       </label>
       <label>
         {mode === 'company' ? 'Firma sahibi giriş e-postası' : 'E-posta'}
-        <input name="email" type="email" autoComplete="email" required />
+        <input name="email" type="email" autoComplete="new-password" data-lpignore="true" required />
       </label>
       <label>
         Telefon
-        <input name="phone" />
+        <input name="phone" autoComplete="off" />
       </label>
       <label>
         Geçici şifre

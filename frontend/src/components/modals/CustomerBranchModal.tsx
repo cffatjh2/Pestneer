@@ -146,7 +146,7 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
     <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Müşteri ve şube yönetimi">
       <div className="modal customer-branch-modal">
         <div className="modal-header"><div><p className="eyebrow">MÜŞTERİ PORTFÖYÜ</p><h2>Müşteri ve şube ekle</h2><p>Çatı firma ile lokasyonların iletişim ve konum bilgilerini ayrı yönetin.</p></div><button className="icon-button" onClick={onClose} aria-label="Kapat"><X size={20} /></button></div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off" data-lpignore="true" data-form-type="other">
           <div className="customer-mode-switch"><button type="button" className={mode === 'new' ? 'active' : ''} onClick={() => setMode('new')}><Building2 size={15} /> Yeni çatı müşteri</button><button type="button" className={mode === 'existing' ? 'active' : ''} onClick={() => setMode('existing')} disabled={customers.length === 0}><Plus size={15} /> Mevcut müşteriye şube</button></div>
 
           {mode === 'new' && <div className="customer-structure-switch" role="radiogroup" aria-label="Müşteri lokasyon yapısı"><button type="button" role="radio" aria-checked={newCustomerStructure === 'single'} className={newCustomerStructure === 'single' ? 'active' : ''} onClick={() => { setNewCustomerStructure('single'); setError(null); }}><MapPin size={18} /><span><strong>Tek lokasyon</strong><small>Fabrika, depo veya tek işletme</small></span><CheckCircle2 size={17} /></button><button type="button" role="radio" aria-checked={newCustomerStructure === 'multi'} className={newCustomerStructure === 'multi' ? 'active' : ''} onClick={() => { setNewCustomerStructure('multi'); setError(null); }}><Building2 size={18} /><span><strong>Şubeli yapı</strong><small>Bir çatı altında birden çok lokasyon</small></span><CheckCircle2 size={17} /></button></div>}
@@ -154,19 +154,19 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
           {mode === 'existing' ? <label className="standalone-field">Müşteri<select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.legalName} · {customer.branches.length} şube</option>)}</select></label> : <section className="customer-data-section">
             <div className="modal-subheading"><Building2 size={18} /><div><strong>{newCustomerStructure === 'single' ? 'Müşteri ve tek lokasyon bilgileri' : 'Çatı müşteri bilgileri'}</strong><span>{newCustomerStructure === 'single' ? 'Bu bilgiler otomatik olarak Merkez lokasyonuna da bağlanır.' : 'Merkez iletişim ve fatura/operasyon konumu'}</span></div></div>
             <div className="form-grid customer-data-grid">
-              <label>Müşteri / marka adı<input name="legalName" required /></label><label>Müşteri kodu<input name="code" placeholder="Otomatik oluşturulur" /></label>
-              <label>Merkez yetkilisi<input name="contactName" placeholder="Ad Soyad" /></label><label>Merkez telefonu<input name="phoneNumber" type="tel" /></label>
-              <label>Merkez e-postası<input name="email" type="email" /></label><label>İl / İlçe<span className="inline-field-pair"><input name="city" placeholder="İl" /><input name="district" placeholder="İlçe" /></span></label>
-              <label className="form-field-wide">Merkez adresi<input name="address" required={newCustomerStructure === 'single'} placeholder="Açık adres" /></label>
-              <label className="form-field-wide">Google Haritalar bağlantısı<input name="mapUrl" type="url" /></label>
-              <label>Enlem<input name="latitude" type="number" step="0.000001" /></label><label>Boylam<input name="longitude" type="number" step="0.000001" /></label>
+              <label>Müşteri / marka adı<input name="legalName" required autoComplete="off" /></label><label>Müşteri kodu<input name="code" placeholder="Otomatik oluşturulur" autoComplete="off" /></label>
+              <label>Merkez yetkilisi<input name="contactName" placeholder="Ad Soyad" autoComplete="off" /></label><label>Merkez telefonu<input name="phoneNumber" type="tel" autoComplete="off" /></label>
+              <label>Merkez e-postası<input name="email" type="email" autoComplete="new-password" data-lpignore="true" placeholder="musteri@firma.com" /></label><label>İl / İlçe<span className="inline-field-pair"><input name="city" placeholder="İl" autoComplete="off" /><input name="district" placeholder="İlçe" autoComplete="off" /></span></label>
+              <label className="form-field-wide">Merkez adresi<input name="address" required={newCustomerStructure === 'single'} placeholder="Açık adres" autoComplete="off" /></label>
+              <label className="form-field-wide">Google Haritalar bağlantısı<input name="mapUrl" type="url" autoComplete="off" /></label>
+              <label>Enlem<input name="latitude" type="number" step="0.000001" autoComplete="off" /></label><label>Boylam<input name="longitude" type="number" step="0.000001" autoComplete="off" /></label>
             </div>
             <div className="customer-portal-account-block">
               <div className="modal-subheading"><CheckCircle2 size={18} /><div><strong>Çatı müşteri portal hesabı</strong><span>Bu hesap müşteri altındaki tüm şubeleri, işleri ve raporları görür.</span></div></div>
               <div className="form-grid customer-data-grid">
-                <label>Hesap yetkilisi<input name="portalContactName" placeholder="Ad Soyad" /></label>
-                <label>Giriş e-postası<input name="portalEmail" type="email" /></label>
-                <label>Geçici şifre<input name="portalPassword" type="password" minLength={6} placeholder="En az 6 karakter" /></label>
+                <label>Hesap yetkilisi<input name="portalContactName" placeholder="Ad Soyad" autoComplete="off" /></label>
+                <label>Giriş e-postası<input name="portalEmail" type="email" autoComplete="new-password" data-lpignore="true" placeholder="portal@musteri.com" /></label>
+                <label>Geçici şifre<input name="portalPassword" type="password" minLength={6} placeholder="En az 6 karakter" autoComplete="new-password" data-lpignore="true" /></label>
                 <div className="portal-account-note">E-posta ve şifre birlikte girildiğinde müşteri hesabı anında açılır.</div>
               </div>
             </div>
@@ -184,18 +184,18 @@ export default function CustomerBranchModal({ customers, onClose, onSubmit }: Cu
 
             {importMode === 'manual' ? <div className="manual-branch-form">
               <div className="form-grid customer-data-grid">
-                <label>Şube adı<input value={manualBranch.name} onChange={(event) => setManualBranch({ ...manualBranch, name: event.target.value })} /></label>
-                <label>Şube kodu<input value={manualBranch.code} onChange={(event) => setManualBranch({ ...manualBranch, code: event.target.value })} placeholder="Otomatik oluşturulur" /></label>
-                <label>Şube yetkilisi<input value={manualBranch.contactName} onChange={(event) => setManualBranch({ ...manualBranch, contactName: event.target.value })} placeholder="Ad Soyad" /></label>
-                <label>Telefon<input type="tel" value={manualBranch.phoneNumber} onChange={(event) => setManualBranch({ ...manualBranch, phoneNumber: event.target.value })} /></label>
-                <label>E-posta<input type="email" value={manualBranch.email} onChange={(event) => setManualBranch({ ...manualBranch, email: event.target.value })} /></label>
-                <label>İl / İlçe<span className="inline-field-pair"><input value={manualBranch.city} onChange={(event) => setManualBranch({ ...manualBranch, city: event.target.value })} placeholder="İl" /><input value={manualBranch.district} onChange={(event) => setManualBranch({ ...manualBranch, district: event.target.value })} placeholder="İlçe" /></span></label>
-                <label className="form-field-wide">Açık adres<input value={manualBranch.address} onChange={(event) => setManualBranch({ ...manualBranch, address: event.target.value })} placeholder="Mahalle, cadde, bina ve kat bilgisi" /></label>
-                <label className="form-field-wide">Google Haritalar bağlantısı<input type="url" value={manualBranch.mapUrl} onChange={(event) => setManualBranch({ ...manualBranch, mapUrl: event.target.value })} /></label>
-                <label>Enlem<input type="number" step="0.000001" value={manualBranch.latitude} onChange={(event) => setManualBranch({ ...manualBranch, latitude: event.target.value })} /></label>
-                <label>Boylam<input type="number" step="0.000001" value={manualBranch.longitude} onChange={(event) => setManualBranch({ ...manualBranch, longitude: event.target.value })} /></label>
+                <label>Şube adı<input value={manualBranch.name} onChange={(event) => setManualBranch({ ...manualBranch, name: event.target.value })} autoComplete="off" /></label>
+                <label>Şube kodu<input value={manualBranch.code} onChange={(event) => setManualBranch({ ...manualBranch, code: event.target.value })} placeholder="Otomatik oluşturulur" autoComplete="off" /></label>
+                <label>Şube yetkilisi<input value={manualBranch.contactName} onChange={(event) => setManualBranch({ ...manualBranch, contactName: event.target.value })} placeholder="Ad Soyad" autoComplete="off" /></label>
+                <label>Telefon<input type="tel" value={manualBranch.phoneNumber} onChange={(event) => setManualBranch({ ...manualBranch, phoneNumber: event.target.value })} autoComplete="off" /></label>
+                <label>E-posta<input type="email" value={manualBranch.email} onChange={(event) => setManualBranch({ ...manualBranch, email: event.target.value })} autoComplete="new-password" data-lpignore="true" /></label>
+                <label>İl / İlçe<span className="inline-field-pair"><input value={manualBranch.city} onChange={(event) => setManualBranch({ ...manualBranch, city: event.target.value })} placeholder="İl" autoComplete="off" /><input value={manualBranch.district} onChange={(event) => setManualBranch({ ...manualBranch, district: event.target.value })} placeholder="İlçe" autoComplete="off" /></span></label>
+                <label className="form-field-wide">Açık adres<input value={manualBranch.address} onChange={(event) => setManualBranch({ ...manualBranch, address: event.target.value })} placeholder="Mahalle, cadde, bina ve kat bilgisi" autoComplete="off" /></label>
+                <label className="form-field-wide">Google Haritalar bağlantısı<input type="url" value={manualBranch.mapUrl} onChange={(event) => setManualBranch({ ...manualBranch, mapUrl: event.target.value })} autoComplete="off" /></label>
+                <label>Enlem<input type="number" step="0.000001" value={manualBranch.latitude} onChange={(event) => setManualBranch({ ...manualBranch, latitude: event.target.value })} autoComplete="off" /></label>
+                <label>Boylam<input type="number" step="0.000001" value={manualBranch.longitude} onChange={(event) => setManualBranch({ ...manualBranch, longitude: event.target.value })} autoComplete="off" /></label>
               </div>
-              <div className="branch-portal-fields"><strong>Şube müşteri portalı <small>Opsiyonel</small></strong><div className="form-grid customer-data-grid"><label>Portal yetkilisi<input value={manualBranch.portalContactName} onChange={(event) => setManualBranch({ ...manualBranch, portalContactName: event.target.value })} placeholder="Ad Soyad" /></label><label>Giriş e-postası<input type="email" value={manualBranch.portalEmail} onChange={(event) => setManualBranch({ ...manualBranch, portalEmail: event.target.value })} /></label><label>Geçici şifre<input type="password" minLength={6} value={manualBranch.portalPassword} onChange={(event) => setManualBranch({ ...manualBranch, portalPassword: event.target.value })} placeholder="En az 6 karakter" /></label><div className="portal-account-note">E-posta ve şifre birlikte girildiğinde yalnızca bu şubeyi gören müşteri hesabı açılır.</div></div></div>
+              <div className="branch-portal-fields"><strong>Şube müşteri portalı <small>Opsiyonel</small></strong><div className="form-grid customer-data-grid"><label>Portal yetkilisi<input value={manualBranch.portalContactName} onChange={(event) => setManualBranch({ ...manualBranch, portalContactName: event.target.value })} placeholder="Ad Soyad" autoComplete="off" /></label><label>Giriş e-postası<input type="email" value={manualBranch.portalEmail} onChange={(event) => setManualBranch({ ...manualBranch, portalEmail: event.target.value })} autoComplete="new-password" data-lpignore="true" /></label><label>Geçici şifre<input type="password" minLength={6} value={manualBranch.portalPassword} onChange={(event) => setManualBranch({ ...manualBranch, portalPassword: event.target.value })} placeholder="En az 6 karakter" autoComplete="new-password" data-lpignore="true" /></label><div className="portal-account-note">E-posta ve şifre birlikte girildiğinde yalnızca bu şubeyi gören müşteri hesabı açılır.</div></div></div>
             </div> : importMode === 'excel' ? <>
               <div
                 className={`excel-upload-zone ${isDragging ? 'dragging' : ''} ${excelBranches.length > 0 ? 'ready' : ''}`}
