@@ -8,6 +8,7 @@ import { addCustomerRequestMessage, approveCustomerRequestClosure, createEmergen
 import WeatherRiskPanel from '../components/weather/WeatherRiskPanel';
 import { getCustomerWeatherRisks, WeatherRiskSessionExpiredError, type WeatherRiskOverview } from '../services/weatherRiskApi';
 import PortalHeader from './PortalHeader';
+import PortalFooter from '../components/layout/PortalFooter';
 import QualityCenter from '../components/quality/QualityCenter';
 import CustomerCommercialCenter from './CustomerCommercialCenter';
 import CorrectiveActionCenter from '../components/compliance/CorrectiveActionCenter';
@@ -55,6 +56,7 @@ export default function CustomerPortal({ session, onLogout }: { session: Authent
         {tab === 'requests' && <section className="role-surface customer-list-surface"><div className="role-section-title"><div><p>TALEP & ŞİKÂYET MERKEZİ</p><h2>Talepler, mesajlar ve kapanış onayı</h2></div><button className="role-primary-button" onClick={() => setRequestOpen(true)}><Plus size={16} /> Yeni talep</button></div><div className="emergency-request-list">{summary.emergencyRequests.map((item) => <CustomerRequestCard key={item.id} item={item} token={session.accessToken} onUpdated={updateRequest} />)}{summary.emergencyRequests.length === 0 && <Empty icon={<ShieldAlert />} text="Henüz talep bulunmuyor." />}</div></section>}
         {tab === 'account' && <div className="portal-account-page"><PasswordChangeCard accessToken={session.accessToken} onSessionExpired={onLogout} /></div>}
       </>}
+      <PortalFooter />
     </main>
     {requestOpen && summary && <EmergencyRequestModal summary={summary} onClose={() => setRequestOpen(false)} onSubmit={submitRequest} />}
     {preview && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>{preview.reportNumber}</strong><span>{preview.customerName} · {preview.branchName}</span></div><button onClick={() => void downloadReport(preview)}><Download size={16} /> PDF İndir</button><button onClick={() => void shareReport(preview)}><Share2 size={16} /> Paylaş</button><button onClick={print}><Printer size={16} /> Yazdır</button><button className="icon-button" onClick={() => setPreview(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={printRef}><ServiceReportPrintSheet report={preview} accessToken={session.accessToken} /></div></div></div></div>}

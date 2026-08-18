@@ -582,7 +582,24 @@ export default function LoginPage({
           )}
         </div>
         <footer>
-          © 2026 Pestneer <span>Gizlilik</span><span>Kullanım koşulları</span><span>Destek</span>
+          <span>© 2026 Pestneer</span>
+          <span>Gizlilik</span>
+          <span>Kullanım Koşulları</span>
+          <a
+            href="mailto:pestneer@gmail.com"
+            className="login-footer-support"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              color: '#60a5fa',
+              textDecoration: 'none',
+              fontWeight: 600,
+              marginLeft: '4px',
+            }}
+          >
+            <Mail size={13} /> Destek: pestneer@gmail.com
+          </a>
         </footer>
       </section>
     </main>

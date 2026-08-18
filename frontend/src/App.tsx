@@ -24,6 +24,8 @@ import {
   type CustomerRecord,
 } from './services/workOrderApi';
 
+import PortalFooter from './components/layout/PortalFooter';
+
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const WorkOrders = lazy(() => import('./pages/WorkOrders'));
 const Calendar = lazy(() => import('./pages/Calendar'));
@@ -187,7 +189,11 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
     <div className="app-shell">
       <Sidebar activeView={activeView} setActiveView={(view) => { setActiveView(view); setActiveReport(null); }} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} onNotify={showToast} companyName={session.company.name} userName={session.user.name} userRole={session.user.role} onLogout={onLogout} />
       <div className="sidebar-scrim" style={{ display: isMenuOpen ? 'block' : 'none' }} onClick={() => setIsMenuOpen(false)} />
-      <main className="main-content"><Topbar activeView={activeView} onMenuOpen={() => setIsMenuOpen(true)} accessToken={session.accessToken} onStockOpen={() => setActiveView('stock')} />{renderContent()}</main>
+      <main className="main-content">
+        <Topbar activeView={activeView} onMenuOpen={() => setIsMenuOpen(true)} accessToken={session.accessToken} onStockOpen={() => setActiveView('stock')} />
+        {renderContent()}
+        <PortalFooter />
+      </main>
 
       {isNewOrderModalOpen && <WorkOrderModal customers={customers} employees={employees} onClose={() => setIsNewOrderModalOpen(false)} onManageCustomers={() => openCustomerManagement(true)} onCreate={handleCreateOrder} />}
       {editingOrder && <WorkOrderModal customers={customers} employees={employees} editingOrder={editingOrder} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} />}

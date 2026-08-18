@@ -23,6 +23,7 @@ import TaskDetailModal from '../components/modals/TaskDetailModal';
 import StationActivationModal from '../components/modals/StationActivationModal';
 import ServiceReportModal from '../components/modals/ServiceReportModal';
 import PortalHeader from './PortalHeader';
+import PortalFooter from '../components/layout/PortalFooter';
 import EmployeeWorkOrdersPanel from './EmployeeWorkOrdersPanel';
 import {
   createVehicleStockCheck,
@@ -406,6 +407,7 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
             </div>
           </>
         )}
+        <PortalFooter />
       </main>
 
       {isStockModalOpen && (

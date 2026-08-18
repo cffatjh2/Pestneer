@@ -168,4 +168,96 @@ td span { margin-top: 3px; color: #8794a7; font-size: 10px; }
 @media (max-width: 920px) { .sidebar { width: 260px; transform: translateX(-105%); transition: transform .2s ease; }.sidebar.sidebar-open { transform: translateX(0); }.sidebar-scrim { position: fixed; z-index: 20; inset: 0; display: block; border: 0; background: rgba(10, 29, 54, .3); }.main-content { width: 100%; margin-left: 0; }.menu-button { display: grid; place-items: center; }.mobile-close { display: grid; }.topbar { padding: 0 22px; }.page { padding: 28px 22px 42px; }.today { display: none; }.topbar-divider { display: none; }.report-sidebar { display: block; }.report-steps { margin: 18px 0; }.stock-overview { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .topbar { height: 60px; padding: 0 14px; }.breadcrumb { display: none; }.topbar-actions { margin-left: auto; }.search-button { display: none; }.page { padding: 23px 14px 35px; }.page-heading { flex-direction: column; margin-bottom: 21px; }.page-heading h1 { font-size: 24px; }.page-heading > div > p:not(.eyebrow) { line-height: 1.5; }.primary-button, .secondary-button { min-height: 39px; }.page-heading > .primary-button { width: 100%; }.metric-grid { gap: 9px; }.metric-card { min-height: 102px; padding: 14px; gap: 9px; }.metric-icon { width: 35px; height: 35px; border-radius: 10px; }.metric-card strong { font-size: 21px; }.metric-card span, .metric-card small { font-size: 9px; }.dashboard-side-column { grid-template-columns: 1fr; }.schedule-surface, .work-table-surface, .progress-surface, .attention-surface, .full-table-surface { padding: 16px; }.schedule-days { gap: 2px; padding: 4px; }.day-cell { min-height: 44px; }.day-cell span { font-size: 8px; }.day-cell strong { font-size: 12px; }.timeline-item { grid-template-columns: 44px 18px 1fr; }.timeline-detail { display: block; }.timeline-detail .status { margin-top: 7px; }.toolbar { flex-wrap: wrap; }.search-field { flex-basis: 100%; }.filter-button { height: 34px; }.heading-actions { width: 100%; }.heading-actions > button { flex: 1; padding: 0 9px; }.team-grid { grid-template-columns: 1fr; }.team-note { align-items: flex-start; flex-wrap: wrap; }.team-note .secondary-button { width: 100%; }.calendar-surface { padding: 13px; }.calendar-toolbar > div > strong { font-size: 14px; }.calendar-grid { grid-template-columns: repeat(7, 104px); }.report-page { padding-left: 0; padding-right: 0; }.report-page .page-heading { padding: 0 14px; }.report-workspace { gap: 8px; }.report-sidebar { border-radius: 0; border-right: 0; border-left: 0; }.report-canvas { border-radius: 0; }.report-canvas-toolbar { padding: 9px 12px; }.print-sheet { min-width: 720px; margin: 14px; transform: scale(.62); margin-bottom: -390px; transform-origin: top left; }.form-grid { grid-template-columns: 1fr; }.modal { padding: 18px; }.signature-pad { height: 175px; }.toast { right: 13px; bottom: 13px; left: 13px; max-width: none; } }
 
-@media print { @page { size: A4; margin: 8mm; } body { background: white; } .sidebar, .topbar, .page-heading, .report-sidebar, .report-canvas-toolbar, .toast { display: none !important; } .main-content { width: 100%; margin: 0; }.page { display: none; padding: 0; }.report-page { display: block; }.report-workspace { display: block; }.report-canvas { overflow: visible; border: 0; background: white; }.print-sheet { display: block; width: 100%; min-height: 0; margin: 0; padding: 0; box-shadow: none; transform: none; }.form-header { padding-top: 0; } }
+@media print { @page { size: A4; margin: 8mm; } body { background: white; } .sidebar, .topbar, .page-heading, .report-sidebar, .report-canvas-toolbar, .toast, .portal-universal-footer { display: none !important; } .main-content { width: 100%; margin: 0; }.page { display: none; padding: 0; }.report-page { display: block; }.report-workspace { display: block; }.report-canvas { overflow: visible; border: 0; background: white; }.print-sheet { display: block; width: 100%; min-height: 0; margin: 0; padding: 0; box-shadow: none; transform: none; }.form-header { padding-top: 0; } }
+
+/* Universal Portal Footer with pestneer@gmail.com */
+.portal-universal-footer {
+  width: 100%;
+  margin-top: auto;
+  padding: 16px 24px 22px;
+  background: transparent;
+  border-top: 1px solid rgba(140, 170, 205, 0.18);
+  font-family: inherit;
+}
+
+.portal-footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  text-align: center;
+}
+
+.portal-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b7f99;
+  font-size: 11px;
+}
+
+.portal-footer-icon {
+  color: #3b82f6;
+}
+
+.portal-footer-support {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.04);
+}
+
+.portal-footer-support-icon {
+  color: #2563eb;
+}
+
+.portal-footer-label {
+  color: #4b6282;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.portal-footer-email {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(219, 234, 254, 0.6);
+  transition: all 0.2s ease;
+}
+
+.portal-footer-email:hover {
+  color: #ffffff;
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+@media (max-width: 640px) {
+  .portal-universal-footer {
+    padding: 14px 12px 20px;
+  }
+  .portal-footer-inner {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .portal-footer-support {
+    width: 100%;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+  }
+}

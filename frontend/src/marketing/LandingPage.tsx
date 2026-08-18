@@ -10,6 +10,7 @@ import {
   FileCheck2,
   Fingerprint,
   Layers3,
+  Mail,
   MailCheck,
   MapPin,
   PackageCheck,
@@ -136,7 +137,42 @@ export default function LandingPage({ onLogin, onOpenDemo }: LandingPageProps) {
       </section>
 
       <section className="landing-cta"><div className="cta-orb" /><div><span><i className="cta-logo"><img src="/pesneer-mark.jpeg" alt="Pestneer" /></i> PESTNEER OPERASYON MERKEZİ</span><h2>Pest kontrol şirketinizi<br />geleceğe hazırlayın.</h2><p>Daha düzenli ekipler, daha hızlı saha operasyonları ve daha güçlü müşteri deneyimi.</p></div><button onClick={onLogin}>Giriş yap ve sistemi keşfet <ArrowRight size={18} /></button></section>
-      <footer className="landing-footer"><a className="landing-brand" href="#top"><span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="Pestneer" /></span><div><strong>Pestneer</strong><small>OPERASYONUN GÜVENLİ MERKEZİ</small></div></a><p>© 2026 Pestneer. Pest kontrol operasyon yönetim sistemi.</p><div><a href="#features">Özellikler</a><a href="#security">Güvenlik</a><button onClick={onLogin}>Giriş Yap</button></div></footer>
+      <footer className="landing-footer">
+        <a className="landing-brand" href="#top">
+          <span className="landing-logo-shell">
+            <img src="/pesneer-mark.jpeg" alt="Pestneer" />
+          </span>
+          <div>
+            <strong>Pestneer</strong>
+            <small>OPERASYONUN GÜVENLİ MERKEZİ</small>
+          </div>
+        </a>
+        <p>© 2026 Pestneer. Pest kontrol operasyon yönetim sistemi.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <a
+            href="mailto:pestneer@gmail.com"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              color: '#38bdf8',
+              textDecoration: 'none',
+              fontWeight: 700,
+              fontSize: '11px',
+              padding: '5px 10px',
+              borderRadius: '8px',
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+            }}
+            title="Destek için e-posta gönderin"
+          >
+            <Mail size={13} /> pestneer@gmail.com
+          </a>
+          <a href="#features">Özellikler</a>
+          <a href="#security">Güvenlik</a>
+          <button onClick={onLogin}>Giriş Yap</button>
+        </div>
+      </footer>
     </main>
   );
 }

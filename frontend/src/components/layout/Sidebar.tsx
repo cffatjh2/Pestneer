@@ -8,6 +8,7 @@ import {
   FileText,
   FolderArchive,
   LayoutDashboard,
+  Mail,
   MessagesSquare,
   LogOut,
   Package,
@@ -81,7 +82,27 @@ export default function Sidebar({
 
       <div className="sidebar-bottom">
         <button className={`nav-item ${activeView === 'settings' ? 'active' : ''}`} onClick={() => { setActiveView('settings'); setIsMenuOpen(false); }}><Settings size={19} /><span>Ayarlar</span></button>
-        <div className="support-card"><div className="support-icon"><Activity size={18} /></div><strong>Yardıma mı ihtiyacınız var?</strong><span>Destek ekibimiz yanınızda.</span><button onClick={() => onNotify('Destek talebi ekranı yakında hazır olacak.')}>Destek Merkezi <ArrowUpRight size={14} /></button></div>
+        <div className="support-card">
+          <div className="support-icon"><Mail size={18} /></div>
+          <strong>Yardıma mı ihtiyacınız var?</strong>
+          <span>Destek ve geri bildirim için:</span>
+          <a
+            href="mailto:pestneer@gmail.com"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              marginTop: '9px',
+              color: '#8de5d0',
+              textDecoration: 'none',
+              fontSize: '11px',
+              fontWeight: 700,
+            }}
+            title="Destek için e-posta gönderin"
+          >
+            pestneer@gmail.com <ArrowUpRight size={13} />
+          </a>
+        </div>
         <button className="profile profile-button" onClick={onLogout}>
           <div className="avatar avatar-blue">{initials}</div>
           <div><strong>{userName}</strong><span>{userRole}</span></div>
