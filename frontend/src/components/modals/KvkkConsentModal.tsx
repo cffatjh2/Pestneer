@@ -91,7 +91,29 @@ export default function KvkkConsentModal({
               <span className="kvkk-security-badge">
                 <ShieldCheck size={14} /> PESTNEER GÜVENLİK & UYUM MERKEZİ
               </span>
-              <span className="kvkk-mandatory-pill">İlk Giriş Zorunlu Onay</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="kvkk-mandatory-pill">İlk Giriş Zorunlu Onay</span>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  title="Farklı bir hesapla giriş yapmak için çıkış yapın"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '3px 8px',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '999px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#f87171',
+                    fontSize: '10px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  <LogOut size={11} /> Çıkış
+                </button>
+              </div>
             </div>
             <h2 id="kvkk-title">
               <Scale size={22} className="text-sky-400" />
@@ -101,18 +123,6 @@ export default function KvkkConsentModal({
               6698 sayılı KVKK ve Sağlık Bakanlığı Biyosidal Ürünler Yönetmeliği standartları gereği sisteme devam etmeden önce yasal metinleri inceleyip onaylamanız gerekmektedir.
             </p>
           </header>
-
-          {/* User & Company Identity Badge */}
-          <div className="kvkk-user-bar">
-            <div className="kvkk-user-bar-left">
-              <div className="kvkk-user-avatar">{user.name.charAt(0).toUpperCase()}</div>
-              <div>
-                <strong>{user.name}</strong>
-                <span>{user.email} · {company?.name || 'Pestneer'}</span>
-              </div>
-            </div>
-            <span className="kvkk-role-pill">{user.role}</span>
-          </div>
 
           {/* 3 Interactive Document Cards (Tıklanıp Büyük Ekranda Açılan Metinler) */}
           <div className="kvkk-docs-cards-grid">

@@ -27,10 +27,7 @@ type RoleOption = {
   shortLabel: string;
   description: string;
   icon: LucideIcon;
-  email: string;
-  userName: string;
-  companyName: string;
-  role: string;
+  placeholderEmail: string;
 };
 
 const roleOptions: RoleOption[] = [
@@ -40,10 +37,7 @@ const roleOptions: RoleOption[] = [
     shortLabel: 'Firma sahibi',
     description: 'Yönetim, ekip, finans ve tüm operasyonlar',
     icon: Building2,
-    email: 'onur@demo.pestneer.app',
-    userName: 'Onur Er',
-    companyName: 'Tura Çevre Sağlığı',
-    role: 'Firma Sahibi',
+    placeholderEmail: 'sahip@firmaniz.com',
   },
   {
     id: 'employee',
@@ -51,10 +45,7 @@ const roleOptions: RoleOption[] = [
     shortLabel: 'Firma çalışanı',
     description: 'Atamalar, saha formları ve günlük işler',
     icon: UserRoundCheck,
-    email: 'ali@demo.pestneer.app',
-    userName: 'Ali Özkaya',
-    companyName: 'Tura Çevre Sağlığı',
-    role: 'Saha Uygulayıcısı',
+    placeholderEmail: 'personel@firmaniz.com',
   },
   {
     id: 'customer',
@@ -62,10 +53,7 @@ const roleOptions: RoleOption[] = [
     shortLabel: 'Müşteri',
     description: 'Şubeler, hizmet raporları ve talepler',
     icon: Store,
-    email: 'operasyon@arabica.demo',
-    userName: 'Deniz Kaya',
-    companyName: 'Tura Çevre Sağlığı',
-    role: 'Müşteri Yöneticisi',
+    placeholderEmail: 'musteri@firmaniz.com',
   },
 ];
 
@@ -102,7 +90,7 @@ export default function LoginPage({
   
   // Login State
   const [portal, setPortal] = useState<PortalType>(saved?.portal ?? 'owner');
-  const [companyCode, setCompanyCode] = useState(saved?.companyCode ?? 'TURA-ANKARA');
+  const [companyCode, setCompanyCode] = useState(saved?.companyCode ?? '');
   const [email, setEmail] = useState(saved?.email ?? '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(saved?.rememberMe ?? true);
@@ -336,7 +324,7 @@ export default function LoginPage({
                       value={companyCode}
                       onChange={(event) => setCompanyCode(event.target.value)}
                       autoComplete="organization"
-                      placeholder="Örn: TURA-ANKARA"
+                      placeholder="Örn: FIRMA-KODU"
                       required
                     />
                   </span>
@@ -349,7 +337,7 @@ export default function LoginPage({
                       type="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      placeholder={selectedRole.email}
+                      placeholder={selectedRole.placeholderEmail}
                       autoComplete="email"
                       required
                     />
