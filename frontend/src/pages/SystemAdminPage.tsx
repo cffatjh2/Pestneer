@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock3,
+  Edit3,
   KeyRound,
   Lock,
   LogOut,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
   Sparkles,
   Store,
+  Trash2,
   UserPlus,
 } from 'lucide-react';
 import {
@@ -21,6 +23,7 @@ import {
   createSystemCompany,
   createSystemCustomer,
   createSystemEmployee,
+  deleteSystemCompany,
   extendCompanyTrial,
   getSystemAdmins,
   getSystemCompanies,
@@ -28,6 +31,7 @@ import {
   loginSystemAdmin,
   resetSystemAccountPassword,
   setCompanyTrial,
+  updateSystemCompany,
   type SystemAccount,
   type SystemAdminSession,
   type SystemCompany,
@@ -45,6 +49,9 @@ export default function SystemAdminPage() {
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [isEditCompanyModalOpen, setIsEditCompanyModalOpen] = useState(false);
+  const [isDeleteCompanyModalOpen, setIsDeleteCompanyModalOpen] = useState(false);
+  const [deleteConfirmTag, setDeleteConfirmTag] = useState('');
 
   const load = async () => {
     if (!session) return;
@@ -131,6 +138,58 @@ export default function SystemAdminPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Deneme modu ayarlanamadı.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdateCompany = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!session || !selectedCompany) return;
+    setBusy(true);
+    setError(undefined);
+    setNotice(undefined);
+    const formData = new FormData(event.currentTarget);
+    const companyName = String(formData.get('companyName') ?? '').trim();
+    const companyCode = String(formData.get('companyCode') ?? '').trim();
+    const reportNotificationEmail = String(formData.get('reportNotificationEmail') ?? '').trim();
+    const isActive = formData.get('isActive') === 'true';
+
+    try {
+      const res = await updateSystemCompany(session.accessToken, selectedCompany.id, {
+        companyName,
+        companyCode,
+        reportNotificationEmail: reportNotificationEmail || undefined,
+        isActive,
+      });
+      setNotice(res.message || 'Firma bilgileri ve TAG başarıyla güncellendi.');
+      setIsEditCompanyModalOpen(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Firma güncellenemedi.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteCompany = async () => {
+    if (!session || !selectedCompany) return;
+    if (deleteConfirmTag.trim().toUpperCase() !== selectedCompany.code.trim().toUpperCase()) {
+      setError(`Silme onaylanamadı. Lütfen firmanın tam TAG'ını ('${selectedCompany.code}') yazın.`);
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      const res = await deleteSystemCompany(session.accessToken, selectedCompany.id);
+      setNotice(res.message || 'Firma ve tüm ilişkili verileri kalıcı olarak silindi.');
+      setIsDeleteCompanyModalOpen(false);
+      setDeleteConfirmTag('');
+      setSelectedCompanyId('');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Firma silinemedi.');
     } finally {
       setBusy(false);
     }
@@ -449,6 +508,29 @@ export default function SystemAdminPage() {
                       <RefreshCw size={16} /> 7 Günlük Deneme Moduna Al
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    className="license-btn-extend"
+                    onClick={() => setIsEditCompanyModalOpen(true)}
+                    disabled={busy}
+                    style={{ background: 'linear-gradient(135deg, #0284c7, #0369a1)', color: '#ffffff', borderColor: '#38bdf8' }}
+                  >
+                    <Edit3 size={16} /> Firmayı & TAG'ı Düzenle
+                  </button>
+
+                  <button
+                    type="button"
+                    className="license-btn-trial"
+                    onClick={() => {
+                      setDeleteConfirmTag('');
+                      setIsDeleteCompanyModalOpen(true);
+                    }}
+                    disabled={busy}
+                    style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.35)' }}
+                  >
+                    <Trash2 size={16} /> Firmayı Kalıcı Sil
+                  </button>
                 </div>
               </div>
 
@@ -588,6 +670,26 @@ export default function SystemAdminPage() {
           )}
         </section>
       </div>
+
+      {isEditCompanyModalOpen && selectedCompany && (
+        <EditCompanyModal
+          company={selectedCompany}
+          onClose={() => setIsEditCompanyModalOpen(false)}
+          onSubmit={handleUpdateCompany}
+          busy={busy}
+        />
+      )}
+
+      {isDeleteCompanyModalOpen && selectedCompany && (
+        <DeleteCompanyModal
+          company={selectedCompany}
+          confirmCode={deleteConfirmTag}
+          setConfirmCode={setDeleteConfirmTag}
+          onClose={() => setIsDeleteCompanyModalOpen(false)}
+          onConfirm={handleDeleteCompany}
+          busy={busy}
+        />
+      )}
     </main>
   );
 }
@@ -797,4 +899,193 @@ function loadSession(): SystemAdminSession | null {
     window.sessionStorage.removeItem(STORAGE_KEY);
     return null;
   }
+}
+
+function EditCompanyModal({
+  company,
+  onClose,
+  onSubmit,
+  busy,
+}: {
+  company: SystemCompany;
+  onClose: () => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => Promise<void>;
+  busy: boolean;
+}) {
+  return (
+    <div className="modal-layer" role="dialog" aria-modal="true" style={{ zIndex: 1000 }}>
+      <div className="modal" style={{ maxWidth: '520px', background: '#0b1d30', color: '#f8fafc', border: '1px solid #1e3a5f', borderRadius: '16px', padding: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#f8fafc' }}>🏢 Firmayı & TAG'ı Düzenle</h2>
+            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0' }}>Firma adı, giriş kodu (TAG) ve bildirim ayarlarını güncelleyin.</p>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} style={{ background: 'transparent', border: 0, color: '#94a3b8', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+        </div>
+
+        <form onSubmit={onSubmit} autoComplete="off" data-lpignore="true">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>
+              Firma Adı
+              <input
+                name="companyName"
+                defaultValue={company.legalName}
+                required
+                minLength={2}
+                maxLength={200}
+                style={{ padding: '10px 14px', borderRadius: '8px', background: '#071626', border: '1px solid #1e3a5f', color: '#f8fafc', fontSize: '13px' }}
+              />
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>
+              Firma Kodu (TAG)
+              <input
+                name="companyCode"
+                defaultValue={company.code}
+                required
+                minLength={2}
+                maxLength={40}
+                placeholder="Örn: NOVA"
+                style={{ padding: '10px 14px', borderRadius: '8px', background: '#071626', border: '1px solid #1e3a5f', color: '#38bdf8', fontWeight: '700', fontSize: '13px', textTransform: 'uppercase' }}
+              />
+              <small style={{ color: '#64748b', fontSize: '11px' }}>Kullanıcılar sisteme giriş yaparken bu TAG'ı yazacaktır. Başka firma ile aynı olamaz.</small>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>
+              Rapor Bildirim E-postası
+              <input
+                name="reportNotificationEmail"
+                type="email"
+                defaultValue={company.reportNotificationEmail || ''}
+                placeholder="rapor@firma.com"
+                autoComplete="off"
+                style={{ padding: '10px 14px', borderRadius: '8px', background: '#071626', border: '1px solid #1e3a5f', color: '#f8fafc', fontSize: '13px' }}
+              />
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>
+              Firma Durumu
+              <select
+                name="isActive"
+                defaultValue={company.isActive ? 'true' : 'false'}
+                style={{ padding: '10px 14px', borderRadius: '8px', background: '#071626', border: '1px solid #1e3a5f', color: '#f8fafc', fontSize: '13px' }}
+              >
+                <option value="true">Aktif (Giriş Açık)</option>
+                <option value="false">Pasif (Giriş Kilitli)</option>
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
+              disabled={busy}
+              style={{ padding: '10px 18px', borderRadius: '8px', background: '#172e48', border: '1px solid #234468', color: '#cbd5e1', cursor: 'pointer' }}
+            >
+              Vazgeç
+            </button>
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={busy}
+              style={{ padding: '10px 22px', borderRadius: '8px', background: '#0284c7', border: 0, color: '#fff', fontWeight: '700', cursor: 'pointer' }}
+            >
+              {busy ? 'Kaydediliyor…' : 'Değişiklikleri Kaydet'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DeleteCompanyModal({
+  company,
+  confirmCode,
+  setConfirmCode,
+  onClose,
+  onConfirm,
+  busy,
+}: {
+  company: SystemCompany;
+  confirmCode: string;
+  setConfirmCode: (val: string) => void;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+  busy: boolean;
+}) {
+  const isMatch = confirmCode.trim().toUpperCase() === company.code.trim().toUpperCase();
+
+  return (
+    <div className="modal-layer" role="dialog" aria-modal="true" style={{ zIndex: 1000 }}>
+      <div className="modal" style={{ maxWidth: '520px', background: '#1c0e0e', color: '#f8fafc', border: '1px solid #7f1d1d', borderRadius: '16px', padding: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', color: '#ef4444' }}>
+          <ShieldAlert size={28} />
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#fca5a5' }}>Firmayı Kalıcı Olarak Sil</h2>
+            <p style={{ fontSize: '12px', color: '#f87171', margin: '2px 0 0' }}>Bu işlem geri alınamaz!</p>
+          </div>
+        </div>
+
+        <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px', padding: '14px', fontSize: '12px', color: '#fecaca', lineHeight: 1.6, marginBottom: '16px' }}>
+          <strong style={{ color: '#fff', display: 'block', marginBottom: '6px' }}>
+            {company.legalName} ({company.code}) firmasını ve tüm verilerini silmek üzeresiniz.
+          </strong>
+          <ul style={{ margin: '0 0 0 16px', padding: 0 }}>
+            <li>{company.employeeCount} çalışan / personel hesabı</li>
+            <li>{company.customerCount} müşteri ve bağlı tüm şubeler</li>
+            <li>Tüm servis formları, iş emirleri, teklifler, sözleşmeler ve geçmiş kayıtlar</li>
+          </ul>
+          <span style={{ display: 'block', marginTop: '6px', fontWeight: '700', color: '#f87171' }}>
+            Veritabanından tamamen ve kalıcı olarak temizlenecektir.
+          </span>
+        </div>
+
+        <div style={{ marginBottom: '18px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', fontWeight: '600', color: '#fca5a5' }}>
+            Silme işlemini onaylamak için lütfen firmanın TAG'ını (<strong>{company.code}</strong>) yazın:
+            <input
+              value={confirmCode}
+              onChange={(e) => setConfirmCode(e.target.value)}
+              placeholder={company.code}
+              autoComplete="off"
+              style={{ padding: '10px 14px', borderRadius: '8px', background: '#0a0505', border: isMatch ? '1px solid #22c55e' : '1px solid #7f1d1d', color: isMatch ? '#4ade80' : '#fca5a5', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}
+            />
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onClose}
+            disabled={busy}
+            style={{ padding: '10px 18px', borderRadius: '8px', background: '#2e1212', border: '1px solid #4a1d1d', color: '#fca5a5', cursor: 'pointer' }}
+          >
+            Vazgeç
+          </button>
+          <button
+            type="button"
+            className="danger-button"
+            onClick={onConfirm}
+            disabled={busy || !isMatch}
+            style={{
+              padding: '10px 22px',
+              borderRadius: '8px',
+              background: isMatch ? '#dc2626' : '#7f1d1d',
+              border: 0,
+              color: '#fff',
+              fontWeight: '700',
+              cursor: isMatch ? 'pointer' : 'not-allowed',
+              opacity: isMatch ? 1 : 0.6,
+            }}
+          >
+            {busy ? 'Siliniyor…' : 'Firmayı ve Tüm Verilerini Kalıcı Sil'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

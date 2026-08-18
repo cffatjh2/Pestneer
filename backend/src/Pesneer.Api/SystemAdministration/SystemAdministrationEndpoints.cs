@@ -24,6 +24,8 @@ public static class SystemAdministrationEndpoints
         group.MapPost("/companies/{companyId:guid}/convert-to-real", ConvertCompanyToRealAsync);
         group.MapPost("/companies/{companyId:guid}/extend-trial", ExtendCompanyTrialAsync);
         group.MapPost("/companies/{companyId:guid}/set-trial", SetCompanyTrialAsync);
+        group.MapPut("/companies/{companyId:guid}", UpdateCompanyAsync);
+        group.MapDelete("/companies/{companyId:guid}", DeleteCompanyAsync);
         return app;
     }
 
@@ -283,6 +285,123 @@ public static class SystemAdministrationEndpoints
         return Results.Created($"/api/system-control/companies/{companyId}/customers/{customer.Id}", new { customer.Id, customer.LegalName, customer.Code, accountId = account.Id });
     }
 
+    private static async Task<IResult> UpdateCompanyAsync(Guid companyId, UpdateSystemCompanyRequest request, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var company = await dbContext.Companies.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == companyId, cancellationToken);
+        if (company is null) return Results.NotFound(new { message = "Firma bulunamadı." });
+
+        var companyName = request.CompanyName?.Trim();
+        if (string.IsNullOrWhiteSpace(companyName) || companyName.Length < 2)
+            return Results.BadRequest(new { message = "Firma adı en az 2 karakter olmalıdır." });
+
+        var code = request.CompanyCode?.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(code) || code.Length is < 2 or > 40)
+            return Results.BadRequest(new { message = "Firma kodu (TAG) 2-40 karakter arasında olmalıdır." });
+
+        if (await dbContext.Companies.IgnoreQueryFilters().AnyAsync(c => c.Id != companyId && c.Code == code, cancellationToken))
+            return Results.Conflict(new { message = $"'{code}' firma kodu (TAG) zaten başka bir firma tarafından kullanılıyor." });
+
+        company.LegalName = companyName;
+        company.Code = code;
+        if (request.ReportNotificationEmail is not null)
+        {
+            var email = request.ReportNotificationEmail.Trim();
+            if (!string.IsNullOrEmpty(email) && !MailAddress.TryCreate(email, out _))
+                return Results.BadRequest(new { message = "Geçerli bir bildirim e-posta adresi giriniz." });
+            company.ReportNotificationEmail = string.IsNullOrEmpty(email) ? null : email;
+        }
+        if (request.IsActive.HasValue)
+        {
+            company.IsActive = request.IsActive.Value;
+        }
+
+        await dbContext.SaveSystemAdministrationChangesAsync(companyId, cancellationToken);
+        return Results.Ok(new { message = $"'{company.LegalName}' bilgileri ve TAG'ı ({company.Code}) başarıyla güncellendi.", company.Id, company.LegalName, company.Code, company.IsActive, company.ReportNotificationEmail });
+    }
+
+    private static async Task<IResult> DeleteCompanyAsync(Guid companyId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var company = await dbContext.Companies.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == companyId, cancellationToken);
+        if (company is null) return Results.NotFound(new { message = "Firma bulunamadı." });
+
+        var staffAccountIds = await dbContext.CompanyMemberships.IgnoreQueryFilters()
+            .Where(m => m.CompanyId == companyId)
+            .Select(m => m.AccountId)
+            .ToListAsync(cancellationToken);
+
+        var customerAccountIds = await dbContext.CustomerMemberships.IgnoreQueryFilters()
+            .Where(m => m.CompanyId == companyId)
+            .Select(m => m.AccountId)
+            .ToListAsync(cancellationToken);
+
+        var candidateAccountIds = staffAccountIds.Concat(customerAccountIds).Distinct().ToList();
+
+        dbContext.CompanyEmailConnections.RemoveRange(dbContext.CompanyEmailConnections.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.ReportEmailDeliveries.RemoveRange(dbContext.ReportEmailDeliveries.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.ServiceReportPestObservations.RemoveRange(dbContext.ServiceReportPestObservations.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.ServiceReportStations.RemoveRange(dbContext.ServiceReportStations.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.ServiceReportProducts.RemoveRange(dbContext.ServiceReportProducts.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.ServiceReports.RemoveRange(dbContext.ServiceReports.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkOrderStatusHistories.RemoveRange(dbContext.WorkOrderStatusHistories.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkOrderPhotos.RemoveRange(dbContext.WorkOrderPhotos.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkOrderAssignments.RemoveRange(dbContext.WorkOrderAssignments.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkOrderVisitSessions.RemoveRange(dbContext.WorkOrderVisitSessions.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkOrderEconomics.RemoveRange(dbContext.WorkOrderEconomics.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkOrders.RemoveRange(dbContext.WorkOrders.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.StationActivations.RemoveRange(dbContext.StationActivations.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.AuditPackageItems.RemoveRange(dbContext.AuditPackageItems.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.AuditPackages.RemoveRange(dbContext.AuditPackages.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.QualityInspections.RemoveRange(dbContext.QualityInspections.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CorrectiveActionEvidence.RemoveRange(dbContext.CorrectiveActionEvidence.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CorrectiveActionHistories.RemoveRange(dbContext.CorrectiveActionHistories.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CorrectiveActions.RemoveRange(dbContext.CorrectiveActions.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.QualityDocuments.RemoveRange(dbContext.QualityDocuments.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.QualityAnalyses.RemoveRange(dbContext.QualityAnalyses.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WasteDisposalEvidence.RemoveRange(dbContext.WasteDisposalEvidence.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WasteDisposalRecords.RemoveRange(dbContext.WasteDisposalRecords.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.SitePlans.RemoveRange(dbContext.SitePlans.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkShiftBreaks.RemoveRange(dbContext.WorkShiftBreaks.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.WorkShifts.RemoveRange(dbContext.WorkShifts.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.VehicleStockMovements.RemoveRange(dbContext.VehicleStockMovements.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.VehicleStockCheckItems.RemoveRange(dbContext.VehicleStockCheckItems.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.VehicleStockChecks.RemoveRange(dbContext.VehicleStockChecks.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.VehicleStockItems.RemoveRange(dbContext.VehicleStockItems.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.Vehicles.RemoveRange(dbContext.Vehicles.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.InventoryMovements.RemoveRange(dbContext.InventoryMovements.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.InventoryItems.RemoveRange(dbContext.InventoryItems.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CalendarEntries.RemoveRange(dbContext.CalendarEntries.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.EmergencyRequestHistories.RemoveRange(dbContext.EmergencyRequestHistories.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.EmergencyRequests.RemoveRange(dbContext.EmergencyRequests.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.ReceivableEntries.RemoveRange(dbContext.ReceivableEntries.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.ContractServicePlans.RemoveRange(dbContext.ContractServicePlans.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CustomerContracts.RemoveRange(dbContext.CustomerContracts.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CommercialProposalLines.RemoveRange(dbContext.CommercialProposalLines.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CommercialProposals.RemoveRange(dbContext.CommercialProposals.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CustomerBranches.RemoveRange(dbContext.CustomerBranches.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CustomerMemberships.RemoveRange(dbContext.CustomerMemberships.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.Customers.RemoveRange(dbContext.Customers.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+        dbContext.CompanyMemberships.RemoveRange(dbContext.CompanyMemberships.IgnoreQueryFilters().Where(e => e.CompanyId == companyId));
+
+        foreach (var accId in candidateAccountIds)
+        {
+            var otherCompanyMemberships = await dbContext.CompanyMemberships.IgnoreQueryFilters().AnyAsync(m => m.AccountId == accId && m.CompanyId != companyId, cancellationToken);
+            var otherCustomerMemberships = await dbContext.CustomerMemberships.IgnoreQueryFilters().AnyAsync(m => m.AccountId == accId && m.CompanyId != companyId, cancellationToken);
+            if (!otherCompanyMemberships && !otherCustomerMemberships)
+            {
+                var account = await dbContext.Accounts.IgnoreQueryFilters().SingleOrDefaultAsync(a => a.Id == accId && a.Portal != PortalType.SystemAdmin, cancellationToken);
+                if (account is not null)
+                {
+                    dbContext.Accounts.Remove(account);
+                }
+            }
+        }
+
+        dbContext.Companies.Remove(company);
+
+        await dbContext.SaveSystemAdministrationChangesAsync(companyId, cancellationToken);
+        return Results.Ok(new { message = $"'{company.LegalName}' ({company.Code}) firması ve tüm ilişkili verileri başarıyla kalıcı olarak silindi.", id = companyId });
+    }
+
     private static Account CreateAccount(string email, string name, string? phone, string password, PortalType portal, IPasswordHasher<Account> hasher)
     {
         var account = new Account { Id = Guid.NewGuid(), Email = email.Trim(), NormalizedEmail = email.Trim().ToUpperInvariant(), DisplayName = name.Trim(), PhoneNumber = phone?.Trim(), PasswordHash = string.Empty, Portal = portal };
@@ -303,6 +422,7 @@ public sealed record CreateSystemAdminRequest(string Name, string Email, string 
 public sealed record ResetSystemAccountPasswordRequest(string NewPassword, string NewPasswordConfirmation);
 public sealed record SystemAccountRecord(Guid Id, string Name, string Email, string? Phone, string Portal, string Role, bool HasAcceptedTerms = false, DateTimeOffset? CreatedAt = null);
 public sealed record CreateSystemCompanyRequest(string CompanyName, string CompanyCode, string OwnerName, string OwnerEmail, string OwnerPassword, string? OwnerPhone, bool IsTrial = true);
+public sealed record UpdateSystemCompanyRequest(string CompanyName, string CompanyCode, string? ReportNotificationEmail, bool? IsActive);
 public sealed record CreateSystemEmployeeRequest(string Name, string Email, string Password, string? Phone, string Role, bool CanSelfSchedule);
 public sealed record CreateSystemCustomerRequest(string CustomerName, string? CustomerCode, string ContactName, string Email, string Password, string? Phone, string? Address, string? City, string? District, string? MapUrl);
 public sealed record ExtendTrialRequest(int? Days);
