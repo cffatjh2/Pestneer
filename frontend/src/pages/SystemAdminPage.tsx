@@ -71,10 +71,14 @@ export default function SystemAdminPage() {
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Hesaplar yüklenemedi.'));
   }, [session?.accessToken, selectedCompanyId]);
 
-  if (!session) {
+  if (!session || !session.accessToken) {
     return (
       <SystemLogin
         onLogin={(value) => {
+          if (!value || !value.accessToken) {
+            setError('Geçersiz sistem yöneticisi oturumu.');
+            return;
+          }
           window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
           setSession(value);
         }}
@@ -596,10 +600,21 @@ function SystemLogin({ onLogin }: { onLogin: (session: SystemAdminSession) => vo
     setBusy(true);
     setError(undefined);
     const form = new FormData(event.currentTarget);
+    const email = String(form.get('email') || '').trim();
+    const password = String(form.get('password') || '');
+    if (!email || !password) {
+      setError('E-posta ve şifre zorunludur.');
+      setBusy(false);
+      return;
+    }
     try {
-      onLogin(await loginSystemAdmin(String(form.get('email')), String(form.get('password'))));
+      const result = await loginSystemAdmin(email, password);
+      if (!result || !result.accessToken) {
+        throw new Error('Sistem yöneticisi girişi doğrulanamadı.');
+      }
+      onLogin(result);
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Giriş doğrulanamadı.');
+      setError(loginError instanceof Error ? loginError.message : 'E-posta veya şifre hatalı.');
     } finally {
       setBusy(false);
     }
@@ -768,13 +783,18 @@ function portalLabel(portal: SystemAccount['portal']) {
   return ({ Owner: 'Firma sahibi', Employee: 'Personel', Customer: 'Müşteri', SystemAdmin: 'Sistem admini' } as const)[portal];
 }
 
-function loadSession() {
+function loadSession(): SystemAdminSession | null {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const value = JSON.parse(raw) as SystemAdminSession;
+    if (!value || !value.accessToken || typeof value.accessToken !== 'string') {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
     return new Date(value.expiresAt).getTime() > Date.now() ? value : null;
   } catch {
+    window.sessionStorage.removeItem(STORAGE_KEY);
     return null;
   }
 }

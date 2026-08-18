@@ -37,16 +37,17 @@ public static class SystemAdministrationEndpoints
         var accounts = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.NormalizedEmail == normalizedEmail && item.IsActive)
             .ToListAsync(cancellationToken);
+
         var bootstrapEmail = configuration["SystemAdmin:Email"]?.Trim();
         Account? matched = null;
-        foreach (var account in accounts.OrderBy(item => item.Portal == PortalType.SystemAdmin ? 0 : item.Portal == PortalType.Owner ? 1 : 2))
+        foreach (var account in accounts)
         {
             if (passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
                 continue;
 
             var isConfiguredOperator = !string.IsNullOrWhiteSpace(bootstrapEmail)
-                && bootstrapEmail.Equals(account.Email, StringComparison.OrdinalIgnoreCase)
-                && account.Portal is PortalType.SystemAdmin or PortalType.Owner;
+                && bootstrapEmail.Equals(account.Email, StringComparison.OrdinalIgnoreCase);
+
             if (account.Portal == PortalType.SystemAdmin || isConfiguredOperator)
             {
                 matched = account;
@@ -55,7 +56,7 @@ public static class SystemAdministrationEndpoints
         }
 
         if (matched is null)
-            return Results.Json(new { message = "Sistem yöneticisi e-postası veya şifre hatalı." }, statusCode: StatusCodes.Status401Unauthorized);
+            return Results.Json(new { message = "Yetkili sistem yöneticisi bulunamadı veya şifre hatalı." }, statusCode: StatusCodes.Status401Unauthorized);
 
         var token = tokens.CreateSystemAdmin(matched);
         return Results.Ok(new { accessToken = token.Value, expiresAt = token.ExpiresAt, user = new { matched.Id, matched.DisplayName, matched.Email } });

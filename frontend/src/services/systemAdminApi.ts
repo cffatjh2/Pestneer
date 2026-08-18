@@ -45,10 +45,30 @@ export const getSystemCompanyAccounts = (token: string, companyId: string) => re
 export const resetSystemAccountPassword = (token: string, accountId: string, newPassword: string, newPasswordConfirmation: string) => request<{ message: string }>(`/api/system-control/accounts/${accountId}/password`, token, { method: 'PUT', body: JSON.stringify({ newPassword, newPasswordConfirmation }) });
 
 async function request<T = unknown>(path: string, token?: string, init?: RequestInit): Promise<T> {
-  const response = await apiFetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) } });
+  const response = await apiFetch(path, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
+  if (!contentType.includes('application/json') && response.status !== 204) {
+    throw new Error('API servisi yanıt vermedi veya sunucu geçersiz yanıt döndürdü.');
+  }
+
   if (!response.ok) {
-    const body = await response.json().catch(() => ({})) as { message?: string; title?: string; errors?: Record<string, string[]> };
-    throw new Error(body.message ?? Object.values(body.errors ?? {}).flat()[0] ?? body.title ?? 'İşlem tamamlanamadı.');
+    const body = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      title?: string;
+      errors?: Record<string, string[]>;
+    };
+    throw new Error(
+      body.message ?? Object.values(body.errors ?? {}).flat()[0] ?? body.title ?? 'Giriş bilgileri hatalı veya yetkisiz erişim.'
+    );
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
