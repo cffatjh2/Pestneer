@@ -302,20 +302,45 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
 
 static string ToNpgsqlConnectionString(string databaseUrl)
 {
-    var uri = new Uri(databaseUrl);
-    var credentials = uri.UserInfo.Split(':', 2);
-    if (credentials.Length != 2) throw new InvalidOperationException("DATABASE_URL kullanıcı bilgileri geçerli değil.");
-
-    return new NpgsqlConnectionStringBuilder
+    if (databaseUrl.Contains(';') && !databaseUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) && !databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
     {
-        Host = uri.Host,
-        Port = uri.IsDefaultPort ? 5432 : uri.Port,
-        Username = Uri.UnescapeDataString(credentials[0]),
-        Password = Uri.UnescapeDataString(credentials[1]),
-        Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
-        SslMode = SslMode.Prefer,
-        Pooling = true
-    }.ConnectionString;
+        var customBuilder = new NpgsqlConnectionStringBuilder(databaseUrl)
+        {
+            SslMode = SslMode.Require,
+            TrustServerCertificate = true
+        };
+        return customBuilder.ConnectionString;
+    }
+
+    try
+    {
+        var uri = new Uri(databaseUrl);
+        var credentials = uri.UserInfo.Split(':', 2);
+        if (credentials.Length != 2) throw new InvalidOperationException("DATABASE_URL kullanıcı bilgileri geçerli değil.");
+
+        return new NpgsqlConnectionStringBuilder
+        {
+            Host = uri.Host,
+            Port = uri.IsDefaultPort ? 5432 : uri.Port,
+            Username = Uri.UnescapeDataString(credentials[0]),
+            Password = Uri.UnescapeDataString(credentials[1]),
+            Database = string.IsNullOrWhiteSpace(uri.AbsolutePath.TrimStart('/')) ? "postgres" : Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
+            SslMode = SslMode.Require,
+            TrustServerCertificate = true,
+            Timeout = 30,
+            CommandTimeout = 60,
+            Pooling = true
+        }.ConnectionString;
+    }
+    catch
+    {
+        var fallbackBuilder = new NpgsqlConnectionStringBuilder(databaseUrl)
+        {
+            SslMode = SslMode.Require,
+            TrustServerCertificate = true
+        };
+        return fallbackBuilder.ConnectionString;
+    }
 }
 
 static async Task<IResult> SignInAsync(
