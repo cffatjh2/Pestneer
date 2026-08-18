@@ -302,45 +302,52 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
 
 static string ToNpgsqlConnectionString(string databaseUrl)
 {
-    if (databaseUrl.Contains(';') && !databaseUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) && !databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    var trimmed = databaseUrl.Trim().Trim('\'', '"');
+
+    if (trimmed.Contains(';') || (trimmed.Contains('=') && !trimmed.StartsWith("postgres", StringComparison.OrdinalIgnoreCase)))
     {
-        var customBuilder = new NpgsqlConnectionStringBuilder(databaseUrl)
+        var customBuilder = new NpgsqlConnectionStringBuilder(trimmed)
         {
-            SslMode = SslMode.Require,
-            TrustServerCertificate = true
+            SslMode = SslMode.Require
         };
         return customBuilder.ConnectionString;
     }
 
-    try
+    var match = System.Text.RegularExpressions.Regex.Match(
+        trimmed,
+        @"^(?:postgres|postgresql):\/\/(?<user>[^:]+):(?<pass>.+)@(?<host>[^:\/\?]+)(?::(?<port>\d+))?(?:\/(?<db>[^\?]+))?",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    if (match.Success)
     {
-        var uri = new Uri(databaseUrl);
-        var credentials = uri.UserInfo.Split(':', 2);
-        if (credentials.Length != 2) throw new InvalidOperationException("DATABASE_URL kullanıcı bilgileri geçerli değil.");
+        var user = Uri.UnescapeDataString(match.Groups["user"].Value);
+        var pass = Uri.UnescapeDataString(match.Groups["pass"].Value);
+        var host = match.Groups["host"].Value;
+        var portStr = match.Groups["port"].Value;
+        var port = int.TryParse(portStr, out var p) ? p : 5432;
+        var db = match.Groups["db"].Success && !string.IsNullOrWhiteSpace(match.Groups["db"].Value)
+            ? Uri.UnescapeDataString(match.Groups["db"].Value)
+            : "postgres";
 
         return new NpgsqlConnectionStringBuilder
         {
-            Host = uri.Host,
-            Port = uri.IsDefaultPort ? 5432 : uri.Port,
-            Username = Uri.UnescapeDataString(credentials[0]),
-            Password = Uri.UnescapeDataString(credentials[1]),
-            Database = string.IsNullOrWhiteSpace(uri.AbsolutePath.TrimStart('/')) ? "postgres" : Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
+            Host = host,
+            Port = port,
+            Username = user,
+            Password = pass,
+            Database = db,
             SslMode = SslMode.Require,
-            TrustServerCertificate = true,
             Timeout = 30,
             CommandTimeout = 60,
             Pooling = true
         }.ConnectionString;
     }
-    catch
+
+    var fallback = new NpgsqlConnectionStringBuilder(trimmed)
     {
-        var fallbackBuilder = new NpgsqlConnectionStringBuilder(databaseUrl)
-        {
-            SslMode = SslMode.Require,
-            TrustServerCertificate = true
-        };
-        return fallbackBuilder.ConnectionString;
-    }
+        SslMode = SslMode.Require
+    };
+    return fallback.ConnectionString;
 }
 
 static async Task<IResult> SignInAsync(
