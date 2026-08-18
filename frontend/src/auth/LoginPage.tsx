@@ -104,7 +104,6 @@ export default function LoginPage({
   // Demo Register State
   const [demoCompanyName, setDemoCompanyName] = useState('');
   const [demoCompanyCode, setDemoCompanyCode] = useState('');
-  const [hasEditedCode, setHasEditedCode] = useState(false);
   const [demoFullName, setDemoFullName] = useState('');
   const [demoEmail, setDemoEmail] = useState('');
   const [demoPhone, setDemoPhone] = useState('');
@@ -112,39 +111,6 @@ export default function LoginPage({
   const [showDemoPassword, setShowDemoPassword] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
-
-  const handleCompanyNameChange = (val: string) => {
-    setDemoCompanyName(val);
-    if (!hasEditedCode) {
-      const words = val
-        .replace(/ç/gi, 'C')
-        .replace(/ğ/gi, 'G')
-        .replace(/ı/gi, 'I')
-        .replace(/İ/gi, 'I')
-        .replace(/i/gi, 'I')
-        .replace(/ö/gi, 'O')
-        .replace(/ş/gi, 'S')
-        .replace(/ü/gi, 'U')
-        .toUpperCase()
-        .replace(/[^A-Z0-9\s]/g, ' ')
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-      if (words.length > 0) {
-        const first = words[0];
-        if (first.length >= 3) {
-          setDemoCompanyCode(first.slice(0, 14));
-        } else if (words.length > 1) {
-          setDemoCompanyCode((first + words[1]).slice(0, 14));
-        } else {
-          setDemoCompanyCode(first);
-        }
-      } else {
-        setDemoCompanyCode('');
-      }
-    }
-  };
 
   const selectedRole = useMemo(() => roleOptions.find((option) => option.id === portal)!, [portal]);
 
@@ -504,8 +470,8 @@ export default function LoginPage({
                     <Building2 size={18} />
                     <input
                       value={demoCompanyName}
-                      onChange={(event) => handleCompanyNameChange(event.target.value)}
-                      placeholder="Örn: NovaPest Çevre Sağlığı Ltd."
+                      onChange={(event) => setDemoCompanyName(event.target.value)}
+                      placeholder="Örn: Nova Pest Çevre Sağlığı Ltd."
                       required
                     />
                   </span>
@@ -520,18 +486,15 @@ export default function LoginPage({
                     <Hash size={18} />
                     <input
                       value={demoCompanyCode}
-                      onChange={(event) => {
-                        setDemoCompanyCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''));
-                        setHasEditedCode(true);
-                      }}
-                      placeholder="Firma giriş etiketi (Örn: NOVAPEST)"
+                      onChange={(event) => setDemoCompanyCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                      placeholder="Örn: NOVA"
                       maxLength={20}
                       autoCapitalize="characters"
                       required
                     />
                   </span>
                   <small style={{ color: '#64748b', fontSize: '11px', marginTop: '3px', display: 'block' }}>
-                    💡 Sisteme ve personellerinizin paneline giriş yaparken bu firma etiketi (TAG) kullanılacaktır.
+                    💡 Giriş yaparken kullanacağınız benzersiz firma etiketinizi (TAG) buraya manuel girin.
                   </small>
                 </label>
 
