@@ -67,16 +67,20 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
         if (report) setReferenceReport(report);
         setCatalog(loadedCatalog);
 
-        // Auto aggregate products applied in station activations
+        // Auto aggregate products & consumables applied in station activations
         if (stationActivation?.stations?.length) {
-          const productMap = new Map<string, { productName: string; unit: string; totalAmount: number }>();
+          const productMap = new Map<string, { productName: string; unit: string; totalAmount: number; isConsumable?: boolean }>();
+          const consumableList: { name: string; quantity: number }[] = [];
           let appliedStationCount = 0;
 
           for (const s of stationActivation.stations) {
+            let hasAnyUsage = false;
+
+            // 1. Biocide application
             if (s.appliedProductName && s.appliedAmount && s.appliedAmount > 0) {
-              appliedStationCount++;
+              hasAnyUsage = true;
               const unit = s.appliedUnit || 'Gram';
-              const key = `${s.appliedProductName.trim().toUpperCase()}|${unit.toUpperCase()}`;
+              const key = `BIOCIDE:${s.appliedProductName.trim().toUpperCase()}|${unit.toUpperCase()}`;
               const cur = productMap.get(key);
               if (cur) {
                 cur.totalAmount += Number(s.appliedAmount);
@@ -85,9 +89,58 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
                   productName: s.appliedProductName.trim(),
                   unit,
                   totalAmount: Number(s.appliedAmount),
+                  isConsumable: false,
                 });
               }
             }
+
+            // 2. Consumable & replacement part
+            if (s.replacementProductName && s.replacementQuantity && s.replacementQuantity > 0) {
+              hasAnyUsage = true;
+              const unit = s.replacementUnit || 'Adet';
+              const key = `CONSUMABLE:${s.replacementProductName.trim().toUpperCase()}|${unit.toUpperCase()}`;
+              const cur = productMap.get(key);
+              if (cur) {
+                cur.totalAmount += Number(s.replacementQuantity);
+              } else {
+                productMap.set(key, {
+                  productName: s.replacementProductName.trim(),
+                  unit,
+                  totalAmount: Number(s.replacementQuantity),
+                  isConsumable: true,
+                });
+              }
+            } else if (s.stickyPlateChanged) {
+              hasAnyUsage = true;
+              const key = 'CONSUMABLE:FARE & SIÇAN YAPIŞKANLI LEVHA (PLAKA)|ADET';
+              const cur = productMap.get(key);
+              if (cur) {
+                cur.totalAmount += 1;
+              } else {
+                productMap.set(key, {
+                  productName: 'Fare & Sıçan Yapışkanlı Levha (Plaka)',
+                  unit: 'Adet',
+                  totalAmount: 1,
+                  isConsumable: true,
+                });
+              }
+            } else if (s.stationReplaced) {
+              hasAnyUsage = true;
+              const key = 'CONSUMABLE:KEMIRGEN YEMLEME İSTASYONU GÖVDESI|ADET';
+              const cur = productMap.get(key);
+              if (cur) {
+                cur.totalAmount += 1;
+              } else {
+                productMap.set(key, {
+                  productName: 'Kemirgen Yemleme İstasyonu Gövdesi',
+                  unit: 'Adet',
+                  totalAmount: 1,
+                  isConsumable: true,
+                });
+              }
+            }
+
+            if (hasAnyUsage) appliedStationCount++;
           }
 
           if (productMap.size > 0) {
@@ -102,9 +155,17 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
                 unit: p.unit,
                 licenseNumber: stockMatch?.licenseNumber || '',
                 licenseDocumentId: stockMatch?.licenseDocumentId,
-                applicationMethod: p.unit === 'Gram' ? 'Yemleme / İstasyon İçi' : p.unit === 'Mililitre' ? 'Püskürtme / Rezidüel' : 'İstasyon İçi Yerleşim',
-                activeIngredient: '',
-                antidote: p.productName.toLowerCase().includes('brodifacoum') || p.productName.toLowerCase().includes('bromadiolone') || p.productName.toLowerCase().includes('difenacoum')
+                applicationMethod: p.isConsumable
+                  ? 'Sarf Malzeme / Parça Değişimi'
+                  : p.unit === 'Gram'
+                  ? 'Yemleme / İstasyon İçi'
+                  : p.unit === 'Mililitre'
+                  ? 'Püskürtme / Rezidüel'
+                  : 'İstasyon İçi Yerleşim',
+                activeIngredient: p.isConsumable ? 'Sarf Malzemesi' : '',
+                antidote: p.isConsumable
+                  ? 'Gerektirmez'
+                  : p.productName.toLowerCase().includes('brodifacoum') || p.productName.toLowerCase().includes('bromadiolone') || p.productName.toLowerCase().includes('difenacoum')
                   ? 'K1 Vitamini (Fitomenadion)'
                   : 'Semptomatik tedavi',
                 dilutionRate: '',
@@ -112,10 +173,21 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
               };
             });
 
+            // Build consumable summary string for EK-1
+            const consumableItems = Array.from(productMap.values()).filter((p) => p.isConsumable);
+            const consumableSummary = consumableItems.map((c) => `${c.totalAmount} ${c.unit} ${c.productName}`).join(', ');
+
             // Only auto-populate if existing report has no products or default blank product
             if (!existing?.products?.length || (existing.products.length === 1 && !existing.products[0].productName)) {
               setProducts(aggregated);
-              setAutoAggregatedNotice(`✨ İstasyon ziyaretlerinde kullanılan ${productMap.size} çeşit ürün ve toplam miktarlar (${appliedStationCount} istasyondan) otomatik toplanıp Ek-1 formuna aktarıldı. Tekrar ürün/ilaç girmenize gerek yoktur.`);
+              if (consumableSummary) {
+                setForm((prev) => ({ ...prev, consumables: prev.consumables || consumableSummary }));
+              }
+              const biocideCount = Array.from(productMap.values()).filter((p) => !p.isConsumable).length;
+              const consumableCount = consumableItems.length;
+              setAutoAggregatedNotice(
+                `✨ İstasyon kontrollerinden ${biocideCount > 0 ? `${biocideCount} çeşit Biyosidal İlaç` : ''}${biocideCount > 0 && consumableCount > 0 ? ' ve ' : ''}${consumableCount > 0 ? `${consumableCount} çeşit Sarf Malzemesi` : ''} (${appliedStationCount} istasyondan) otomatik toplandı. Tekrar ürün/sarf girmenize gerek yoktur.`
+              );
             }
           }
         }
@@ -364,6 +436,7 @@ function ReportDetails({ catalog, form, setField, products, updateProduct, setPr
         <Field label="Alan (m²)" value={form.areaSquareMeters} onChange={(value) => setField('areaSquareMeters', value)} disabled={readOnly} type="number" />
         <DropdownMultiSelect label="İş türü" placeholder="Uygulanan iş türlerini seçin..." options={catalog.workTypes} value={form.workType ?? ''} disabled={readOnly} onChange={(value) => setField('workType', value)} wide />
         <DropdownMultiSelect label="Güvenlik önlemleri" placeholder="Alınan güvenlik önlemlerini seçin..." options={catalog.safetyMeasures} value={form.safetyMeasures ?? ''} disabled={readOnly} onChange={(value) => setField('safetyMeasures', value)} wide />
+        <Field label="Kullanılan sarf malzemeleri (İstasyonlardan otomatik aktarılır)" value={form.consumables ?? ''} onChange={(value) => setField('consumables', value)} disabled={readOnly} placeholder="Örn: 12 Adet Fare & Sıçan Yapışkanlı Levha, 2 Adet UV Lamba" wide />
       </div>
     </section>
 
@@ -386,16 +459,30 @@ function ReportDetails({ catalog, form, setField, products, updateProduct, setPr
       )}
       <div className="report-product-list">
         {products.map((product, index) => <article key={index}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {product.unit === 'Adet' ? (
+                <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>📦 Sarf Malzemesi / Parça</span>
+              ) : (
+                <span style={{ fontSize: '11px', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>🧪 Biyosidal İlaç / Kimyasal</span>
+              )}
+              {product.productName && <strong style={{ fontSize: '13px', color: '#0f172a' }}>{product.productName}</strong>}
+            </div>
+            {!readOnly && products.length > 1 && (
+              <button type="button" className="report-product-remove" style={{ margin: 0 }} onClick={() => setProducts((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                <Trash2 size={14} /> Kaldır
+              </button>
+            )}
+          </div>
           <div className="report-product-grid">
-            <StockSelect label="Araç stoğundan ürün / sarf" value={product.vehicleStockItemId} stockItems={vehicleStockItems} disabled={readOnly} onChange={(stock) => updateProduct(index, { vehicleStockItemId: stock?.vehicleStockItemId, productName: stock?.productName ?? '', unit: stock ? usageUnits(stock.unit)[0] : 'Adet', licenseNumber: stock?.licenseNumber ?? '', licenseDocumentId: stock?.licenseDocumentId })} />
+            <StockSelect label="Araç stoğundan ürün / sarf" value={product.vehicleStockItemId} stockItems={vehicleStockItems} disabled={readOnly} onChange={(stock) => updateProduct(index, { vehicleStockItemId: stock?.vehicleStockItemId, productName: stock?.productName ?? '', unit: stock ? usageUnits(stock.unit)[0] : (product.unit || 'Adet'), licenseNumber: stock?.licenseNumber ?? '', licenseDocumentId: stock?.licenseDocumentId })} />
             <Field label="Ruhsat / ürün bilgisi" value={product.licenseNumber ?? ''} onChange={(value) => updateProduct(index, { licenseNumber: value, licenseDocumentId: undefined })} disabled={readOnly || Boolean(product.licenseDocumentId)} placeholder={product.vehicleStockItemId ? 'Ürüne bağlı ruhsat bulunamadı' : 'Sarf malzemesi için gerekmez'} />
             <CatalogSelectField label="Kullanım yeri / yöntemi" options={catalog.applicationMethods} value={product.applicationMethod ?? ''} disabled={readOnly} onChange={(value) => updateProduct(index, { applicationMethod: value })} />
             <Field label="Etken madde / sarf türü" value={product.activeIngredient ?? ''} onChange={(value) => updateProduct(index, { activeIngredient: value })} disabled={readOnly} placeholder="Etken madde" />
             <Field label="Kullanılan miktar" value={String(product.amountUsed || '')} onChange={(value) => updateProduct(index, { amountUsed: Number(value) })} disabled={readOnly} type="number" />
-            <label className="report-control">Birim<select value={product.unit} disabled={readOnly || !product.vehicleStockItemId} onChange={(event) => updateProduct(index, { unit: event.target.value })}>{usageUnits(vehicleStockItems.find((item) => item.vehicleStockItemId === product.vehicleStockItemId)?.unit).map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+            <label className="report-control">Birim<select value={product.unit} disabled={readOnly || !product.vehicleStockItemId} onChange={(event) => updateProduct(index, { unit: event.target.value })}>{usageUnits(vehicleStockItems.find((item) => item.vehicleStockItemId === product.vehicleStockItemId)?.unit || product.unit).map((unit) => <option key={unit}>{unit}</option>)}</select></label>
           </div>
           {product.licenseDocumentId && <small className="report-license-linked"><FileCheck2 size={14} /> Ürüne bağlı güncel ruhsat EK-1 formuna otomatik eklendi.</small>}
-          {!readOnly && products.length > 1 && <button type="button" className="report-product-remove" onClick={() => setProducts((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={14} /> Kalemi kaldır</button>}
         </article>)}
       </div>
     </section>

@@ -22,18 +22,30 @@ type Props = {
   onSaved?: (record: StationActivationRecord) => void;
 };
 
-/* ── Türkiye Sağlık Bakanlığı Onaylı Gerçek Biyosidal & Sarf Kataloğu ── */
+/* ── Türkiye Sağlık Bakanlığı Onaylı Gerçek Biyosidal Kataloğu (Kimyasallar / İlaçlar) ── */
 export const defaultBiocideOptions = [
   { name: 'Brodifacoum %0.005 Mum Blok Yem', unit: 'Gram', defaultAmount: 20, category: 'Kemirgen Yemi' },
   { name: 'Bromadiolone %0.005 Pasta Yem', unit: 'Gram', defaultAmount: 15, category: 'Kemirgen Yemi' },
   { name: 'Difenacoum %0.005 Pelet Yem', unit: 'Gram', defaultAmount: 20, category: 'Kemirgen Yemi' },
+  { name: 'Flocoumafen %0.005 Mum Blok (Storm)', unit: 'Gram', defaultAmount: 20, category: 'Kemirgen Yemi' },
   { name: 'Maxforce IC %2.15 Hamamböceği Jeli', unit: 'Gram', defaultAmount: 5, category: 'Jel İlaç' },
   { name: 'Goliath Jel %0.05 Hamamböceği Jeli', unit: 'Gram', defaultAmount: 5, category: 'Jel İlaç' },
+  { name: 'Advion Cockroach Jel', unit: 'Gram', defaultAmount: 5, category: 'Jel İlaç' },
   { name: 'K-Othrine SC 25 Sıvı İnsektisit', unit: 'Mililitre', defaultAmount: 50, category: 'Sıvı İnsektisit' },
   { name: 'Chrysamed Forte Konsantre İnsektisit', unit: 'Mililitre', defaultAmount: 50, category: 'Sıvı İnsektisit' },
-  { name: 'Fare & Sıçan Yapışkanlı Levha (Plaka)', unit: 'Adet', defaultAmount: 1, category: 'Sarf Malzemesi' },
-  { name: 'EFK Sinek Cihazı UV Yapışkan Levhası', unit: 'Adet', defaultAmount: 1, category: 'Sarf Malzemesi' },
-  { name: 'Feromonlu Güve & Böcek Monitör Yapışkanı', unit: 'Adet', defaultAmount: 1, category: 'Sarf Malzemesi' },
+  { name: 'Icon 10 CS Mikrokapsül İnsektisit', unit: 'Mililitre', defaultAmount: 50, category: 'Sıvı İnsektisit' },
+];
+
+/* ── Standart Sarf Malzemeleri ve Ekipman Değişim Kataloğu ── */
+export const defaultConsumableOptions = [
+  { name: 'Fare & Sıçan Yapışkanlı Levha (Plaka)', unit: 'Adet', defaultAmount: 1, category: 'Yapışkan Levha' },
+  { name: 'EFK Sinek Cihazı UV Yapışkan Levhası', unit: 'Adet', defaultAmount: 1, category: 'Sinek Yapışkanı' },
+  { name: 'Hamamböceği Monitör Yapışkan Kapanı', unit: 'Adet', defaultAmount: 1, category: 'Böcek Monitörü' },
+  { name: 'Feromonlu Güve & Böcek Monitör Yapışkanı', unit: 'Adet', defaultAmount: 1, category: 'Feromon Kapanı' },
+  { name: '15W UV-A Floresan Sinek Lambası', unit: 'Adet', defaultAmount: 1, category: 'UV Lamba' },
+  { name: '36W UV-A Shatterproof Sinek Lambası', unit: 'Adet', defaultAmount: 1, category: 'UV Lamba' },
+  { name: 'Kemirgen Yemleme İstasyonu Gövdesi', unit: 'Adet', defaultAmount: 1, category: 'İstasyon Ekipmanı' },
+  { name: 'Canlı Yakalama Kapanı (Mekanik)', unit: 'Adet', defaultAmount: 1, category: 'Mekanik Kapan' },
 ];
 
 /* ── checklist tanımı ── */
@@ -423,21 +435,44 @@ export default function StationActivationModal({ accessToken, order, onClose, on
             <div className="activation-checklist-grid">
               {checklistItems.map((item) => (
                 <label key={item.key} className={`activation-check-item ${current[item.key] ? 'checked' : ''}`}>
-                  <input type="checkbox" checked={!!current[item.key]} disabled={readOnly}
-                    onChange={(e) => update({ [item.key]: e.target.checked } as Partial<ReportStationInput>)} />
+                  <input
+                    type="checkbox"
+                    checked={!!current[item.key]}
+                    disabled={readOnly}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      const patch: Partial<ReportStationInput> = { [item.key]: checked };
+                      if (checked) {
+                        if (item.key === 'stickyPlateChanged' && !current.replacementProductName) {
+                          patch.replacementProductName = 'Fare & Sıçan Yapışkanlı Levha (Plaka)';
+                          patch.replacementQuantity = 1;
+                          patch.replacementUnit = 'Adet';
+                        } else if (item.key === 'stationReplaced' && !current.replacementProductName) {
+                          patch.replacementProductName = 'Kemirgen Yemleme İstasyonu Gövdesi';
+                          patch.replacementQuantity = 1;
+                          patch.replacementUnit = 'Adet';
+                        } else if (item.key === 'baitGelCompleted' && !current.appliedProductName) {
+                          patch.appliedProductName = 'Brodifacoum %0.005 Mum Blok Yem';
+                          patch.appliedAmount = 20;
+                          patch.appliedUnit = 'Gram';
+                        }
+                      }
+                      update(patch);
+                    }}
+                  />
                   <span>{item.label}</span>
                 </label>
               ))}
             </div>
           </div>}
 
-          {/* ── Biyosidal / İlaç & Yem Uygulaması Paneli ── */}
+          {/* ── 1. Biyosidal / İlaç & Yem Uygulaması (Kimyasallar) ── */}
           {current.deviceStatus !== 'Unchecked' && (
             <div className="activation-biocide-panel">
               <div className="activation-biocide-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <PackageCheck size={16} color="#0d9488" />
-                  <strong style={{ fontSize: '13px', color: '#0f766e' }}>İlaç / Yem & Biyosidal Uygulaması</strong>
+                  <strong style={{ fontSize: '13px', color: '#0f766e' }}>1. İlaç / Yem & Biyosidal Uygulaması</strong>
                 </div>
                 {current.appliedProductName && (
                   <button
@@ -486,19 +521,20 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                         appliedVehicleStockItemId: stockMatch?.vehicleStockItemId,
                         appliedUnit: unit,
                         appliedAmount: defaultAmt,
-                        baitGelCompleted: unit === 'Gram' || unit === 'Mililitre' ? true : current.baitGelCompleted,
-                        stickyPlateChanged: val.includes('Plaka') || val.includes('Yapışkan') ? true : current.stickyPlateChanged,
+                        baitGelCompleted: true,
                       });
                     }}
                   >
                     <option value="">İlaç / yem uygulanmadı</option>
                     {vehicleStock?.items && vehicleStock.items.length > 0 && (
-                      <optgroup label="🚗 Araç Stoğundaki Ürünler">
-                        {vehicleStock.items.map((item) => (
-                          <option key={item.id} value={item.productName}>
-                            {item.productName} ({item.quantity} {item.unit})
-                          </option>
-                        ))}
+                      <optgroup label="🚗 Araç Stoğundaki Biyosidaller">
+                        {vehicleStock.items
+                          .filter((item) => item.unit === 'Gram' || item.unit === 'Mililitre' || item.unit === 'Litre' || item.unit === 'Kilogram' || item.productName.toLowerCase().includes('yem') || item.productName.toLowerCase().includes('jel') || item.productName.toLowerCase().includes('blok'))
+                          .map((item) => (
+                            <option key={item.id} value={item.productName}>
+                              {item.productName} ({item.quantity} {item.unit})
+                            </option>
+                          ))}
                       </optgroup>
                     )}
                     <optgroup label="🏷️ Sağlık Bakanlığı Onaylı Biyosidal Kataloğu">
@@ -533,7 +569,6 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                     >
                       <option value="Gram">Gram (gr)</option>
                       <option value="Mililitre">Mililitre (ml)</option>
-                      <option value="Adet">Adet / Blok</option>
                       <option value="Litre">Litre (lt)</option>
                       <option value="Kilogram">Kilogram (kg)</option>
                     </select>
@@ -541,15 +576,178 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                 </div>
               </div>
 
-              {current.appliedProductName && !readOnly && (
+              {!readOnly && (
                 <div className="activation-quick-dosage">
                   <span className="activation-quick-dosage-label">Hızlı Doz:</span>
-                  <button type="button" onClick={() => update({ appliedAmount: 10, appliedUnit: 'Gram', baitGelCompleted: true })}>+10 gr</button>
-                  <button type="button" onClick={() => update({ appliedAmount: 20, appliedUnit: 'Gram', baitGelCompleted: true })}>+20 gr</button>
-                  <button type="button" onClick={() => update({ appliedAmount: 15, appliedUnit: 'Gram', baitGelCompleted: true })}>+15 gr</button>
-                  <button type="button" onClick={() => update({ appliedAmount: 5, appliedUnit: 'Gram', baitGelCompleted: true })}>+5 gr Jel</button>
-                  <button type="button" onClick={() => update({ appliedAmount: 1, appliedUnit: 'Adet', stickyPlateChanged: true })}>+1 Adet Plaka</button>
-                  <button type="button" onClick={() => update({ appliedAmount: 50, appliedUnit: 'Mililitre' })}>+50 ml</button>
+                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Brodifacoum %0.005 Mum Blok Yem', appliedAmount: 20, appliedUnit: 'Gram', baitGelCompleted: true })}>+20 gr Blok Yem</button>
+                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Bromadiolone %0.005 Pasta Yem', appliedAmount: 15, appliedUnit: 'Gram', baitGelCompleted: true })}>+15 gr Pasta Yem</button>
+                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Maxforce IC %2.15 Hamamböceği Jeli', appliedAmount: 5, appliedUnit: 'Gram', baitGelCompleted: true })}>+5 gr Jel</button>
+                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'K-Othrine SC 25 Sıvı İnsektisit', appliedAmount: 50, appliedUnit: 'Mililitre' })}>+50 ml Sıvı</button>
+                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Chrysamed Forte Konsantre İnsektisit', appliedAmount: 100, appliedUnit: 'Mililitre' })}>+100 ml</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── 2. Sarf Malzemesi & Parça Değişimi (Yapışkan Plaka / UV Lamba / Cihaz) ── */}
+          {current.deviceStatus !== 'Unchecked' && (
+            <div className="activation-biocide-panel" style={{ marginTop: '12px', background: '#f8fafc', border: '1px solid #cbd5e1' }}>
+              <div className="activation-biocide-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <PackageCheck size={16} color="#0284c7" />
+                  <strong style={{ fontSize: '13px', color: '#0369a1' }}>2. Sarf Malzemesi & Parça Değişimi</strong>
+                </div>
+                {current.replacementProductName && (
+                  <button
+                    type="button"
+                    className="activation-clear-btn"
+                    disabled={readOnly}
+                    onClick={() => update({
+                      replacementProductName: undefined,
+                      replacementQuantity: 0,
+                      replacementUnit: undefined,
+                      replacementVehicleStockItemId: undefined,
+                      stickyPlateChanged: false,
+                      stationReplaced: false,
+                    })}
+                  >
+                    Kaldır
+                  </button>
+                )}
+              </div>
+
+              <div className="activation-biocide-grid">
+                <label className="activation-control">
+                  <span>Kullanılan Sarf / Değişen Parça</span>
+                  <select
+                    value={current.replacementProductName || ''}
+                    disabled={readOnly}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        update({
+                          replacementProductName: undefined,
+                          replacementQuantity: 0,
+                          replacementUnit: undefined,
+                          replacementVehicleStockItemId: undefined,
+                        });
+                        return;
+                      }
+                      const stockMatch = vehicleStock?.items?.find((item) => item.productName === val);
+                      const catalogMatch = defaultConsumableOptions.find((item) => item.name === val);
+                      update({
+                        replacementProductName: val,
+                        replacementVehicleStockItemId: stockMatch?.vehicleStockItemId,
+                        replacementUnit: stockMatch?.unit || catalogMatch?.unit || 'Adet',
+                        replacementQuantity: current.replacementQuantity && current.replacementQuantity > 0 ? current.replacementQuantity : 1,
+                        stickyPlateChanged: val.includes('Plaka') || val.includes('Yapışkan') || val.includes('Levha') ? true : current.stickyPlateChanged,
+                        stationReplaced: val.includes('İstasyon') || val.includes('Kapan') ? true : current.stationReplaced,
+                      });
+                    }}
+                  >
+                    <option value="">Sarf malzeme / parça değişimi yapılmadı</option>
+                    {vehicleStock?.items && vehicleStock.items.length > 0 && (
+                      <optgroup label="🚗 Araç Stoğundaki Sarf Malzemeleri">
+                        {vehicleStock.items
+                          .filter((item) => item.unit === 'Adet' || item.productName.toLowerCase().includes('plaka') || item.productName.toLowerCase().includes('lamba') || item.productName.toLowerCase().includes('istasyon') || item.productName.toLowerCase().includes('kapan'))
+                          .map((item) => (
+                            <option key={item.id} value={item.productName}>
+                              {item.productName} ({item.quantity} {item.unit})
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="📦 Standart Sarf & Ekipman Kataloğu">
+                      {defaultConsumableOptions.map((opt) => (
+                        <option key={opt.name} value={opt.name}>
+                          {opt.name} · {opt.category} ({opt.unit})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </label>
+
+                <div className="activation-biocide-amount-row">
+                  <label className="activation-control" style={{ flex: 1 }}>
+                    <span>Değişen Adet</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={current.replacementQuantity || ''}
+                      disabled={readOnly || !current.replacementProductName}
+                      placeholder="1"
+                      onChange={(e) => update({ replacementQuantity: Number(e.target.value) || 0 })}
+                    />
+                  </label>
+                  <label className="activation-control" style={{ width: '120px' }}>
+                    <span>Birim</span>
+                    <input
+                      value={current.replacementUnit || 'Adet'}
+                      disabled
+                      style={{ background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {!readOnly && (
+                <div className="activation-quick-dosage" style={{ marginTop: '8px' }}>
+                  <span className="activation-quick-dosage-label" style={{ color: '#0369a1' }}>Hızlı Sarf:</span>
+                  <button
+                    type="button"
+                    onClick={() => update({
+                      replacementProductName: 'Fare & Sıçan Yapışkanlı Levha (Plaka)',
+                      replacementQuantity: 1,
+                      replacementUnit: 'Adet',
+                      stickyPlateChanged: true,
+                    })}
+                  >
+                    +1 Fare Yapışkanı
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update({
+                      replacementProductName: 'EFK Sinek Cihazı UV Yapışkan Levhası',
+                      replacementQuantity: 1,
+                      replacementUnit: 'Adet',
+                      stickyPlateChanged: true,
+                    })}
+                  >
+                    +1 Sinek Yapışkanı
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update({
+                      replacementProductName: 'Hamamböceği Monitör Yapışkan Kapanı',
+                      replacementQuantity: 1,
+                      replacementUnit: 'Adet',
+                      stickyPlateChanged: true,
+                    })}
+                  >
+                    +1 Böcek Monitör
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update({
+                      replacementProductName: '15W UV-A Floresan Sinek Lambası',
+                      replacementQuantity: 1,
+                      replacementUnit: 'Adet',
+                    })}
+                  >
+                    +1 UV Lamba
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update({
+                      replacementProductName: 'Kemirgen Yemleme İstasyonu Gövdesi',
+                      replacementQuantity: 1,
+                      replacementUnit: 'Adet',
+                      stationReplaced: true,
+                    })}
+                  >
+                    +1 İstasyon Gövdesi
+                  </button>
                 </div>
               )}
             </div>
