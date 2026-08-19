@@ -7,13 +7,13 @@ import { getInventory, type InventoryItem } from '../../services/inventoryApi';
 import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
 import { shareProtectedDocument } from '../../utils/shareUtils';
 import {
-  createRiskAnalysis, createTrendAnalysis, downloadQualityDocument, getQualityAnalyses, getQualityDocuments, getQualityLocations,
-  QualitySessionExpiredError, uploadQualityDocument, type CreateRiskAnalysisInput, type CreateTrendAnalysisInput,
+  archiveQualityDocument, createRiskAnalysis, createTrendAnalysis, deleteQualityDocument, downloadQualityDocument, getQualityAnalyses, getQualityDocuments, getQualityLocations,
+  QualitySessionExpiredError, unarchiveQualityDocument, uploadQualityDocument, type CreateRiskAnalysisInput, type CreateTrendAnalysisInput,
   type QualityAnalysis, type QualityDocument, type QualityLocation, type RiskAnswer, type RiskMatrixRow,
 } from '../../services/qualityApi';
 import { compressImage } from '../../utils/imageCompression';
 
-type CenterTab = 'trend' | 'risk' | 'plans' | 'audit' | 'licenses' | 'safety' | 'documents';
+type CenterTab = 'trend' | 'risk' | 'plans' | 'audit' | 'licenses' | 'safety' | 'documents' | 'archive';
 type Props = { accessToken: string; mode: 'staff' | 'customer'; onSessionExpired: () => void; standalone?: boolean; initialTab?: CenterTab; canManageLicenses?: boolean };
 
 export default function QualityCenter({ accessToken, mode, onSessionExpired, standalone = false, initialTab = 'trend', canManageLicenses = false }: Props) {
@@ -30,6 +30,8 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
   const [sitePlanCount, setSitePlanCount] = useState(0);
   const [auditPackageCount, setAuditPackageCount] = useState(0);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [deletingDoc, setDeletingDoc] = useState<QualityDocument | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -60,7 +62,9 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
 
   const trends = scopedAnalyses.filter((item) => item.analysisType === 'Trend');
   const risks = scopedAnalyses.filter((item) => item.analysisType === 'Risk');
-  const filteredDocuments = category ? scopedDocuments.filter((item) => item.category === category) : scopedDocuments;
+  const activeDocuments = scopedDocuments.filter((item) => item.category !== 'Archived');
+  const archivedDocuments = scopedDocuments.filter((item) => item.category === 'Archived');
+  const filteredDocuments = category ? (category === 'Archived' ? archivedDocuments : scopedDocuments.filter((item) => item.category === category)) : activeDocuments;
   const licenseDocuments = scopedDocuments.filter((item) => item.category === 'Licenses');
   const safetyDocuments = scopedDocuments.filter((item) => item.category === 'SafetyDataSheets');
 
@@ -69,6 +73,43 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
   const handleUpload = async (input: Parameters<typeof uploadQualityDocument>[1]) => { const created = await uploadQualityDocument(accessToken, input); setDocuments((current) => [created, ...current]); setUploadOpen(false); setScannerOpen(false); };
   const download = async (document: QualityDocument, open = false) => { try { await downloadQualityDocument(accessToken, document, open); } catch (downloadError) { if (downloadError instanceof QualitySessionExpiredError) return onSessionExpired(); setError(downloadError instanceof Error ? downloadError.message : 'Belge indirilemedi.'); } };
   const share = async (document: QualityDocument) => { try { await shareProtectedDocument(accessToken, document.downloadUrl, document.fileName, document.title); } catch (shareError) { setError(shareError instanceof Error ? shareError.message : 'Belge paylaşılamadı.'); } };
+  
+  const handleArchiveDoc = async (doc: QualityDocument) => {
+    try {
+      const updated = await archiveQualityDocument(accessToken, doc.id);
+      setDocuments((current) => current.map((d) => d.id === doc.id ? updated : d));
+    } catch (e) {
+      setError(messageOf(e));
+    }
+  };
+
+  const handleUnarchiveDoc = async (doc: QualityDocument) => {
+    try {
+      const updated = await unarchiveQualityDocument(accessToken, doc.id);
+      setDocuments((current) => current.map((d) => d.id === doc.id ? updated : d));
+    } catch (e) {
+      setError(messageOf(e));
+    }
+  };
+
+  const handleDeleteDoc = (doc: QualityDocument) => {
+    setDeletingDoc(doc);
+  };
+
+  const confirmDeleteDoc = async () => {
+    if (!deletingDoc) return;
+    setDeletingBusy(true);
+    try {
+      await deleteQualityDocument(accessToken, deletingDoc.id);
+      setDocuments((current) => current.filter((d) => d.id !== deletingDoc.id));
+      setDeletingDoc(null);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setDeletingBusy(false);
+    }
+  };
+
   const documentByAnalysis = useMemo(() => new Map(documents.filter((item) => item.analysisId).map((item) => [item.analysisId!, item])), [documents]);
 
   return <section className={`quality-center ${standalone ? 'page quality-center-page' : 'quality-center-embedded'}`}>
@@ -106,22 +147,56 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
       </div>
     )}
 
-    <nav className="quality-tabs"><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}><BarChart3 size={18} /><span>Trend Analizleri</span><b>{trends.length}</b></button><button className={tab === 'risk' ? 'active' : ''} onClick={() => setTab('risk')}><BrainCircuit size={18} /><span>Risk Analizleri</span><b>{risks.length}</b></button><button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}><MapIcon size={18} /><span>Kroki & Yerleşim</span><b>{sitePlanCount}</b></button><button className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}><PackageCheck size={18} /><span>Denetim Dosyaları</span><b>{auditPackageCount}</b></button><button className={tab === 'licenses' ? 'active' : ''} onClick={() => setTab('licenses')}><BadgeCheck size={18} /><span>Ruhsatlar</span><b>{licenseDocuments.length}</b></button><button className={tab === 'safety' ? 'active' : ''} onClick={() => setTab('safety')}><ShieldAlert size={18} /><span>MSDS / GBF</span><b>{safetyDocuments.length}</b></button><button className={tab === 'documents' ? 'active' : ''} onClick={() => setTab('documents')}><FolderArchive size={18} /><span>Belge Arşivi</span><b>{filteredDocuments.length}</b></button></nav>
+    <nav className="quality-tabs">
+      <button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}><BarChart3 size={18} /><span>Trend Analizleri</span><b>{trends.length}</b></button>
+      <button className={tab === 'risk' ? 'active' : ''} onClick={() => setTab('risk')}><BrainCircuit size={18} /><span>Risk Analizleri</span><b>{risks.length}</b></button>
+      <button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}><MapIcon size={18} /><span>Kroki & Yerleşim</span><b>{sitePlanCount}</b></button>
+      <button className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}><PackageCheck size={18} /><span>Denetim Dosyaları</span><b>{auditPackageCount}</b></button>
+      <button className={tab === 'licenses' ? 'active' : ''} onClick={() => setTab('licenses')}><BadgeCheck size={18} /><span>Ruhsatlar</span><b>{licenseDocuments.length}</b></button>
+      <button className={tab === 'safety' ? 'active' : ''} onClick={() => setTab('safety')}><ShieldAlert size={18} /><span>MSDS / GBF</span><b>{safetyDocuments.length}</b></button>
+      <button className={tab === 'documents' ? 'active' : ''} onClick={() => setTab('documents')}><FolderArchive size={18} /><span>Belge Arşivi</span><b>{activeDocuments.length}</b></button>
+      <button className={tab === 'archive' ? 'active' : ''} onClick={() => setTab('archive')}><FileArchive size={18} /><span>Arşiv</span><b>{archivedDocuments.length}</b></button>
+    </nav>
     {error && <div className="quality-error"><ShieldAlert size={17} />{error}<button onClick={() => setError(null)}>Kapat</button></div>}
     {loading ? <div className="surface quality-loading"><RefreshCw className="spin-icon" /><strong>Kalite kayıtları hazırlanıyor…</strong></div> : <>
       {tab === 'trend' && <AnalysisList type="Trend" items={trends} staff={mode === 'staff'} onScan={() => { setScannerCategory('TrendAnalyses'); setScannerOpen(true); }} onCreate={() => setTrendOpen(true)} documents={documentByAnalysis} onDownload={download} onShare={share} />}
       {tab === 'risk' && <AnalysisList type="Risk" items={risks} staff={mode === 'staff'} onScan={() => { setScannerCategory('RiskAnalyses'); setScannerOpen(true); }} onCreate={() => setRiskOpen(true)} documents={documentByAnalysis} onDownload={download} onShare={share} onOpenRiskMap={setRiskSitePlanItem} />}
       {tab === 'plans' && <SitePlanCenter accessToken={accessToken} mode={mode} locations={locations} onSessionExpired={onSessionExpired} onCount={setSitePlanCount} onSaved={() => refreshDocuments(accessToken, setDocuments)} />}
       {tab === 'audit' && <AuditPackageCenter accessToken={accessToken} mode={mode} locations={locations} onSessionExpired={onSessionExpired} onCount={setAuditPackageCount} />}
-      {tab === 'licenses' && <DocumentLibrary items={licenseDocuments} category="Licenses" onCategory={() => undefined} staff={canManageLicenses} onScan={() => { setScannerCategory('Licenses'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('Licenses'); setUploadOpen(true); }} onDownload={download} onShare={share} fixed title="Ürün ruhsatları" description="Her ruhsatı stoktaki ürüne bağlayın; araç stoğu ve EK-1 formu ruhsat numarasını otomatik kullansın." uploadLabel="Ruhsat Yükle" />}
-      {tab === 'safety' && <DocumentLibrary items={safetyDocuments} category="SafetyDataSheets" onCategory={() => undefined} staff={canManageLicenses} onScan={() => { setScannerCategory('SafetyDataSheets'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('SafetyDataSheets'); setUploadOpen(true); }} onDownload={download} onShare={share} fixed title="MSDS / Güvenlik Bilgi Formları" description="MSDS, SDS ve Türkçe GBF belgelerini stok ürünüyle eşleştirin; kullanılan ürüne ait belgeler müşteriye ve denetim paketine otomatik yansısın." uploadLabel="MSDS / GBF Yükle" />}
-      {tab === 'documents' && <DocumentLibrary items={filteredDocuments} category={category} onCategory={setCategory} staff={mode === 'staff'} onScan={() => { setScannerCategory(category || 'General'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('Other'); setUploadOpen(true); }} onDownload={download} onShare={share} />}
+      {tab === 'licenses' && <DocumentLibrary items={licenseDocuments} category="Licenses" onCategory={() => undefined} staff={canManageLicenses} onScan={() => { setScannerCategory('Licenses'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('Licenses'); setUploadOpen(true); }} onDownload={download} onShare={share} onArchive={handleArchiveDoc} onUnarchive={handleUnarchiveDoc} onDelete={handleDeleteDoc} fixed title="Ürün ruhsatları" description="Her ruhsatı stoktaki ürüne bağlayın; araç stoğu ve EK-1 formu ruhsat numarasını otomatik kullansın." uploadLabel="Ruhsat Yükle" />}
+      {tab === 'safety' && <DocumentLibrary items={safetyDocuments} category="SafetyDataSheets" onCategory={() => undefined} staff={canManageLicenses} onScan={() => { setScannerCategory('SafetyDataSheets'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('SafetyDataSheets'); setUploadOpen(true); }} onDownload={download} onShare={share} onArchive={handleArchiveDoc} onUnarchive={handleUnarchiveDoc} onDelete={handleDeleteDoc} fixed title="MSDS / Güvenlik Bilgi Formları" description="MSDS, SDS ve Türkçe GBF belgelerini stok ürünüyle eşleştirin; kullanılan ürüne ait belgeler müşteriye ve denetim paketine otomatik yansısın." uploadLabel="MSDS / GBF Yükle" />}
+      {tab === 'documents' && <DocumentLibrary items={filteredDocuments} category={category} onCategory={setCategory} staff={mode === 'staff'} onScan={() => { setScannerCategory(category || 'General'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('Other'); setUploadOpen(true); }} onDownload={download} onShare={share} onArchive={handleArchiveDoc} onUnarchive={handleUnarchiveDoc} onDelete={handleDeleteDoc} />}
+      {tab === 'archive' && <DocumentLibrary items={archivedDocuments} category="Archived" onCategory={() => undefined} staff={mode === 'staff'} onDownload={download} onShare={share} onArchive={handleArchiveDoc} onUnarchive={handleUnarchiveDoc} onDelete={handleDeleteDoc} title="Belge Arşivi" description="Arşivlenen tüm kurumsal belgeler burada saklanır. Dilediğiniz zaman tek tıkla arşivden çıkarabilirsiniz." />}
     </>}
     {trendOpen && <TrendAnalysisModal locations={locations} onClose={() => setTrendOpen(false)} onSubmit={handleTrend} />}
     {riskOpen && <RiskAnalysisModal accessToken={accessToken} locations={locations} onClose={() => setRiskOpen(false)} onSubmit={handleRisk} />}
     {uploadOpen && <DocumentUploadModal locations={locations} inventoryItems={inventoryItems} defaultCategory={uploadCategory} onClose={() => setUploadOpen(false)} onSubmit={handleUpload} />}
     {scannerOpen && <DocumentScannerModal locations={locations} inventoryItems={inventoryItems} defaultCategory={scannerCategory} onClose={() => setScannerOpen(false)} onSubmit={handleUpload} />}
     {riskSitePlanItem && <RiskSitePlanModal analysis={riskSitePlanItem} document={documentByAnalysis.get(riskSitePlanItem.id)} onClose={() => setRiskSitePlanItem(null)} onDownload={download} onShare={share} />}
+
+    {deletingDoc && (
+      <div className="modal-layer" style={{ zIndex: 1100 }}>
+        <div className="modal" style={{ maxWidth: '440px' }}>
+          <div className="modal-header">
+            <div>
+              <p className="eyebrow" style={{ color: '#dc2626' }}>BELGE SİLME ONAYI</p>
+              <h2>Belgeyi Sil</h2>
+            </div>
+            <button className="icon-button" onClick={() => setDeletingDoc(null)}><X /></button>
+          </div>
+          <div style={{ padding: '16px 0', fontSize: '13.5px', color: '#334155', lineHeight: 1.5 }}>
+            <p><strong>"{deletingDoc.title}"</strong> ({deletingDoc.fileName}) belgesini kalıcı olarak silmek istediğinize emin misiniz?</p>
+            <p style={{ marginTop: '8px', fontSize: '12px', color: '#ef4444', fontWeight: 600 }}>⚠️ Bu işlem geri alınamaz ve belge sunucudan tamamen silinir.</p>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="secondary-button" onClick={() => setDeletingDoc(null)}>Vazgeç</button>
+            <button type="button" className="primary-button" style={{ background: '#dc2626', borderColor: '#b91c1c' }} disabled={deletingBusy} onClick={() => void confirmDeleteDoc()}>
+              {deletingBusy ? 'Siliniyor…' : 'Evet, Kalıcı Olarak Sil'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </section>;
 }
 
@@ -132,7 +207,7 @@ function AnalysisList({ type, items, staff, onScan, onCreate, documents, onDownl
   </div>;
 }
 
-function DocumentLibrary({ items, category, onCategory, staff, onScan, onUpload, onDownload, onShare, fixed = false, title = 'Belgeler', description = 'Oluşturulan analizler ve yüklenen PDF, Word, Excel, metin veya görsel dosyaları tek yerde saklanır.', uploadLabel = 'Belge Yükle' }: { items: QualityDocument[]; category: string; onCategory: (value: string) => void; staff: boolean; onScan?: () => void; onUpload: () => void; onDownload: (document: QualityDocument, open?: boolean) => void; onShare: (document: QualityDocument) => void; fixed?: boolean; title?: string; description?: string; uploadLabel?: string }) {
+function DocumentLibrary({ items, category, onCategory, staff, onScan, onUpload, onDownload, onShare, onArchive, onUnarchive, onDelete, fixed = false, title = 'Belgeler', description = 'Oluşturulan analizler ve yüklenen PDF, Word, Excel, metin veya görsel dosyaları tek yerde saklanır.', uploadLabel = 'Belge Yükle' }: { items: QualityDocument[]; category: string; onCategory: (value: string) => void; staff: boolean; onScan?: () => void; onUpload?: () => void; onDownload: (document: QualityDocument, open?: boolean) => void; onShare: (document: QualityDocument) => void; onArchive?: (document: QualityDocument) => void; onUnarchive?: (document: QualityDocument) => void; onDelete?: (document: QualityDocument) => void; fixed?: boolean; title?: string; description?: string; uploadLabel?: string }) {
   const [search, setSearch] = useState(''); const [scope, setScope] = useState(''); const [fileType, setFileType] = useState(''); const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState('');
   const scopes = useMemo(() => Array.from(new Map(items.map((item) => fixed
     ? [item.inventoryItemId ?? item.productName, { value: item.inventoryItemId ?? item.productName ?? '', label: item.productName ?? 'Ürün bağlantısı yok' }]
@@ -145,7 +220,7 @@ function DocumentLibrary({ items, category, onCategory, staff, onScan, onUpload,
   }), [items, search, scope, fileType, dateFrom, dateTo, fixed]);
   const hasFilters = Boolean(search || scope || fileType || dateFrom || dateTo || (!fixed && category));
   const clearFilters = () => { setSearch(''); setScope(''); setFileType(''); setDateFrom(''); setDateTo(''); if (!fixed) onCategory(''); };
-  return <div className="quality-module"><div className="quality-module-heading"><div><p className="eyebrow">KATEGORİK DİJİTAL ARŞİV</p><h2>{title}</h2><p>{description}</p></div>{staff && <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>{onScan && <button type="button" className="secondary-button" onClick={onScan} title="Kamera ile A4 Belge Tara"><Camera size={17} /> Belge Tara (A4)</button>}<button className="primary-button" onClick={onUpload}><Upload size={17} /> {uploadLabel}</button></div>}</div><div className="surface document-library"><div className="document-filter-panel"><label className="document-search"><span>Belge ara</span><i><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Başlık, dosya, ürün veya müşteri…" /></i></label>{!fixed && <label>Kategori<select value={category} onChange={(event) => onCategory(event.target.value)}><option value="">Tüm kategoriler</option>{documentCategories.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>}<label>{fixed ? 'Stok ürünü' : 'Müşteri / Şube'}<select value={scope} onChange={(event) => setScope(event.target.value)}><option value="">Tümü</option>{scopes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label>Dosya türü<select value={fileType} onChange={(event) => setFileType(event.target.value)}><option value="">Tüm türler</option><option value="pdf">PDF</option><option value="office">Word / Excel</option><option value="image">Görsel</option><option value="text">Metin / Diğer</option></select></label><label>Başlangıç<input type="date" value={dateFrom} onChange={(event) => { const next = event.target.value; setDateFrom(next); if (dateTo && dateTo < next) setDateTo(next); }} /></label><label>Bitiş<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label><div className="document-filter-summary"><span><strong>{visibleItems.length}</strong> / {items.length} belge</span><button type="button" disabled={!hasFilters} onClick={clearFilters}><FilterX size={15} /> Temizle</button></div></div>{visibleItems.length === 0 ? <div className="quality-empty"><FileArchive /><strong>{items.length ? 'Filtrelere uygun belge bulunamadı' : 'Bu kategoride belge yok'}</strong><span>{items.length ? 'Filtreleri temizleyin veya farklı ölçütlerle tekrar deneyin.' : fixed ? 'İlk belgeyi yükleyip stok ürünüyle eşleştirin.' : 'Yeni analizler ve yüklenen dosyalar burada sıralanır.'}</span></div> : <div className="document-table"><div className="document-table-head"><span>Belge</span><span>Kategori</span><span>{fixed ? 'Bağlı ürün / Belge no' : 'Müşteri / Şube'}</span><span>Oluşturan</span><span>Tarih</span><span /></div>{visibleItems.map((item) => <article key={item.id}><span className="document-name"><i>{documentIcon(item)}</i><span><strong>{item.title}</strong><small>{item.fileName}{item.sizeBytes ? ` · ${formatSize(item.sizeBytes)}` : ' · Dijital form'}</small></span></span><span className="document-category">{categoryLabel(item.category)}</span><span>{fixed ? item.productName ?? 'Ürün bağlantısı yok' : item.customerName}<small>{fixed ? item.licenseNumber ?? (item.category === 'SafetyDataSheets' ? 'MSDS / GBF' : 'Ruhsat numarası yok') : item.branchName}</small></span><span>{item.createdBy}</span><span>{formatDate(item.createdAt)}</span><span className="document-actions">{item.contentType === 'application/pdf' && <button title="Görüntüle" onClick={() => onDownload(item, true)}><Eye size={16} /></button>}<button title="İndir" onClick={() => onDownload(item)}><Download size={16} /></button><button title="Paylaş" onClick={() => onShare(item)}><Share2 size={16} /></button></span></article>)}</div>}</div></div>;
+  return <div className="quality-module"><div className="quality-module-heading"><div><p className="eyebrow">KATEGORİK DİJİTAL ARŞİV</p><h2>{title}</h2><p>{description}</p></div>{staff && <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>{onScan && <button type="button" className="secondary-button" onClick={onScan} title="Kamera ile A4 Belge Tara"><Camera size={17} /> Belge Tara (A4)</button>}{onUpload && <button className="primary-button" onClick={onUpload}><Upload size={17} /> {uploadLabel}</button>}</div>}</div><div className="surface document-library"><div className="document-filter-panel"><label className="document-search"><span>Belge ara</span><i><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Başlık, dosya, ürün veya müşteri…" /></i></label>{!fixed && <label>Kategori<select value={category} onChange={(event) => onCategory(event.target.value)}><option value="">Tüm kategoriler</option>{documentCategories.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>}<label>{fixed ? 'Stok ürünü' : 'Müşteri / Şube'}<select value={scope} onChange={(event) => setScope(event.target.value)}><option value="">Tümü</option>{scopes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label>Dosya türü<select value={fileType} onChange={(event) => setFileType(event.target.value)}><option value="">Tüm türler</option><option value="pdf">PDF</option><option value="office">Word / Excel</option><option value="image">Görsel</option><option value="text">Metin / Diğer</option></select></label><label>Başlangıç<input type="date" value={dateFrom} onChange={(event) => { const next = event.target.value; setDateFrom(next); if (dateTo && dateTo < next) setDateTo(next); }} /></label><label>Bitiş<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label><div className="document-filter-summary"><span><strong>{visibleItems.length}</strong> / {items.length} belge</span><button type="button" disabled={!hasFilters} onClick={clearFilters}><FilterX size={15} /> Temizle</button></div></div>{visibleItems.length === 0 ? <div className="quality-empty"><FileArchive /><strong>{items.length ? 'Filtrelere uygun belge bulunamadı' : 'Bu kategoride belge yok'}</strong><span>{items.length ? 'Filtreleri temizleyin veya farklı ölçütlerle tekrar deneyin.' : fixed ? 'İlk belgeyi yükleyip stok ürünüyle eşleştirin.' : 'Yeni analizler ve yüklenen dosyalar burada sıralanır.'}</span></div> : <div className="document-table"><div className="document-table-head"><span>Belge</span><span>Kategori</span><span>{fixed ? 'Bağlı ürün / Belge no' : 'Müşteri / Şube'}</span><span>Oluşturan</span><span>Tarih</span><span /></div>{visibleItems.map((item) => <article key={item.id}><span className="document-name"><i>{documentIcon(item)}</i><span><strong>{item.title}</strong><small>{item.fileName}{item.sizeBytes ? ` · ${formatSize(item.sizeBytes)}` : ' · Dijital form'}</small></span></span><span className="document-category">{categoryLabel(item.category)}</span><span>{fixed ? item.productName ?? 'Ürün bağlantısı yok' : item.customerName}<small>{fixed ? item.licenseNumber ?? (item.category === 'SafetyDataSheets' ? 'MSDS / GBF' : 'Ruhsat numarası yok') : item.branchName}</small></span><span>{item.createdBy}</span><span>{formatDate(item.createdAt)}</span><span className="document-actions">{item.contentType === 'application/pdf' && <button title="Görüntüle" onClick={() => onDownload(item, true)}><Eye size={16} /></button>}<button title="İndir" onClick={() => onDownload(item)}><Download size={16} /></button><button title="Paylaş" onClick={() => onShare(item)}><Share2 size={16} /></button>{staff && <>{item.category === 'Archived' ? <button type="button" title="Arşivden Çıkar" onClick={() => onUnarchive?.(item)} style={{ color: '#0d9488' }}><RefreshCw size={15} /></button> : <button type="button" title="Arşivle" onClick={() => onArchive?.(item)} style={{ color: '#d97706' }}><FileArchive size={15} /></button>}<button type="button" title="Kalıcı Olarak Sil" onClick={() => onDelete?.(item)} style={{ color: '#dc2626' }}><Trash2 size={15} /></button></>}</span></article>)}</div>}</div></div>;
 }
 
 function TrendAnalysisModal({ locations, onClose, onSubmit }: { locations: QualityLocation[]; onClose: () => void; onSubmit: (input: CreateTrendAnalysisInput) => Promise<void> }) {
@@ -445,7 +520,7 @@ const documentCategories = [
   { value: 'ServiceReports', label: 'Saha Hizmet Raporları' }, { value: 'CommercialProposals', label: 'Teklifler' }, { value: 'Contracts', label: 'Sözleşmeler' },
   { value: 'SalesForms', label: 'Satış Formları' },
   { value: 'Certificates', label: 'İzin & Sertifikalar' }, { value: 'Licenses', label: 'Ürün Ruhsatları' }, { value: 'SafetyDataSheets', label: 'MSDS / Güvenlik Bilgi Formları' }, { value: 'Photos', label: 'Fotoğraflar' },
-  { value: 'General', label: 'Genel Belgeler' }, { value: 'Other', label: 'Diğer' },
+  { value: 'General', label: 'Genel Belgeler' }, { value: 'Archived', label: '📁 Arşivlenmiş Belgeler' }, { value: 'Other', label: 'Diğer' },
 ];
 const riskPestCategories = ['Kemirgen', 'Uçan haşere', 'Yürüyen haşere', 'Depolanmış ürün zararlısı', 'Kuş', 'Sokak hayvanları', 'Diğer'];
 const riskCategories = ['Dış alan & çevre koşulları', 'Yalıtım standartları', 'Hijyen standartları', 'İç alan & depolama sınırları', 'İzleme & kayıt sistemi'];

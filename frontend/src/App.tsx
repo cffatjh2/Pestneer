@@ -78,7 +78,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
     try {
       const [orderItems, customerItems, employeeItems] = await Promise.all([
         getWorkOrders(session.accessToken),
-        getCustomers(session.accessToken),
+        getCustomers(session.accessToken, true),
         getEmployees(session.accessToken),
       ]);
       setWorkOrders(orderItems);
@@ -149,7 +149,7 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
       if (branches.length > 0) {
         await addCustomerBranches(session.accessToken, targetCustomerId, branches);
       }
-      setCustomers(await getCustomers(session.accessToken));
+      setCustomers(await getCustomers(session.accessToken, true));
       setIsCustomerModalOpen(false);
       showToast(branches.length > 0
         ? `${branches.length} şube müşteri portföyüne eklendi.`
@@ -195,11 +195,19 @@ function OwnerPortal({ session, onLogout }: { session: AuthenticatedSession; onL
         <PortalFooter />
       </main>
 
-      {isNewOrderModalOpen && <WorkOrderModal customers={customers} employees={employees} onClose={() => setIsNewOrderModalOpen(false)} onManageCustomers={() => openCustomerManagement(true)} onCreate={handleCreateOrder} />}
-      {editingOrder && <WorkOrderModal customers={customers} employees={employees} editingOrder={editingOrder} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} />}
+      {isNewOrderModalOpen && <WorkOrderModal customers={customers.filter((c) => c.isActive !== false)} employees={employees} onClose={() => setIsNewOrderModalOpen(false)} onManageCustomers={() => openCustomerManagement(true)} onCreate={handleCreateOrder} />}
+      {editingOrder && <WorkOrderModal customers={customers.filter((c) => c.isActive !== false)} employees={employees} editingOrder={editingOrder} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} />}
       {selectedOrder && <WorkOrderDetailModal order={selectedOrder} accessToken={session.accessToken} onClose={() => setSelectedOrder(null)} onEdit={() => { setEditingOrder(selectedOrder); setSelectedOrder(null); }} onOpenStations={() => { setStationModalOrder(selectedOrder); setSelectedOrder(null); }} />}
       {stationModalOrder && <StationActivationModal accessToken={session.accessToken} order={stationModalOrder} onClose={() => setStationModalOrder(null)} />}
-      {isCustomerModalOpen && <CustomerBranchModal customers={customers} onClose={() => { setIsCustomerModalOpen(false); setReopenOrderAfterCustomer(false); }} onSubmit={handleCustomerBranches} />}
+      {isCustomerModalOpen && (
+        <CustomerBranchModal
+          accessToken={session.accessToken}
+          customers={customers}
+          onClose={() => { setIsCustomerModalOpen(false); setReopenOrderAfterCustomer(false); }}
+          onSubmit={handleCustomerBranches}
+          onRefresh={async () => setCustomers(await getCustomers(session.accessToken, true))}
+        />
+      )}
       {toastMessage && <div className="toast"><AlertCircle size={20} />{toastMessage}</div>}
     </div>
   );

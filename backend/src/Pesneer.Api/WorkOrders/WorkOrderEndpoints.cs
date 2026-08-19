@@ -24,6 +24,11 @@ public static class WorkOrderEndpoints
         customers.MapGet("/", GetCustomersAsync);
         customers.MapPost("/", CreateCustomerAsync);
         customers.MapPost("/{customerId:guid}/branches/bulk", CreateBranchesAsync);
+        customers.MapPost("/{customerId:guid}/archive", ArchiveCustomerAsync);
+        customers.MapPost("/{customerId:guid}/unarchive", UnarchiveCustomerAsync);
+        customers.MapPost("/{customerId:guid}/branches/{branchId:guid}/archive", ArchiveBranchAsync);
+        customers.MapPost("/{customerId:guid}/branches/{branchId:guid}/unarchive", UnarchiveBranchAsync);
+        customers.MapDelete("/{customerId:guid}", DeleteCustomerAsync);
 
         var companyWorkOrders = app.MapGroup("/api/company/work-orders").RequireAuthorization("OwnerPortal");
         companyWorkOrders.MapGet("/", GetCompanyWorkOrdersAsync);
@@ -44,12 +49,17 @@ public static class WorkOrderEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetCustomersAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> GetCustomersAsync(bool? includeArchived, PesneerDbContext dbContext, CancellationToken cancellationToken)
     {
-        var customers = await dbContext.Customers.AsNoTracking()
-            .Include(customer => customer.Branches)
-            .Where(customer => customer.IsActive)
-            .ToListAsync(cancellationToken);
+        var query = dbContext.Customers.AsNoTracking()
+            .Include(customer => customer.Branches).AsQueryable();
+
+        if (includeArchived != true)
+        {
+            query = query.Where(customer => customer.IsActive);
+        }
+
+        var customers = await query.ToListAsync(cancellationToken);
 
         return Results.Ok(customers.OrderBy(customer => customer.LegalName, StringComparer.Create(TurkishCulture, true)).Select(ToResponse));
     }
@@ -737,7 +747,70 @@ public static class WorkOrderEndpoints
     private static bool UrlIsValid(string? value) => string.IsNullOrWhiteSpace(value) || (Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https");
     private static IResult Validation(string key, string message) => Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });
 
-    private static CustomerResponse ToResponse(Customer customer) => new(customer.Id, customer.LegalName, customer.Code, customer.ContactName, customer.PhoneNumber, customer.Email, customer.Address, customer.City, customer.District, customer.Latitude, customer.Longitude, customer.MapUrl, customer.IsActive, customer.Branches.Where(item => item.IsActive).OrderBy(item => item.Name).Select(ToResponse).ToArray());
+    private static async Task<IResult> ArchiveCustomerAsync(Guid customerId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var customer = await dbContext.Customers.Include(c => c.Branches).SingleOrDefaultAsync(c => c.Id == customerId, cancellationToken);
+        if (customer is null) return Results.NotFound(new { message = "Müşteri bulunamadı." });
+        customer.IsActive = false;
+        foreach (var branch in customer.Branches) branch.IsActive = false;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(customer));
+    }
+
+    private static async Task<IResult> UnarchiveCustomerAsync(Guid customerId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var customer = await dbContext.Customers.Include(c => c.Branches).SingleOrDefaultAsync(c => c.Id == customerId, cancellationToken);
+        if (customer is null) return Results.NotFound(new { message = "Müşteri bulunamadı." });
+        customer.IsActive = true;
+        foreach (var branch in customer.Branches) branch.IsActive = true;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(customer));
+    }
+
+    private static async Task<IResult> ArchiveBranchAsync(Guid customerId, Guid branchId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var branch = await dbContext.CustomerBranches.SingleOrDefaultAsync(b => b.CustomerId == customerId && b.Id == branchId, cancellationToken);
+        if (branch is null) return Results.NotFound(new { message = "Şube bulunamadı." });
+        branch.IsActive = false;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(branch));
+    }
+
+    private static async Task<IResult> UnarchiveBranchAsync(Guid customerId, Guid branchId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var branch = await dbContext.CustomerBranches.SingleOrDefaultAsync(b => b.CustomerId == customerId && b.Id == branchId, cancellationToken);
+        if (branch is null) return Results.NotFound(new { message = "Şube bulunamadı." });
+        branch.IsActive = true;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(branch));
+    }
+
+    private static async Task<IResult> DeleteCustomerAsync(Guid customerId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var customer = await dbContext.Customers.Include(c => c.Branches).SingleOrDefaultAsync(c => c.Id == customerId, cancellationToken);
+        if (customer is null) return Results.NotFound(new { message = "Müşteri bulunamadı." });
+        customer.IsActive = false;
+        foreach (var branch in customer.Branches) branch.IsActive = false;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { message = "Müşteri başarıyla silindi." });
+    }
+
+    private static CustomerResponse ToResponse(Customer customer) => new(
+        customer.Id,
+        customer.LegalName,
+        customer.Code,
+        customer.ContactName,
+        customer.PhoneNumber,
+        customer.Email,
+        customer.Address,
+        customer.City,
+        customer.District,
+        customer.Latitude,
+        customer.Longitude,
+        customer.MapUrl,
+        customer.IsActive,
+        customer.Branches.OrderBy(item => item.Name).Select(ToResponse).ToArray()
+    );
     private static CustomerBranchResponse ToResponse(CustomerBranch branch) => new(branch.Id, branch.Name, branch.Code, branch.Address, branch.City, branch.District, branch.ContactName, branch.PhoneNumber, branch.Email, branch.Latitude, branch.Longitude, branch.MapUrl, branch.IsActive);
 
     private static WorkOrderResponse ToResponse(WorkOrder workOrder) => ToResponse(workOrder, workOrder.Customer, workOrder.CustomerBranch, workOrder.AssignedEmployeeAccount);

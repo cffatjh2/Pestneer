@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Plus, RefreshCw, UserRound } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, Clock3, Plus, RefreshCw, UserRound, X } from 'lucide-react';
 import CalendarEntryModal from '../components/modals/CalendarEntryModal';
 import type { EmployeeRecord } from '../services/employeeApi';
 import {
@@ -28,6 +28,7 @@ export default function Calendar({ accessToken, employees, onSessionExpired, onN
   const [entries, setEntries] = useState<CalendarEntryRecord[]>([]);
   const [editingEntry, setEditingEntry] = useState<CalendarEntryRecord | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [dayEventsModalDate, setDayEventsModalDate] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
@@ -60,15 +61,19 @@ export default function Calendar({ accessToken, employees, onSessionExpired, onN
 
   const saveEntry = async (input: SaveCalendarEntryInput) => {
     try {
-      const saved = editingEntry
-        ? await updateCalendarEntry(accessToken, editingEntry.id, input)
-        : await createCalendarEntry(accessToken, input);
-      setEntries((current) => editingEntry ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved].sort(sortEntries));
+      if (editingEntry) {
+        const updated = await updateCalendarEntry(accessToken, editingEntry.id, input);
+        setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+        onNotify('Takvim kaydı güncellendi.');
+      } else {
+        const created = await createCalendarEntry(accessToken, input);
+        setEntries((current) => [...current, created]);
+        onNotify('Yeni kayıt takvime eklendi.');
+      }
       setIsModalOpen(false);
       setEditingEntry(null);
-      onNotify(editingEntry ? 'Takvim kaydı güncellendi.' : 'Yeni takvim kaydı oluşturuldu.');
     } catch (saveError) {
-      if (saveError instanceof CalendarSessionExpiredError) onSessionExpired();
+      if (saveError instanceof CalendarSessionExpiredError) return onSessionExpired();
       throw saveError;
     }
   };
@@ -82,21 +87,24 @@ export default function Calendar({ accessToken, employees, onSessionExpired, onN
       setEditingEntry(null);
       onNotify('Takvim kaydı silindi.');
     } catch (deleteError) {
-      if (deleteError instanceof CalendarSessionExpiredError) onSessionExpired();
+      if (deleteError instanceof CalendarSessionExpiredError) return onSessionExpired();
       throw deleteError;
     }
   };
 
-  const navigate = (direction: number) => {
+  const navigate = (direction: -1 | 1) => {
+    if (view === 'day') {
+      const next = addDays(focusDate, direction);
+      setFocusDate(next);
+      setSelectedDate(next);
+      return;
+    }
     const next = new Date(focusDate);
-    if (view === 'month') next.setMonth(next.getMonth() + direction, 1);
-    if (view === 'day') next.setDate(next.getDate() + direction);
-    setFocusDate(startOfDay(next));
-    setSelectedDate(startOfDay(next));
+    next.setMonth(next.getMonth() + direction);
+    setFocusDate(next);
   };
 
   const openEntry = (entry: CalendarEntryRecord) => {
-    if (!entry.canEdit) return;
     setEditingEntry(entry);
     setSelectedDate(startOfDay(new Date(entry.scheduledAt)));
     setIsModalOpen(true);
@@ -118,29 +126,172 @@ export default function Calendar({ accessToken, employees, onSessionExpired, onN
         </div>
 
         {isLoading ? <div className="calendar-loading"><RefreshCw className="spin-icon" size={24} /> Takvim yükleniyor…</div> : view === 'month'
-          ? <MonthView focusDate={focusDate} entries={entries} selectedDate={selectedDate} onSelectDate={(date) => { setSelectedDate(date); setFocusDate(date); }} onCreate={openCreate} onOpenEntry={openEntry} />
+          ? <MonthView focusDate={focusDate} entries={entries} selectedDate={selectedDate} onSelectDate={(date) => { setSelectedDate(date); setFocusDate(date); }} onOpenDayModal={(date) => setDayEventsModalDate(date)} onCreate={openCreate} onOpenEntry={openEntry} />
           : <DayView date={focusDate} entries={entries} onCreate={openCreate} onOpenEntry={openEntry} />}
       </section>
 
       {isModalOpen && <CalendarEntryModal employees={employees} selectedDate={toDateKey(selectedDate)} entry={editingEntry} onClose={() => { setIsModalOpen(false); setEditingEntry(null); }} onSubmit={saveEntry} onDelete={editingEntry ? removeEntry : undefined} />}
+
+      {dayEventsModalDate && (
+        <DayEventsModal
+          date={dayEventsModalDate}
+          entries={entries}
+          onClose={() => setDayEventsModalDate(null)}
+          onCreate={openCreate}
+          onOpenEntry={openEntry}
+        />
+      )}
     </section>
   );
 }
 
-function MonthView({ focusDate, entries, selectedDate, onSelectDate, onCreate, onOpenEntry }: { focusDate: Date; entries: CalendarEntryRecord[]; selectedDate: Date; onSelectDate: (date: Date) => void; onCreate: (date: Date) => void; onOpenEntry: (entry: CalendarEntryRecord) => void }) {
+function MonthView({ focusDate, entries, selectedDate, onSelectDate, onOpenDayModal, onCreate, onOpenEntry }: { focusDate: Date; entries: CalendarEntryRecord[]; selectedDate: Date; onSelectDate: (date: Date) => void; onOpenDayModal: (date: Date) => void; onCreate: (date: Date) => void; onOpenEntry: (entry: CalendarEntryRecord) => void }) {
   const first = new Date(focusDate.getFullYear(), focusDate.getMonth(), 1);
   const gridStart = startOfWeek(first);
   const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
   return <div className="calendar-grid">{weekdays.map((day) => <div key={day} className="calendar-weekday">{day}</div>)}{days.map((date) => {
     const dayEntries = entriesForDate(entries, date);
     const isCurrentMonth = date.getMonth() === focusDate.getMonth();
-    return <div key={toDateKey(date)} className={`calendar-day ${isToday(date) ? 'today' : ''} ${!isCurrentMonth ? 'muted' : ''} ${sameDay(date, selectedDate) ? 'selected' : ''}`} onClick={() => onSelectDate(date)}><div className="calendar-day-header"><strong>{date.getDate()}</strong><button onClick={(event) => { event.stopPropagation(); onCreate(date); }} aria-label={`${formatFullDate(date)} için kayıt ekle`}><Plus size={13} /></button></div><div className="calendar-day-events">{dayEntries.slice(0, 3).map((entry) => <CalendarEvent key={entry.id} entry={entry} onClick={onOpenEntry} />)}{dayEntries.length > 3 && <button className="calendar-more" onClick={(event) => { event.stopPropagation(); onSelectDate(date); }}>+{dayEntries.length - 3} kayıt</button>}</div></div>;
+    return (
+      <div
+        key={toDateKey(date)}
+        className={`calendar-day ${isToday(date) ? 'today' : ''} ${!isCurrentMonth ? 'muted' : ''} ${sameDay(date, selectedDate) ? 'selected' : ''}`}
+        onClick={() => {
+          onSelectDate(date);
+          if (dayEntries.length > 0) {
+            onOpenDayModal(date);
+          }
+        }}
+      >
+        <div className="calendar-day-header">
+          <strong>{date.getDate()}</strong>
+          <button onClick={(event) => { event.stopPropagation(); onCreate(date); }} aria-label={`${formatFullDate(date)} için kayıt ekle`}><Plus size={13} /></button>
+        </div>
+        <div className="calendar-day-events">
+          {dayEntries.slice(0, 3).map((entry) => <CalendarEvent key={entry.id} entry={entry} onClick={onOpenEntry} />)}
+          {dayEntries.length > 3 && (
+            <button
+              type="button"
+              className="calendar-more"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectDate(date);
+                onOpenDayModal(date);
+              }}
+            >
+              +{dayEntries.length - 3} kayıt
+            </button>
+          )}
+        </div>
+      </div>
+    );
   })}</div>;
 }
 
 function DayView({ date, entries, onCreate, onOpenEntry }: { date: Date; entries: CalendarEntryRecord[]; onCreate: (date: Date) => void; onOpenEntry: (entry: CalendarEntryRecord) => void }) {
   const dayEntries = entriesForDate(entries, date);
   return <div className="calendar-day-view"><div className="day-view-heading"><div><CalendarDays size={22} /><div><strong>{formatFullDate(date)}</strong><span>{dayEntries.length} kayıt planlandı</span></div></div><button className="secondary-button" onClick={() => onCreate(date)}><Plus size={16} /> Bu güne ekle</button></div>{dayEntries.length > 0 ? <div className="day-agenda-list">{dayEntries.map((entry) => <CalendarAgendaItem key={entry.id} entry={entry} onClick={onOpenEntry} />)}</div> : <div className="calendar-empty-day"><CalendarDays size={30} /><strong>Bu gün için kayıt yok</strong><span>Not ekleyebilir veya personele görev atayabilirsiniz.</span></div>}</div>;
+}
+
+function DayEventsModal({
+  date,
+  entries,
+  onClose,
+  onCreate,
+  onOpenEntry,
+}: {
+  date: Date;
+  entries: CalendarEntryRecord[];
+  onClose: () => void;
+  onCreate: (date: Date) => void;
+  onOpenEntry: (entry: CalendarEntryRecord) => void;
+}) {
+  const dayEntries = entriesForDate(entries, date);
+  return (
+    <div className="modal-layer" style={{ zIndex: 1100 }}>
+      <div className="modal calendar-day-events-modal" style={{ maxWidth: '580px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
+              <CalendarDays size={22} />
+            </div>
+            <div>
+              <p className="eyebrow" style={{ color: '#2563eb', fontWeight: 800 }}>GÜNLÜK İŞ & GÖREV LİSTESİ</p>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>{formatFullDate(date)}</h2>
+              <p style={{ fontSize: '12.5px', color: '#64748b', margin: '2px 0 0 0' }}>Bu tarihe planlanmış <strong>{dayEntries.length} kayıt</strong> bulunmaktadır.</p>
+            </div>
+          </div>
+          <button className="icon-button" onClick={onClose}><X size={20} /></button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {dayEntries.length === 0 ? (
+            <div className="calendar-empty-day" style={{ padding: '30px', textAlign: 'center' }}>
+              <CalendarDays size={32} color="#94a3b8" />
+              <strong style={{ display: 'block', marginTop: '10px', color: '#334155' }}>Bu gün için kayıt yok</strong>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>Yeni bir iş emri veya not ekleyebilirsiniz.</span>
+            </div>
+          ) : (
+            dayEntries.map((entry) => (
+              <div
+                key={entry.id}
+                onClick={() => { onClose(); onOpenEntry(entry); }}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  transition: 'all 0.15s ease',
+                }}
+                className="day-event-card"
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '6px 10px', borderRadius: '8px', background: '#fff', border: '1px solid #cbd5e1', minWidth: '68px', textAlign: 'center' }}>
+                  <Clock size={13} color="#64748b" />
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e293b' }}>
+                    {entry.isAllDay ? 'Tüm gün' : formatEntryTime(new Date(entry.scheduledAt))}
+                  </span>
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                    <strong style={{ fontSize: '14px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {entry.title}
+                    </strong>
+                    {entry.priority === 'High' && <span style={{ fontSize: '10px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: '#fee2e2', color: '#dc2626' }}>Acil</span>}
+                  </div>
+                  <small style={{ display: 'block', fontSize: '12px', color: '#64748b' }}>
+                    {entry.kind === 'WorkOrder'
+                      ? `${entry.workOrderNumber ?? ''} · ${entry.serviceType ?? 'Saha Hizmeti'} · ${entry.assignedEmployeeName || 'Atama bekliyor'}`
+                      : entry.kind === 'Task'
+                      ? `${entry.assignedEmployeeName || 'Personele atanmadı'} · Görev`
+                      : 'Kişisel Not'}
+                    {entry.description ? ` · ${entry.description}` : ''}
+                  </small>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '6px', background: entry.status === 'Completed' ? '#dcfce7' : '#e0e7ff', color: entry.status === 'Completed' ? '#166534' : '#3730a3' }}>
+                    {entry.status === 'Completed' ? 'Tamamlandı' : 'Planlandı'}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="modal-actions" style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
+          <button type="button" className="secondary-button" onClick={onClose}>Kapat</button>
+          <button type="button" className="primary-button" onClick={() => { onClose(); onCreate(date); }}>
+            <Plus size={16} /> Bu Güne Yeni Kayıt Ekle
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CalendarEvent({ entry, onClick }: { entry: CalendarEntryRecord; onClick: (entry: CalendarEntryRecord) => void }) {

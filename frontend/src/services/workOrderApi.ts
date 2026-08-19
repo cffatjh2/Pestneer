@@ -33,9 +33,14 @@ export class WorkOrderSessionExpiredError extends Error {
   constructor(message = 'Oturumunuz güncel değil. Lütfen yeniden giriş yapın.') { super(message); this.name = 'WorkOrderSessionExpiredError'; }
 }
 
-export const getCustomers = (token: string) => request<CustomerRecord[]>('/api/company/customers', token);
+export const getCustomers = (token: string, includeArchived = false) => request<CustomerRecord[]>(`/api/company/customers${includeArchived ? '?includeArchived=true' : ''}`, token);
 export const createCustomer = (token: string, input: CreateCustomerInput) => request<CustomerRecord>('/api/company/customers', token, { method: 'POST', body: JSON.stringify(input) });
 export const addCustomerBranches = (token: string, customerId: string, branches: CreateBranchInput[]) => request<CustomerBranchRecord[]>(`/api/company/customers/${customerId}/branches/bulk`, token, { method: 'POST', body: JSON.stringify({ branches }) });
+export const archiveCustomer = (token: string, customerId: string) => request<CustomerRecord>(`/api/company/customers/${customerId}/archive`, token, { method: 'POST' });
+export const unarchiveCustomer = (token: string, customerId: string) => request<CustomerRecord>(`/api/company/customers/${customerId}/unarchive`, token, { method: 'POST' });
+export const archiveCustomerBranch = (token: string, customerId: string, branchId: string) => request<CustomerBranchRecord>(`/api/company/customers/${customerId}/branches/${branchId}/archive`, token, { method: 'POST' });
+export const unarchiveCustomerBranch = (token: string, customerId: string, branchId: string) => request<CustomerBranchRecord>(`/api/company/customers/${customerId}/branches/${branchId}/unarchive`, token, { method: 'POST' });
+export const deleteCustomer = (token: string, customerId: string) => request<{ message: string }>(`/api/company/customers/${customerId}`, token, { method: 'DELETE' });
 export async function getWorkOrders(token: string) { return (await request<WorkOrderResponse[]>('/api/company/work-orders', token)).map(mapWorkOrder); }
 export async function createWorkOrders(token: string, input: CreateWorkOrdersInput) { return (await request<WorkOrderResponse[]>('/api/company/work-orders/batch', token, { method: 'POST', body: JSON.stringify(input) })).map(mapWorkOrder); }
 export async function updateWorkOrder(token: string, id: string, input: UpdateWorkOrderInput) { return mapWorkOrder(await request<WorkOrderResponse>(`/api/company/work-orders/${id}`, token, { method: 'PUT', body: JSON.stringify(input) })); }

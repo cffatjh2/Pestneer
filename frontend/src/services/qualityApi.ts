@@ -67,6 +67,9 @@ export const getQualityDocuments = (token: string, filters: QualityDocumentFilte
 };
 export const createTrendAnalysis = (token: string, input: CreateTrendAnalysisInput) => request<QualityAnalysis>('/api/quality/trend-analyses', token, { method: 'POST', body: JSON.stringify(input) });
 export const createRiskAnalysis = (token: string, input: CreateRiskAnalysisInput) => request<QualityAnalysis>('/api/quality/risk-analyses', token, { method: 'POST', body: JSON.stringify(input) });
+export const archiveQualityDocument = (token: string, documentId: string) => request<QualityDocument>(`/api/quality/documents/${documentId}/archive`, token, { method: 'POST' });
+export const unarchiveQualityDocument = (token: string, documentId: string) => request<QualityDocument>(`/api/quality/documents/${documentId}/unarchive`, token, { method: 'POST' });
+export const deleteQualityDocument = (token: string, documentId: string) => request<{ message: string }>(`/api/quality/documents/${documentId}`, token, { method: 'DELETE' });
 
 export async function uploadQualityDocument(token: string, input: UploadQualityDocumentInput) {
   const form = new FormData(); form.append('file', input.file); form.append('category', input.category);

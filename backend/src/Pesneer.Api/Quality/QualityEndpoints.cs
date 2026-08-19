@@ -20,7 +20,7 @@ public static class QualityEndpoints
     };
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     {
-        "General", "CommercialProposals", "Contracts", "ServiceReports", "StationActivations", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Licenses", "SafetyDataSheets", "AuditPackages", "Photos", "FieldInspections", "SalesForms", "Other"
+        "General", "CommercialProposals", "Contracts", "ServiceReports", "StationActivations", "TrendAnalyses", "RiskAnalyses", "SitePlans", "Certificates", "Licenses", "SafetyDataSheets", "AuditPackages", "Photos", "FieldInspections", "SalesForms", "Archived", "Other"
     };
 
     public static IEndpointRouteBuilder MapQualityEndpoints(this IEndpointRouteBuilder app)
@@ -36,6 +36,9 @@ public static class QualityEndpoints
         staff.MapPost("/trend-analyses", CreateTrendAnalysisAsync);
         staff.MapPost("/risk-analyses", CreateRiskAnalysisAsync);
         staff.MapPost("/documents/upload", UploadDocumentAsync).DisableAntiforgery();
+        staff.MapPost("/documents/{documentId:guid}/archive", ArchiveDocumentAsync);
+        staff.MapPost("/documents/{documentId:guid}/unarchive", UnarchiveDocumentAsync);
+        staff.MapDelete("/documents/{documentId:guid}", DeleteDocumentAsync);
         return app;
     }
 
@@ -105,7 +108,14 @@ public static class QualityEndpoints
             return Validation("contentType", "Geçerli bir dosya türü filtresi seçin.");
         var query = AccessibleDocuments(dbContext, context).AsNoTracking()
             .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem).AsQueryable();
-        if (!string.IsNullOrWhiteSpace(category)) query = query.Where(item => item.Category == category);
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            query = query.Where(item => item.Category == category);
+        }
+        else
+        {
+            query = query.Where(item => item.Category != "Archived");
+        }
         if (customerId.HasValue) query = query.Where(item => item.CustomerId == customerId.Value);
         if (branchId.HasValue) query = query.Where(item => item.CustomerBranchId == branchId.Value);
         if (inventoryItemId.HasValue) query = query.Where(item => item.InventoryItemId == inventoryItemId.Value);
@@ -365,6 +375,54 @@ public static class QualityEndpoints
         var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
             .SingleAsync(item => item.Id == document.Id, cancellationToken);
         return Results.Created($"/api/quality/documents/{document.Id}", ToDocumentResponse(loaded));
+    }
+
+    private static async Task<IResult> ArchiveDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        var document = await dbContext.QualityDocuments.SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
+        if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
+
+        var prevCat = document.Category;
+        document.Category = "Archived";
+        document.Description = $"[ARCHIVED_FROM:{prevCat}]{document.Description ?? string.Empty}";
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
+            .SingleAsync(item => item.Id == document.Id, cancellationToken);
+        return Results.Ok(ToDocumentResponse(loaded));
+    }
+
+    private static async Task<IResult> UnarchiveDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        var document = await dbContext.QualityDocuments.SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
+        if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
+
+        var restoredCategory = "General";
+        if (document.Description != null && document.Description.StartsWith("[ARCHIVED_FROM:"))
+        {
+            var endIdx = document.Description.IndexOf(']');
+            if (endIdx > 15)
+            {
+                restoredCategory = document.Description.Substring(15, endIdx - 15);
+                document.Description = document.Description.Substring(endIdx + 1);
+            }
+        }
+        document.Category = Categories.Contains(restoredCategory) && restoredCategory != "Archived" ? restoredCategory : "General";
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
+            .SingleAsync(item => item.Id == document.Id, cancellationToken);
+        return Results.Ok(ToDocumentResponse(loaded));
+    }
+
+    private static async Task<IResult> DeleteDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        var document = await dbContext.QualityDocuments.SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
+        if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
+
+        dbContext.QualityDocuments.Remove(document);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { message = "Belge başarıyla silindi." });
     }
 
     private static IQueryable<QualityAnalysis> AccessibleAnalyses(PesneerDbContext dbContext, ICompanyContext context)
