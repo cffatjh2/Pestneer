@@ -292,6 +292,7 @@ public sealed class LoginService(
         dbContext.Accounts.Add(owner);
         dbContext.CompanyMemberships.Add(membership);
 
+        await DevelopmentDataSeeder.SeedCompanyBiocidesAsync(dbContext, company.Id);
         await dbContext.SavePublicRegistrationChangesAsync(company.Id, cancellationToken);
 
         var token = jwtTokenService.Create(owner, company, CompanyRole.Owner, null, null);

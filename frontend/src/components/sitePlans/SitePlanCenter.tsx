@@ -52,6 +52,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<SitePlanRecord | 'new' | null>(null);
+  const [filterLocationKey, setFilterLocationKey] = useState('');
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -64,6 +65,11 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
     } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [accessToken]);
+
+  const visiblePlans = useMemo(() => {
+    if (!filterLocationKey) return plans;
+    return plans.filter((p) => `${p.customerId}|${p.branchId ?? ''}` === filterLocationKey);
+  }, [plans, filterLocationKey]);
 
   const download = async (plan: SitePlanRecord, open = false) => {
     try { await downloadSitePlan(accessToken, plan, open); }
@@ -114,9 +120,31 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
   };
 
   return <div className="site-plan-module">
-    <div className="quality-module-heading site-plan-heading"><div><p className="eyebrow">DENETİME HAZIR DİJİTAL KROKİ</p><h2>Ekipman yerleşim planları</h2><p>Numaralı izleme noktalarını A4 yatay planda çizin veya kendi mimari planınızı yükleyip üstüne istasyon yerleştirin.</p></div>{mode === 'staff' && <button className="primary-button" onClick={() => setEditing('new')}><Plus size={17} /> Yeni Kroki Oluştur</button>}</div>
+    <div className="quality-module-heading site-plan-heading">
+      <div>
+        <p className="eyebrow">DENETİME HAZIR DİJİTAL KROKİ</p>
+        <h2>Ekipman yerleşim planları</h2>
+        <p>Numaralı izleme noktalarını A4 yatay planda çizin veya kendi mimari planınızı yükleyip üstüne istasyon yerleştirin.</p>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        {locations.length > 0 && (
+          <select
+            value={filterLocationKey}
+            onChange={(e) => setFilterLocationKey(e.target.value)}
+            style={{ height: '38px', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '0 10px', fontSize: '13px', fontWeight: 600, background: '#fff', maxWidth: '260px' }}
+          >
+            <option value="">Tüm Müşteriler</option>
+            {locations.map((loc) => {
+              const val = `${loc.customerId}|${loc.branchId ?? ''}`;
+              return <option key={val} value={val}>{loc.customerName} {loc.branchName ? `· ${loc.branchName}` : ''}</option>;
+            })}
+          </select>
+        )}
+        {mode === 'staff' && <button className="primary-button" onClick={() => setEditing('new')}><Plus size={17} /> Yeni Kroki Oluştur</button>}
+      </div>
+    </div>
     {error && <div className="site-plan-error">{error}<button onClick={() => setError(null)}>Kapat</button></div>}
-    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : plans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>Henüz yerleşim planı yok</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturun veya mimari plan görseli yükleyerek istasyonları yerleştirin.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{plans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><MiniPlan canvas={plan.canvas} /></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{stationCount(plan.canvas)} ekipman noktası</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div className="site-plan-card-actions"><button title="QR Etiketlerini Yazdır (A4 PDF)" className="site-plan-qr-btn" onClick={() => void downloadQrLabels(plan)}><QrCode size={15} /><span>QR Etiketleri</span></button><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button><button title="Paylaş" onClick={() => void share(plan)}><Share2 size={16} /></button>{mode === 'staff' && <button title="Planı düzenle" onClick={() => setEditing(plan)}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
+    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : visiblePlans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>{plans.length > 0 ? 'Seçili müşteriye ait yerleşim planı bulunamadı' : 'Henüz yerleşim planı yok'}</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturun veya mimari plan görseli yükleyerek istasyonları yerleştirin.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{visiblePlans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><MiniPlan canvas={plan.canvas} /></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{stationCount(plan.canvas)} ekipman noktası</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div className="site-plan-card-actions"><button title="QR Etiketlerini Yazdır (A4 PDF)" className="site-plan-qr-btn" onClick={() => void downloadQrLabels(plan)}><QrCode size={15} /><span>QR Etiketleri</span></button><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button><button title="Paylaş" onClick={() => void share(plan)}><Share2 size={16} /></button>{mode === 'staff' && <button title="Planı düzenle" onClick={() => setEditing(plan)}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
     {editing && <SitePlanEditor locations={locations} plan={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSave={save} />}
   </div>;
 }

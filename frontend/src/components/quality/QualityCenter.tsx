@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BadgeCheck, BarChart3, BrainCircuit, Camera, Download, Eye, FileArchive, FileSpreadsheet, FileText, FilterX, FolderArchive, Map as MapIcon, MapPin, PackageCheck, Plus, RefreshCw, Search, Share2, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
+import { BadgeCheck, BarChart3, BrainCircuit, Building2, Camera, Download, Eye, FileArchive, FileSpreadsheet, FileText, FilterX, FolderArchive, Map as MapIcon, MapPin, PackageCheck, Plus, RefreshCw, Search, Share2, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
 import SitePlanCenter from '../sitePlans/SitePlanCenter';
 import AuditPackageCenter from './AuditPackageCenter';
 import DocumentScannerModal from '../scanner/DocumentScannerModal';
@@ -26,6 +26,7 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
   const [uploadCategory, setUploadCategory] = useState('Other');
   const [scannerCategory, setScannerCategory] = useState('Licenses');
   const [category, setCategory] = useState('');
+  const [selectedLocationKey, setSelectedLocationKey] = useState('');
   const [sitePlanCount, setSitePlanCount] = useState(0);
   const [auditPackageCount, setAuditPackageCount] = useState(0);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
@@ -45,10 +46,24 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
   };
   useEffect(() => { void load(); }, [accessToken]);
 
-  const trends = analyses.filter((item) => item.analysisType === 'Trend'); const risks = analyses.filter((item) => item.analysisType === 'Risk');
-  const filteredDocuments = category ? documents.filter((item) => item.category === category) : documents;
-  const licenseDocuments = documents.filter((item) => item.category === 'Licenses');
-  const safetyDocuments = documents.filter((item) => item.category === 'SafetyDataSheets');
+  const [selCustomerId, selBranchId] = selectedLocationKey ? selectedLocationKey.split('|') : ['', ''];
+
+  const scopedAnalyses = useMemo(() => {
+    if (!selectedLocationKey) return analyses;
+    return analyses.filter((item) => item.customerId === selCustomerId && (!selBranchId || item.branchId === selBranchId));
+  }, [analyses, selectedLocationKey, selCustomerId, selBranchId]);
+
+  const scopedDocuments = useMemo(() => {
+    if (!selectedLocationKey) return documents;
+    return documents.filter((item) => !item.customerId || (item.customerId === selCustomerId && (!selBranchId || item.branchId === selBranchId)));
+  }, [documents, selectedLocationKey, selCustomerId, selBranchId]);
+
+  const trends = scopedAnalyses.filter((item) => item.analysisType === 'Trend');
+  const risks = scopedAnalyses.filter((item) => item.analysisType === 'Risk');
+  const filteredDocuments = category ? scopedDocuments.filter((item) => item.category === category) : scopedDocuments;
+  const licenseDocuments = scopedDocuments.filter((item) => item.category === 'Licenses');
+  const safetyDocuments = scopedDocuments.filter((item) => item.category === 'SafetyDataSheets');
+
   const handleTrend = async (input: CreateTrendAnalysisInput) => { const created = await createTrendAnalysis(accessToken, input); setAnalyses((current) => [created, ...current]); await refreshDocuments(accessToken, setDocuments); setTrendOpen(false); };
   const handleRisk = async (input: CreateRiskAnalysisInput) => { const created = await createRiskAnalysis(accessToken, input); setAnalyses((current) => [created, ...current]); await refreshDocuments(accessToken, setDocuments); setRiskOpen(false); };
   const handleUpload = async (input: Parameters<typeof uploadQualityDocument>[1]) => { const created = await uploadQualityDocument(accessToken, input); setDocuments((current) => [created, ...current]); setUploadOpen(false); setScannerOpen(false); };
@@ -58,7 +73,40 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
 
   return <section className={`quality-center ${standalone ? 'page quality-center-page' : 'quality-center-embedded'}`}>
     {standalone && <div className="page-heading"><div><p className="eyebrow">KALİTE, UYUM & İZLENEBİLİRLİK</p><h1>Belgeler & Analizler</h1><p>Trendleri, konuma bağlı riskleri ve kurumsal belgeleri düzenli bir arşivde yönetin.</p></div><div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>{mode === 'staff' && <button type="button" className="primary-button" onClick={() => { setScannerCategory('General'); setScannerOpen(true); }} style={{ background: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)', color: '#ffffff', border: 'none', boxShadow: '0 4px 14px rgba(13, 148, 136, 0.35)' }}><Camera size={16} /> Belge Tara (A4)</button>}<button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} /> Yenile</button></div></div>}
-    <nav className="quality-tabs"><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}><BarChart3 size={18} /><span>Trend Analizleri</span><b>{trends.length}</b></button><button className={tab === 'risk' ? 'active' : ''} onClick={() => setTab('risk')}><BrainCircuit size={18} /><span>Risk Analizleri</span><b>{risks.length}</b></button><button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}><MapIcon size={18} /><span>Kroki & Yerleşim</span><b>{sitePlanCount}</b></button><button className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}><PackageCheck size={18} /><span>Denetim Dosyaları</span><b>{auditPackageCount}</b></button><button className={tab === 'licenses' ? 'active' : ''} onClick={() => setTab('licenses')}><BadgeCheck size={18} /><span>Ruhsatlar</span><b>{licenseDocuments.length}</b></button><button className={tab === 'safety' ? 'active' : ''} onClick={() => setTab('safety')}><ShieldAlert size={18} /><span>MSDS / GBF</span><b>{safetyDocuments.length}</b></button><button className={tab === 'documents' ? 'active' : ''} onClick={() => setTab('documents')}><FolderArchive size={18} /><span>Belge Arşivi</span><b>{documents.length}</b></button></nav>
+
+    {mode === 'staff' && locations.length > 0 && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 16px 0', padding: '12px 18px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+        <Building2 size={18} color="#0d9488" />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>Müşteri & Şube Filtresi:</span>
+        <select
+          value={selectedLocationKey}
+          onChange={(e) => setSelectedLocationKey(e.target.value)}
+          style={{ flex: 1, maxWidth: '380px', height: '36px', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '0 10px', fontSize: '13px', fontWeight: 600, background: '#fff' }}
+        >
+          <option value="">Tüm Müşteriler & Belgeler (Tümü)</option>
+          {locations.map((loc) => {
+            const val = `${loc.customerId}|${loc.branchId ?? ''}`;
+            return (
+              <option key={val} value={val}>
+                {loc.customerName} {loc.branchName ? `· ${loc.branchName}` : ''}
+              </option>
+            );
+          })}
+        </select>
+        {selectedLocationKey && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setSelectedLocationKey('')}
+            style={{ height: '36px', padding: '0 12px', fontSize: '12px' }}
+          >
+            Filtreyi Temizle
+          </button>
+        )}
+      </div>
+    )}
+
+    <nav className="quality-tabs"><button className={tab === 'trend' ? 'active' : ''} onClick={() => setTab('trend')}><BarChart3 size={18} /><span>Trend Analizleri</span><b>{trends.length}</b></button><button className={tab === 'risk' ? 'active' : ''} onClick={() => setTab('risk')}><BrainCircuit size={18} /><span>Risk Analizleri</span><b>{risks.length}</b></button><button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}><MapIcon size={18} /><span>Kroki & Yerleşim</span><b>{sitePlanCount}</b></button><button className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}><PackageCheck size={18} /><span>Denetim Dosyaları</span><b>{auditPackageCount}</b></button><button className={tab === 'licenses' ? 'active' : ''} onClick={() => setTab('licenses')}><BadgeCheck size={18} /><span>Ruhsatlar</span><b>{licenseDocuments.length}</b></button><button className={tab === 'safety' ? 'active' : ''} onClick={() => setTab('safety')}><ShieldAlert size={18} /><span>MSDS / GBF</span><b>{safetyDocuments.length}</b></button><button className={tab === 'documents' ? 'active' : ''} onClick={() => setTab('documents')}><FolderArchive size={18} /><span>Belge Arşivi</span><b>{filteredDocuments.length}</b></button></nav>
     {error && <div className="quality-error"><ShieldAlert size={17} />{error}<button onClick={() => setError(null)}>Kapat</button></div>}
     {loading ? <div className="surface quality-loading"><RefreshCw className="spin-icon" /><strong>Kalite kayıtları hazırlanıyor…</strong></div> : <>
       {tab === 'trend' && <AnalysisList type="Trend" items={trends} staff={mode === 'staff'} onScan={() => { setScannerCategory('TrendAnalyses'); setScannerOpen(true); }} onCreate={() => setTrendOpen(true)} documents={documentByAnalysis} onDownload={download} onShare={share} />}

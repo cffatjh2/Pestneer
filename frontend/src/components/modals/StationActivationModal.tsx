@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Ban, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getServiceReportCatalog, type ReportPestObservationInput, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
 import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
+import { getLatestVehicleStock, type VehicleStockCheck } from '../../services/fieldOperationsApi';
 import {
   downloadStationActivationPdf,
   getStationActivationByWorkOrder,
@@ -20,6 +21,20 @@ type Props = {
   onClose: () => void;
   onSaved?: (record: StationActivationRecord) => void;
 };
+
+/* ── Türkiye Sağlık Bakanlığı Onaylı Gerçek Biyosidal & Sarf Kataloğu ── */
+export const defaultBiocideOptions = [
+  { name: 'Brodifacoum %0.005 Mum Blok Yem', unit: 'Gram', defaultAmount: 20, category: 'Kemirgen Yemi' },
+  { name: 'Bromadiolone %0.005 Pasta Yem', unit: 'Gram', defaultAmount: 15, category: 'Kemirgen Yemi' },
+  { name: 'Difenacoum %0.005 Pelet Yem', unit: 'Gram', defaultAmount: 20, category: 'Kemirgen Yemi' },
+  { name: 'Maxforce IC %2.15 Hamamböceği Jeli', unit: 'Gram', defaultAmount: 5, category: 'Jel İlaç' },
+  { name: 'Goliath Jel %0.05 Hamamböceği Jeli', unit: 'Gram', defaultAmount: 5, category: 'Jel İlaç' },
+  { name: 'K-Othrine SC 25 Sıvı İnsektisit', unit: 'Mililitre', defaultAmount: 50, category: 'Sıvı İnsektisit' },
+  { name: 'Chrysamed Forte Konsantre İnsektisit', unit: 'Mililitre', defaultAmount: 50, category: 'Sıvı İnsektisit' },
+  { name: 'Fare & Sıçan Yapışkanlı Levha (Plaka)', unit: 'Adet', defaultAmount: 1, category: 'Sarf Malzemesi' },
+  { name: 'EFK Sinek Cihazı UV Yapışkan Levhası', unit: 'Adet', defaultAmount: 1, category: 'Sarf Malzemesi' },
+  { name: 'Feromonlu Güve & Böcek Monitör Yapışkanı', unit: 'Adet', defaultAmount: 1, category: 'Sarf Malzemesi' },
+];
 
 /* ── checklist tanımı ── */
 const checklistItems: { key: keyof ReportStationInput; label: string }[] = [
@@ -74,6 +89,7 @@ export default function StationActivationModal({ accessToken, order, onClose, on
   const [sitePlan, setSitePlan] = useState<SitePlanRecord | null>(null);
   const [qrNotice, setQrNotice] = useState<string | null>(null);
   const [visionOpen, setVisionOpen] = useState(false);
+  const [vehicleStock, setVehicleStock] = useState<VehicleStockCheck | null>(null);
   const readOnly = record?.status === 'Finalized' && !isEditing;
 
   const handleVisionApply = (observations: ReportPestObservationInput[], summary: { total: number; dominantPest: string }) => {
@@ -92,10 +108,16 @@ export default function StationActivationModal({ accessToken, order, onClose, on
 
   useEffect(() => {
     let active = true;
-    Promise.all([getStationActivationByWorkOrder(accessToken, order.recordId), getSitePlans(accessToken), getServiceReportCatalog(accessToken)])
-      .then(([existing, plans, loadedCatalog]) => {
+    Promise.all([
+      getStationActivationByWorkOrder(accessToken, order.recordId),
+      getSitePlans(accessToken),
+      getServiceReportCatalog(accessToken),
+      getLatestVehicleStock(accessToken).catch(() => null),
+    ])
+      .then(([existing, plans, loadedCatalog, stock]) => {
         if (!active) return;
         setCatalog(loadedCatalog);
+        if (stock) setVehicleStock(stock);
         setRecord(existing); setNotes(existing?.notes ?? '');
         const plan = plans.find((item) => item.customerId === order.customerId && (order.branchId ? item.branchId === order.branchId : !item.branchId));
         setSitePlan(plan || null);
@@ -359,6 +381,130 @@ export default function StationActivationModal({ accessToken, order, onClose, on
               ))}
             </div>
           </div>}
+
+          {/* ── Biyosidal / İlaç & Yem Uygulaması Paneli ── */}
+          {current.deviceStatus !== 'Unchecked' && (
+            <div className="activation-biocide-panel">
+              <div className="activation-biocide-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <PackageCheck size={16} color="#0d9488" />
+                  <strong style={{ fontSize: '13px', color: '#0f766e' }}>İlaç / Yem & Biyosidal Uygulaması</strong>
+                </div>
+                {current.appliedProductName && (
+                  <button
+                    type="button"
+                    className="activation-clear-btn"
+                    disabled={readOnly}
+                    onClick={() => update({
+                      appliedProductName: undefined,
+                      appliedAmount: 0,
+                      appliedUnit: undefined,
+                      appliedVehicleStockItemId: undefined,
+                      baitGelCompleted: false,
+                    })}
+                  >
+                    Kaldır
+                  </button>
+                )}
+              </div>
+
+              <div className="activation-biocide-grid">
+                <label className="activation-control">
+                  <span>Biyosidal Ürün / Yem / İlaç</span>
+                  <select
+                    value={current.appliedProductName || ''}
+                    disabled={readOnly}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        update({
+                          appliedProductName: undefined,
+                          appliedAmount: 0,
+                          appliedUnit: undefined,
+                          appliedVehicleStockItemId: undefined,
+                        });
+                        return;
+                      }
+                      const stockMatch = vehicleStock?.items?.find((item) => item.productName === val);
+                      const catalogMatch = defaultBiocideOptions.find((item) => item.name === val);
+                      const unit = stockMatch ? stockMatch.unit : catalogMatch ? catalogMatch.unit : 'Gram';
+                      const defaultAmt = current.appliedAmount && current.appliedAmount > 0
+                        ? current.appliedAmount
+                        : catalogMatch?.defaultAmount ?? (unit === 'Gram' ? 20 : unit === 'Mililitre' ? 50 : 1);
+
+                      update({
+                        appliedProductName: val,
+                        appliedVehicleStockItemId: stockMatch?.vehicleStockItemId,
+                        appliedUnit: unit,
+                        appliedAmount: defaultAmt,
+                        baitGelCompleted: unit === 'Gram' || unit === 'Mililitre' ? true : current.baitGelCompleted,
+                        stickyPlateChanged: val.includes('Plaka') || val.includes('Yapışkan') ? true : current.stickyPlateChanged,
+                      });
+                    }}
+                  >
+                    <option value="">İlaç / yem uygulanmadı</option>
+                    {vehicleStock?.items && vehicleStock.items.length > 0 && (
+                      <optgroup label="🚗 Araç Stoğundaki Ürünler">
+                        {vehicleStock.items.map((item) => (
+                          <option key={item.id} value={item.productName}>
+                            {item.productName} ({item.quantity} {item.unit})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="🏷️ Sağlık Bakanlığı Onaylı Biyosidal Kataloğu">
+                      {defaultBiocideOptions.map((opt) => (
+                        <option key={opt.name} value={opt.name}>
+                          {opt.name} · {opt.category} ({opt.unit})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </label>
+
+                <div className="activation-biocide-amount-row">
+                  <label className="activation-control" style={{ flex: 1 }}>
+                    <span>Uygulanan Miktar</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={current.appliedAmount || ''}
+                      disabled={readOnly || !current.appliedProductName}
+                      placeholder="0"
+                      onChange={(e) => update({ appliedAmount: Number(e.target.value) || 0 })}
+                    />
+                  </label>
+                  <label className="activation-control" style={{ width: '120px' }}>
+                    <span>Birim</span>
+                    <select
+                      value={current.appliedUnit || 'Gram'}
+                      disabled={readOnly || !current.appliedProductName}
+                      onChange={(e) => update({ appliedUnit: e.target.value })}
+                    >
+                      <option value="Gram">Gram (gr)</option>
+                      <option value="Mililitre">Mililitre (ml)</option>
+                      <option value="Adet">Adet / Blok</option>
+                      <option value="Litre">Litre (lt)</option>
+                      <option value="Kilogram">Kilogram (kg)</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {current.appliedProductName && !readOnly && (
+                <div className="activation-quick-dosage">
+                  <span className="activation-quick-dosage-label">Hızlı Doz:</span>
+                  <button type="button" onClick={() => update({ appliedAmount: 10, appliedUnit: 'Gram', baitGelCompleted: true })}>+10 gr</button>
+                  <button type="button" onClick={() => update({ appliedAmount: 20, appliedUnit: 'Gram', baitGelCompleted: true })}>+20 gr</button>
+                  <button type="button" onClick={() => update({ appliedAmount: 15, appliedUnit: 'Gram', baitGelCompleted: true })}>+15 gr</button>
+                  <button type="button" onClick={() => update({ appliedAmount: 5, appliedUnit: 'Gram', baitGelCompleted: true })}>+5 gr Jel</button>
+                  <button type="button" onClick={() => update({ appliedAmount: 1, appliedUnit: 'Adet', stickyPlateChanged: true })}>+1 Adet Plaka</button>
+                  <button type="button" onClick={() => update({ appliedAmount: 50, appliedUnit: 'Mililitre' })}>+50 ml</button>
+                </div>
+              )}
+            </div>
+          )}
 
           {current.deviceStatus === 'Activity' && <div className="activation-activity-panel">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>

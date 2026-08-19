@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
-import { AlertTriangle, Ban, Bug, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Cloud, FileCheck2, ImagePlus, MapPinned, PackageCheck, Plus, QrCode, Save, Search, Trash2, Undo2, WandSparkles, Wrench, X, Zap } from 'lucide-react';
+import { AlertTriangle, Ban, Bug, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Cloud, FileCheck2, ImagePlus, MapPinned, PackageCheck, Plus, QrCode, Save, Search, Sparkles, Trash2, Undo2, WandSparkles, Wrench, X, Zap } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getPreviousServiceReport, getServiceReportCatalog, ReportConflictError, type ReportPhotoUpload, type ReportProductInput, type ReportStationInput, type ServiceReportCatalog, type ServiceReportRecord, type UpsertServiceReportInput } from '../../services/serviceReportApi';
+import { getStationActivationByWorkOrder } from '../../services/stationActivationApi';
 import { getSitePlans, type SitePlanElement, type SitePlanRecord } from '../../services/sitePlanApi';
 import type { VehicleStockCheck } from '../../services/fieldOperationsApi';
 import { getLocalReportDraft, removeLocalReportDraft, saveLocalReportDraft, toOfflinePhotos } from '../../services/offlineFieldStore';
@@ -30,6 +31,7 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   const [form, setForm] = useState<FormState>(() => createInitialForm(order, existing, companyName));
   const [stations, setStations] = useState<ReportStationInput[]>(existing?.stations.map(stripStationId) ?? []);
   const [products, setProducts] = useState<ReportProductInput[]>(existing?.products.map(stripProductId) ?? [blankProduct()]);
+  const [autoAggregatedNotice, setAutoAggregatedNotice] = useState<string | null>(null);
   const [sitePlan, setSitePlan] = useState<SitePlanRecord | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [planWarning, setPlanWarning] = useState<string | null>(null);
@@ -53,11 +55,72 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
 
   useEffect(() => {
     let active = true;
-    Promise.all([getPreviousServiceReport(accessToken, order.recordId), getServiceReportCatalog(accessToken)])
-      .then(([report, loadedCatalog]) => { if (!active) return; if (report) setReferenceReport(report); setCatalog(loadedCatalog); })
+    Promise.all([
+      getPreviousServiceReport(accessToken, order.recordId),
+      getServiceReportCatalog(accessToken),
+      getStationActivationByWorkOrder(accessToken, order.recordId).catch(() => null),
+    ])
+      .then(([report, loadedCatalog, stationActivation]) => {
+        if (!active) return;
+        if (report) setReferenceReport(report);
+        setCatalog(loadedCatalog);
+
+        // Auto aggregate products applied in station activations
+        if (stationActivation?.stations?.length) {
+          const productMap = new Map<string, { productName: string; unit: string; totalAmount: number }>();
+          let appliedStationCount = 0;
+
+          for (const s of stationActivation.stations) {
+            if (s.appliedProductName && s.appliedAmount && s.appliedAmount > 0) {
+              appliedStationCount++;
+              const unit = s.appliedUnit || 'Gram';
+              const key = `${s.appliedProductName.trim().toUpperCase()}|${unit.toUpperCase()}`;
+              const cur = productMap.get(key);
+              if (cur) {
+                cur.totalAmount += Number(s.appliedAmount);
+              } else {
+                productMap.set(key, {
+                  productName: s.appliedProductName.trim(),
+                  unit,
+                  totalAmount: Number(s.appliedAmount),
+                });
+              }
+            }
+          }
+
+          if (productMap.size > 0) {
+            const aggregated: ReportProductInput[] = Array.from(productMap.values()).map((p) => {
+              const stockMatch = vehicleStockItems.find(
+                (item) => item.productName.toLocaleUpperCase('tr-TR') === p.productName.toLocaleUpperCase('tr-TR')
+              );
+              return {
+                vehicleStockItemId: stockMatch?.vehicleStockItemId,
+                productName: p.productName,
+                amountUsed: p.totalAmount,
+                unit: p.unit,
+                licenseNumber: stockMatch?.licenseNumber || '',
+                licenseDocumentId: stockMatch?.licenseDocumentId,
+                applicationMethod: p.unit === 'Gram' ? 'Yemleme / İstasyon İçi' : p.unit === 'Mililitre' ? 'Püskürtme / Rezidüel' : 'İstasyon İçi Yerleşim',
+                activeIngredient: '',
+                antidote: p.productName.toLowerCase().includes('brodifacoum') || p.productName.toLowerCase().includes('bromadiolone') || p.productName.toLowerCase().includes('difenacoum')
+                  ? 'K1 Vitamini (Fitomenadion)'
+                  : 'Semptomatik tedavi',
+                dilutionRate: '',
+                packingQuantity: '',
+              };
+            });
+
+            // Only auto-populate if existing report has no products or default blank product
+            if (!existing?.products?.length || (existing.products.length === 1 && !existing.products[0].productName)) {
+              setProducts(aggregated);
+              setAutoAggregatedNotice(`✨ İstasyon ziyaretlerinde kullanılan ${productMap.size} çeşit ürün ve toplam miktarlar (${appliedStationCount} istasyondan) otomatik toplanıp Ek-1 formuna aktarıldı. Tekrar ürün/ilaç girmenize gerek yoktur.`);
+            }
+          }
+        }
+      })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [accessToken, order.recordId]);
+  }, [accessToken, order.recordId, existing?.products, vehicleStockItems]);
 
   useEffect(() => {
     setPlanLoading(false);
@@ -190,13 +253,13 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
 
     <nav className="field-report-steps field-report-single-step"><button className="active"><span>1</span><div><strong>Uygulama & onay</strong><small>Ürün, saha sonucu ve iş bitimi imzası</small></div></button><div className={`local-draft-state ${localSaveState}`}><Cloud size={15} /><span>{readOnly ? 'Sunucu kaydı' : localSaveState === 'saving' ? 'Cihaza kaydediliyor…' : 'Cihaza kaydoldu'}</span></div></nav>
 
-    <ReportDetails catalog={catalog} form={form} setField={setField} products={products} updateProduct={updateProduct} setProducts={setProducts} stations={existing?.stations.length ? stations : []} vehicleStockItems={vehicleStockItems} readOnly={readOnly} setSignatureTarget={setSignatureTarget} onAddManualStock={onAddManualStock ? () => { setProducts((current) => [...current, blankProduct()]); setManualStockTarget(products.length); } : undefined} />
+    <ReportDetails catalog={catalog} form={form} setField={setField} products={products} updateProduct={updateProduct} setProducts={setProducts} stations={existing?.stations.length ? stations : []} vehicleStockItems={vehicleStockItems} readOnly={readOnly} setSignatureTarget={setSignatureTarget} autoAggregatedNotice={autoAggregatedNotice} onAddManualStock={onAddManualStock ? () => { setProducts((current) => [...current, blankProduct()]); setManualStockTarget(products.length); } : undefined} />
 
-    {stage === 'report' && <><PhotoCapture photos={photos} existingPhotos={existing?.photos ?? []} readOnly={readOnly} onChange={setPhotos} /><div className="report-form-status"><FileCheck2 size={18} /><div><strong>{existing?.status === 'Finalized' ? 'Onaylanmış EK-1 formu' : 'EK-1 formu onaya hazır'}</strong><span>İstasyon aktivasyonundan bağımsızdır; ürün ve sarf tüketimleri araç stoğundan düşer.</span></div></div>{error && <div className="modal-form-error">{error}</div>}<div className="modal-actions service-report-actions"><button className="secondary-button" onClick={onClose}>Kapat</button>{!readOnly && <><button className="secondary-button" disabled={saving} onClick={() => void submit(false)}><Save size={16} /> Taslak Kaydet</button><button className="primary-button" disabled={saving} onClick={() => void submit(true)}><Check size={17} /> EK-1 Formunu Onayla</button></>}</div></>}
+    {stage === 'report' && <><PhotoCapture photos={photos} existingPhotos={existing?.photos ?? []} readOnly={readOnly} onChange={setPhotos} /><div className="report-form-status"><FileCheck2 size={18} /><div><strong>{existing?.status === 'Finalized' ? 'Onaylanmış EK-1 formu' : 'EK-1 formu onaya hazır'}</strong><span>İstasyon tüketimleri otomatik toplanmıştır; ürün ve sarf düşümleri araç stoğundan kaydedilir.</span></div></div>{error && <div className="modal-form-error">{error}</div>}<div className="modal-actions service-report-actions"><button className="secondary-button" onClick={onClose}>Kapat</button>{!readOnly && <><button className="secondary-button" disabled={saving} onClick={() => void submit(false)}><Save size={16} /> Taslak Kaydet</button><button className="primary-button" disabled={saving} onClick={() => void submit(true)}><Check size={17} /> EK-1 Formunu Onayla</button></>}</div></>}
   </div>{signatureTarget && <SignaturePad onClose={() => setSignatureTarget(null)} onSave={(image) => { setField(signatureTarget === 'manager' ? 'managerSignatureData' : 'customerSignatureData', image); setSignatureTarget(null); }} />}{manualStockTarget !== null && onAddManualStock && <ManualStockModal onClose={() => setManualStockTarget(null)} onSave={async (input) => { const item = await onAddManualStock(input); updateProduct(manualStockTarget, { vehicleStockItemId: item.vehicleStockItemId, productName: item.productName, unit: usageUnits(item.unit)[0], licenseNumber: item.licenseNumber, licenseDocumentId: item.licenseDocumentId }); setManualStockTarget(null); }} />}{scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onScan={handleQrScan} />}{conflict && <div className="nested-modal-layer"><div className="report-conflict-dialog"><AlertTriangle size={30} /><h3>İki farklı rapor sürümü bulundu</h3><p>Sunucudaki rapor {formatDraftTime(conflict.updatedAt)} tarihinde güncellendi. Bu cihazdaki taslakla üzerine yazabilir veya güncel sunucu sürümünü kullanabilirsiniz.</p><div><button className="secondary-button" onClick={() => { setForm(createInitialForm(order, conflict, companyName)); setStations(conflict.stations.map(stripStationId)); setProducts(conflict.products.map(stripProductId)); setBaseUpdatedAt(conflict.updatedAt); setConflict(null); }}>Sunucudakini kullan</button><button className="primary-button" onClick={() => { setConflict(null); void submit(conflictFinalize, true); }}>Bu cihazdaki sürümü gönder</button></div></div></div>}</div>;
 }
 
-function ReportDetails({ catalog, form, setField, products, updateProduct, setProducts, stations, vehicleStockItems, readOnly, setSignatureTarget, onAddManualStock }: { catalog: ServiceReportCatalog; form: FormState; setField: <K extends keyof FormState>(key: K, value: FormState[K]) => void; products: ReportProductInput[]; updateProduct: (index: number, patch: Partial<ReportProductInput>) => void; setProducts: Dispatch<SetStateAction<ReportProductInput[]>>; stations: ReportStationInput[]; vehicleStockItems: VehicleStockCheck['items']; readOnly: boolean; setSignatureTarget: (value: 'manager' | 'customer') => void; onAddManualStock?: () => void }) {
+function ReportDetails({ catalog, form, setField, products, updateProduct, setProducts, stations, vehicleStockItems, readOnly, setSignatureTarget, autoAggregatedNotice, onAddManualStock }: { catalog: ServiceReportCatalog; form: FormState; setField: <K extends keyof FormState>(key: K, value: FormState[K]) => void; products: ReportProductInput[]; updateProduct: (index: number, patch: Partial<ReportProductInput>) => void; setProducts: Dispatch<SetStateAction<ReportProductInput[]>>; stations: ReportStationInput[]; vehicleStockItems: VehicleStockCheck['items']; readOnly: boolean; setSignatureTarget: (value: 'manager' | 'customer') => void; autoAggregatedNotice?: string | null; onAddManualStock?: () => void }) {
   return <div className="service-report-details">
     <section className="report-form-section">
       <header>
@@ -241,10 +304,16 @@ function ReportDetails({ catalog, form, setField, products, updateProduct, setPr
         <span>{stations.length > 0 ? '4' : '3'}</span>
         <div>
           <strong>Ürün ve sarf tüketimleri</strong>
-          <small>Araç stoğundan seçilir; rapor onayında stoktan otomatik düşer</small>
+          <small>İstasyonlardan otomatik toplanır; rapor onayında araç stoğundan düşer</small>
         </div>
-        {!readOnly && <div className="report-stock-actions"><button onClick={() => setProducts((current) => [...current, blankProduct()])}><Plus size={15} /> Stoktan ürün ekle</button>{onAddManualStock && <button onClick={onAddManualStock}><PackageCheck size={15} /> Manuel sarf ekle</button>}</div>}
+        {!readOnly && <div className="report-stock-actions"><button onClick={() => setProducts((current) => [...current, blankProduct()])}><Plus size={15} /> Manuel ürün ekle</button>{onAddManualStock && <button onClick={onAddManualStock}><PackageCheck size={15} /> Sarf ekle</button>}</div>}
       </header>
+      {autoAggregatedNotice && (
+        <div style={{ margin: '0 24px 16px', padding: '12px 16px', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: '10px', color: '#065f46', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 600 }}>
+          <Sparkles size={18} color="#059669" style={{ flexShrink: 0 }} />
+          <span>{autoAggregatedNotice}</span>
+        </div>
+      )}
       <div className="report-product-list">
         {products.map((product, index) => <article key={index}>
           <div className="report-product-grid">

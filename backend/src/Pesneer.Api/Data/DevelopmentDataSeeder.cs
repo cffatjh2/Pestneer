@@ -71,6 +71,8 @@ public static class DevelopmentDataSeeder
                     Role = CompanyRole.Owner
                 });
             }
+            // Seed standard real biocides and consumables for the company if empty
+            await SeedCompanyBiocidesAsync(dbContext, company.Id);
         }
 
         var systemAdminEmail = configuration["SystemAdmin:Email"]?.Trim();
@@ -98,15 +100,62 @@ public static class DevelopmentDataSeeder
                 dbContext.Accounts.Add(systemAdmin);
             }
             // NOTE: Do NOT overwrite existing system admin password on restart
-            // Previously this line ran unconditionally: systemAdmin.PasswordHash = passwordHasher.HashPassword(...)
-            // which caused ALL password resets done via admin panel to be lost on every deploy/restart
-
             systemAdmin.IsActive = true;
-
-            // NOTE: Do NOT touch owner accounts' passwords here
-            // Previously this code also overwrote owner account passwords sharing the same email
         }
 
         await dbContext.SaveChangesAsync();
+    }
+
+    public static async Task SeedCompanyBiocidesAsync(PesneerDbContext dbContext, Guid companyId)
+    {
+        var hasItems = await dbContext.InventoryItems.IgnoreQueryFilters().AnyAsync(item => item.CompanyId == companyId);
+        if (hasItems) return;
+
+        var now = DateTimeOffset.UtcNow;
+        (string Name, string Category, decimal Qty, string Unit, decimal Min, decimal Cost, string? Lic, string Lot)[] defaultBiocides =
+        [
+            ("Brodifacoum %0.005 Mum Blok Yem", "Biyosidal Ürünler", 5000m, "Gram", 500m, 0.45m, "2018/142", "BRD-2026-01"),
+            ("Bromadiolone %0.005 Pasta Yem", "Biyosidal Ürünler", 3000m, "Gram", 400m, 0.50m, "2019/88", "BRM-2026-02"),
+            ("Difenacoum %0.005 Pelet Yem", "Biyosidal Ürünler", 3000m, "Gram", 300m, 0.40m, "2020/215", "DFN-2026-01"),
+            ("Maxforce IC %2.15 Hamamböceği Jeli", "Biyosidal Ürünler", 500m, "Gram", 60m, 4.20m, "2017/63", "MXF-2026-04"),
+            ("Goliath Jel %0.05 Hamamböceği Jeli", "Biyosidal Ürünler", 350m, "Gram", 70m, 5.10m, "2016/110", "GLT-2026-01"),
+            ("K-Othrine SC 25 Sıvı İnsektisit", "Biyosidal Ürünler", 2500m, "Mililitre", 500m, 1.20m, "2015/92", "KOT-2026-03"),
+            ("Chrysamed Forte Konsantre İnsektisit", "Biyosidal Ürünler", 2000m, "Mililitre", 500m, 1.10m, "2021/304", "CHY-2026-02"),
+            ("Fare & Sıçan Yapışkanlı Levha (Plaka)", "Sarf Malzemeleri", 200m, "Adet", 30m, 8.50m, null, "PLK-2026-01"),
+            ("EFK Sinek Cihazı UV Yapışkan Levhası", "Sarf Malzemeleri", 100m, "Adet", 20m, 15.00m, null, "EFK-2026-01"),
+            ("Feromonlu Güve & Böcek Monitör Yapışkanı", "Sarf Malzemeleri", 150m, "Adet", 25m, 6.00m, null, "FRM-2026-01"),
+        ];
+
+        foreach (var b in defaultBiocides)
+        {
+            var item = new InventoryItem
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = companyId,
+                Name = b.Name,
+                NormalizedName = b.Name.ToUpperInvariant(),
+                Category = b.Category,
+                Quantity = b.Qty,
+                Unit = b.Unit,
+                MinimumQuantity = b.Min,
+                UnitCost = b.Cost,
+                LicenseNumber = b.Lic,
+                LotNumber = b.Lot,
+                LastMovementAt = now,
+                IsActive = true
+            };
+            dbContext.InventoryItems.Add(item);
+            dbContext.InventoryMovements.Add(new InventoryMovement
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = companyId,
+                InventoryItemId = item.Id,
+                Type = "InitialStock",
+                Quantity = b.Qty,
+                Unit = b.Unit,
+                Note = "Başlangıç Biyosidal & Sarf Envanteri",
+                OccurredAt = now
+            });
+        }
     }
 }

@@ -1414,6 +1414,19 @@
 
 .activation-activity-panel { margin-top: 16px; padding: 16px; border: 1px solid #bfe8d9; border-radius: 14px; background: #f2fcf8; }
 .activation-activity-panel .activation-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 0; }
+
+/* ── Biyosidal & İlaç Uygulaması Paneli ── */
+.activation-biocide-panel { margin-top: 16px; padding: 16px; border: 1px solid #ccfbf1; border-radius: 14px; background: #f0fdfa; }
+.activation-biocide-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.activation-clear-btn { background: none; border: none; color: #ef4444; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; }
+.activation-clear-btn:hover { color: #dc2626; }
+.activation-biocide-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; align-items: flex-end; }
+@media (max-width: 640px) { .activation-biocide-grid { grid-template-columns: 1fr; } }
+.activation-biocide-amount-row { display: flex; gap: 8px; align-items: flex-end; }
+.activation-quick-dosage { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #99f6e4; }
+.activation-quick-dosage-label { font-size: 11px; font-weight: 700; color: #0f766e; margin-right: 4px; }
+.activation-quick-dosage button { padding: 4px 10px; border: 1px solid #0d9488; border-radius: 8px; background: #fff; color: #0f766e; font-size: 11px; font-weight: 750; cursor: pointer; transition: all 0.15s ease; }
+.activation-quick-dosage button:hover { background: #ccfbf1; color: #115e59; transform: translateY(-1px); }
 .activation-general-note { margin: 18px 24px 0; }.activation-general-note textarea { min-height: 76px; resize: vertical; }.activation-add { color: #2167d5; font-weight: 800; display: flex !important; align-items: center; justify-content: center; gap: 7px; }.activation-remove { margin-top: 18px; border: 0; background: #fff1f1; color: #c33; border-radius: 10px; padding: 10px 13px; display: inline-flex; gap: 7px; align-items: center; cursor: pointer; }
 
 /* ── Bulk add & status modals ── */
