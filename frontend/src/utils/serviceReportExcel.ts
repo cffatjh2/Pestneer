@@ -109,5 +109,13 @@ export function exportMonthlyBiocideExcel(
 const riskLabel = (value: string) => ({ Low: 'Düşük', Medium: 'Orta', High: 'Yüksek' }[value] ?? value);
 const deviceLabel = (value: string) => ({ EFT: 'Elektrikli sinek tutucu', LiveCapture: 'Canlı yakalama', Rodent: 'Kemirgen istasyonu', InsectMonitor: 'Haşere monitörü', Other: 'Diğer' }[value] ?? value);
 const deviceStatusLabel = (value: string) => ({ Active: 'Aktif', Damaged: 'Hasarlı', Missing: 'Kayıp', Replaced: 'Değiştirildi', Passive: 'Pasif' }[value] ?? value);
-const formatDate = (value: string) => new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+const formatDate = (value?: string | null) => {
+  if (!value) return '—';
+  try {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? value : new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short' }).format(d);
+  } catch {
+    return String(value);
+  }
+};
 const safeName = (value: string) => value.replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ_-]+/g, '_');

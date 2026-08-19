@@ -690,10 +690,57 @@ const statusLabels = { notStarted: 'Başlamadı', working: 'Mesaide', onBreak: '
 const riskLabel = (value: string) => ({ Low: 'Düşük', Medium: 'Orta', High: 'Yüksek' }[value] ?? value);
 const formatNumber = (value: number) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 }).format(value);
 const formatDuration = (minutes: number) => `${Math.floor(minutes / 60)}s ${minutes % 60}dk`;
-const formatTime = (value?: string) => value ? new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—';
-const formatDateTime = (value: string) => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
-const formatDate = (value: string) => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
-const formatPeriod = (value: string) => new Intl.DateTimeFormat('tr-TR', { month: 'short', year: '2-digit' }).format(new Date(`${value}-01T12:00:00`));
+const formatTime = (value?: string | null) => {
+  if (!value) return '—';
+  try {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? '—' : new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(d);
+  } catch {
+    return '—';
+  }
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '—';
+  try {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? '—' : new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(d);
+  } catch {
+    return '—';
+  }
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return '—';
+  try {
+    const str = String(value).trim();
+    if (!str) return '—';
+    const d = str.includes('T') ? new Date(str) : new Date(`${str}T12:00:00`);
+    if (isNaN(d.getTime())) {
+      const fb = new Date(str);
+      return isNaN(fb.getTime()) ? str : new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(fb);
+    }
+    return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(d);
+  } catch {
+    return String(value);
+  }
+};
+
+const formatPeriod = (value?: string | null) => {
+  if (!value) return '—';
+  try {
+    const str = String(value).trim();
+    if (!str) return '—';
+    const d = str.includes('T') ? new Date(str) : new Date(`${str}-01T12:00:00`);
+    if (isNaN(d.getTime())) {
+      const fb = new Date(str);
+      return isNaN(fb.getTime()) ? str : new Intl.DateTimeFormat('tr-TR', { month: 'short', year: '2-digit' }).format(fb);
+    }
+    return new Intl.DateTimeFormat('tr-TR', { month: 'short', year: '2-digit' }).format(d);
+  } catch {
+    return String(value);
+  }
+};
 const dateKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 function defaultFrom() { const value = new Date(); value.setMonth(value.getMonth() - 5, 1); return dateKey(value); }
 function aggregateQuarters(periods: ServiceReportAnalytics['periods']): ServiceReportAnalytics['periods'] {

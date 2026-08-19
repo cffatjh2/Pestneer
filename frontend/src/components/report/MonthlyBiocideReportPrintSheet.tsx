@@ -388,5 +388,15 @@ export default function MonthlyBiocideReportPrintSheet({
   );
 }
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
+const formatDate = (value?: string | null) => {
+  if (!value) return '—';
+  try {
+    const str = String(value).trim();
+    if (!str) return '—';
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+  } catch {
+    return String(value);
+  }
+};
