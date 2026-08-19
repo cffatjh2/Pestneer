@@ -258,7 +258,12 @@ export default function SystemAdminPage() {
         if (!value.password) {
           throw new Error('Lütfen yeni geçici şifreyi girin.');
         }
+        const targetAccount = accounts.find((a) => a.id === value.accountId);
         await resetSystemAccountPassword(session.accessToken, value.accountId, value.password, value.passwordConfirmation);
+        formElement.reset();
+        setNotice(`${targetAccount?.name ?? 'Hesap'} (${targetAccount?.email ?? ''}) için geçici şifre başarıyla güncellendi.`);
+        await load();
+        return;
       }
       formElement.reset();
       setNotice(modeNotice(mode));

@@ -27,31 +27,41 @@ public sealed class LoginService(
         }
 
         var companyCode = request.CompanyCode.Trim().ToUpperInvariant();
-        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
+        var rawEmail = request.Email.Trim();
+        var normalizedEmail = rawEmail.ToUpperInvariant();
         var rawPassword = request.Password;
         var trimmedPassword = request.Password.Trim();
 
         var company = await dbContext.Companies.IgnoreQueryFilters().AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Code == companyCode && item.IsActive, cancellationToken);
+            .SingleOrDefaultAsync(item => (item.Code == companyCode || EF.Functions.ILike(item.Code, companyCode)) && item.IsActive, cancellationToken);
 
         if (company is null)
         {
             return new LoginResult(null, $"'{companyCode}' koduna sahip aktif bir firma bulunamadı. Lütfen firma kodunu kontrol edin.");
         }
 
-        // Fetch candidate accounts by normalized email
+        // Fetch candidate accounts by email with multiple matching strategies (Invariant, Turkish, ILike)
         var candidateAccounts = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
-            .Where(item => item.NormalizedEmail == normalizedEmail && item.IsActive)
+            .Where(item => item.NormalizedEmail == normalizedEmail
+                        || item.NormalizedEmail == rawEmail.ToUpper()
+                        || item.Email.ToLower() == rawEmail.ToLower()
+                        || EF.Functions.ILike(item.Email, rawEmail))
             .ToListAsync(cancellationToken);
 
         if (candidateAccounts.Count == 0)
         {
-            return new LoginResult(null, "Bu e-posta adresi ile kayıtlı aktif bir hesap bulunamadı.");
+            return new LoginResult(null, "Bu e-posta adresi ile kayıtlı bir hesap bulunamadı. Lütfen e-postanızı kontrol edin.");
+        }
+
+        var activeCandidates = candidateAccounts.Where(a => a.IsActive).ToList();
+        if (activeCandidates.Count == 0)
+        {
+            return new LoginResult(null, "Hesabınız pasife alınmıştır. Lütfen firma yöneticiniz ile iletişime geçin.");
         }
 
         // Verify password against candidate accounts (prioritizing selected portal)
         Account? matchedAccount = null;
-        var orderedCandidates = candidateAccounts.OrderBy(a => a.Portal == portal ? 0 : 1).ToList();
+        var orderedCandidates = activeCandidates.OrderBy(a => a.Portal == portal ? 0 : 1).ToList();
 
         foreach (var candidate in orderedCandidates)
         {
@@ -74,10 +84,19 @@ public sealed class LoginService(
 
         // Check memberships in this company
         var staffMembership = await dbContext.CompanyMemberships.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(item => item.AccountId == matchedAccount.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(item => item.AccountId == matchedAccount.Id && item.CompanyId == company.Id, cancellationToken);
 
         var customerMembership = await dbContext.CustomerMemberships.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(item => item.AccountId == matchedAccount.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(item => item.AccountId == matchedAccount.Id && item.CompanyId == company.Id, cancellationToken);
+
+        if (staffMembership is not null && !staffMembership.IsActive && customerMembership is null)
+        {
+            return new LoginResult(null, $"'{company.LegalName}' firmasındaki personel yetkiniz pasif duruma alınmıştır.");
+        }
+        if (customerMembership is not null && !customerMembership.IsActive && staffMembership is null)
+        {
+            return new LoginResult(null, $"'{company.LegalName}' firmasındaki müşteri portalı üyeliğiniz pasif duruma alınmıştır.");
+        }
 
         CompanyRole role;
         Guid? customerId = null;
@@ -86,9 +105,9 @@ public sealed class LoginService(
 
         if (portal == PortalType.Customer)
         {
-            if (customerMembership is null)
+            if (customerMembership is null || !customerMembership.IsActive)
             {
-                if (staffMembership is not null)
+                if (staffMembership is not null && staffMembership.IsActive)
                 {
                     role = staffMembership.Role;
                     effectivePortal = role == CompanyRole.Owner ? PortalType.Owner : PortalType.Employee;
@@ -108,9 +127,9 @@ public sealed class LoginService(
         else
         {
             // Owner or Employee
-            if (staffMembership is null)
+            if (staffMembership is null || !staffMembership.IsActive)
             {
-                if (customerMembership is not null)
+                if (customerMembership is not null && customerMembership.IsActive)
                 {
                     role = customerMembership.Role;
                     effectivePortal = PortalType.Customer;

@@ -64,15 +64,19 @@ export function CompanyAccountResetCard({ accessToken, onSessionExpired, onNotif
   const [selectedId, setSelectedId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
 
   useEffect(() => {
-    getCompanyManagedAccounts(accessToken).then((items) => { setAccounts(items); setSelectedId(items[0]?.id ?? ''); })
+    getCompanyManagedAccounts(accessToken).then((items) => {
+      setAccounts(items);
+      setSelectedId('');
+    })
       .catch((loadError) => loadError instanceof AccountSecuritySessionExpiredError ? onSessionExpired() : setError(loadError instanceof Error ? loadError.message : 'Hesaplar yüklenemedi.'));
   }, [accessToken]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!selectedId) return;
-    setBusy(true); setError(undefined);
+    setBusy(true); setError(undefined); setNotice(undefined);
     const form = new FormData(event.currentTarget);
     const newPassword = String(form.get('newPassword') || '');
     const confirmation = String(form.get('confirmation') || '');
@@ -89,8 +93,12 @@ export function CompanyAccountResetCard({ accessToken, onSessionExpired, onNotif
     }
 
     try {
+      const targetAccount = accounts.find((a) => a.id === selectedId);
       const result = await resetCompanyAccountPassword(accessToken, selectedId, newPassword, confirmation);
-      event.currentTarget.reset(); onNotify?.(result.message);
+      event.currentTarget.reset();
+      const msg = `${targetAccount?.name ?? 'Seçilen hesap'} (${targetAccount?.email ?? ''}) için geçici şifre başarıyla atandı.`;
+      setNotice(msg);
+      onNotify?.(msg);
     } catch (submitError) {
       if (submitError instanceof AccountSecuritySessionExpiredError) return onSessionExpired();
       setError(submitError instanceof Error ? submitError.message : 'Geçici şifre atanamadı.');
@@ -100,10 +108,11 @@ export function CompanyAccountResetCard({ accessToken, onSessionExpired, onNotif
   return <section className="account-security-card managed-account-card">
     <header><span><UserCog size={21} /></span><div><strong>Bağlı hesapların şifreleri</strong><small>Yalnızca firmanıza bağlı personel ve müşteri portalı hesaplarına geçici şifre atayın.</small></div></header>
     <form onSubmit={submit}>
-      <label className="wide">Hesap<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} required><option value="">Hesap seçin</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {portalLabel(account.portal)} · {account.email}</option>)}</select></label>
+      <label className="wide">Hesap<select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setError(undefined); setNotice(undefined); }} required><option value="">-- Şifresi değiştirilecek hesabı seçin --</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {portalLabel(account.portal)} · {account.email}</option>)}</select></label>
       <label>Geçici şifre<input name="newPassword" type="password" placeholder="Yeni geçici şifre" autoComplete="new-password" required /></label>
       <label>Geçici şifre tekrarı<input name="confirmation" type="password" placeholder="Şifreyi tekrar girin" autoComplete="new-password" required /></label>
       {error && <div className="account-security-error wide">{error}</div>}
+      {notice && <div className="account-security-success wide" style={{ gridColumn: '1 / -1', padding: '10px 14px', background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22c55e', borderRadius: '8px', color: '#4ade80', fontSize: '13px' }}>{notice}</div>}
       <button className="secondary-button" disabled={busy || !selectedId}>{busy ? <RefreshCw className="spin-icon" size={16} /> : <CheckCircle2 size={16} />}Geçici şifre ata</button>
     </form>
   </section>;
