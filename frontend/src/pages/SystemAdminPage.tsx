@@ -255,8 +255,8 @@ export default function SystemAdminPage() {
         if (!value.accountId) {
           throw new Error('Lütfen şifresi atanacak bir hesap seçin.');
         }
-        if (!value.password || value.password.length < 8 || !/[A-Za-z]/.test(value.password) || !/[0-9]/.test(value.password)) {
-          throw new Error('Şifre en az 8 karakter olmalı, en az bir harf ve bir rakam içermelidir.');
+        if (!value.password) {
+          throw new Error('Lütfen yeni geçici şifreyi girin.');
         }
         await resetSystemAccountPassword(session.accessToken, value.accountId, value.password, value.passwordConfirmation);
       }
@@ -767,15 +767,12 @@ function FormFields({ mode, accounts }: { mode: Mode; accounts: SystemAccount[] 
         </label>
         <label>
           Yeni geçici şifre
-          <input name="password" type="password" minLength={8} placeholder="En az 8 karakter (harf + rakam)" required />
+          <input name="password" type="password" placeholder="Yeni geçici şifre" required />
         </label>
         <label>
           Geçici şifre tekrarı
-          <input name="passwordConfirmation" type="password" minLength={8} placeholder="Şifreyi tekrar girin" required />
+          <input name="passwordConfirmation" type="password" placeholder="Şifreyi tekrar girin" required />
         </label>
-        <p className="wide" style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span>ℹ️</span> <span>Şifre en az 8 karakter olmalı, <strong>en az bir harf</strong> ve <strong>bir rakam</strong> içermelidir.</span>
-        </p>
       </div>
     );
   }
@@ -832,17 +829,14 @@ function FormFields({ mode, accounts }: { mode: Mode; accounts: SystemAccount[] 
       </label>
       <label>
         Geçici şifre
-        <input name="password" type="password" minLength={8} placeholder="En az 8 karakter (harf + rakam)" autoComplete="new-password" required />
+        <input name="password" type="password" placeholder="Geçici şifre belirleyin" autoComplete="new-password" required />
       </label>
       {mode === 'company' && (
         <label>
           Geçici şifre tekrarı
-          <input name="passwordConfirmation" type="password" minLength={8} placeholder="Şifreyi tekrar girin" autoComplete="new-password" required />
+          <input name="passwordConfirmation" type="password" placeholder="Şifreyi tekrar girin" autoComplete="new-password" required />
         </label>
       )}
-      <p className="wide" style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <span>ℹ️</span> <span>Şifre en az 8 karakter olmalı, <strong>en az bir harf</strong> ve <strong>bir rakam</strong> içermelidir.</span>
-      </p>
       {mode === 'employee' && (
         <>
           <label>

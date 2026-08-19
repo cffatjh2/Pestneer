@@ -126,8 +126,8 @@ public static class AccountSecurityEndpoints
     {
         if (password != confirmation)
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["newPasswordConfirmation"] = ["Şifre tekrarı eşleşmiyor."] });
-        if (string.IsNullOrWhiteSpace(password) || password.Length < 8 || !password.Any(char.IsLetter) || !password.Any(char.IsDigit))
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["newPassword"] = ["Şifre en az 8 karakter olmalı, harf ve rakam içermelidir."] });
+        if (string.IsNullOrWhiteSpace(password))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["newPassword"] = ["Şifre boş bırakılamaz."] });
         return null;
     }
 

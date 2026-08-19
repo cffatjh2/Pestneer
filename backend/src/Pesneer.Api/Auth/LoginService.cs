@@ -21,17 +21,51 @@ public sealed class LoginService(
 {
     public async Task<LoginResult> SignInAsync(PortalType portal, LoginRequest request, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.CompanyCode) || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+        {
+            return new LoginResult(null, "Lütfen firma kodu, e-posta ve şifrenizi girin.");
+        }
+
         var companyCode = request.CompanyCode.Trim().ToUpperInvariant();
         var normalizedEmail = request.Email.Trim().ToUpperInvariant();
+        var rawPassword = request.Password;
+        var trimmedPassword = request.Password.Trim();
+
         var company = await dbContext.Companies.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item => item.Code == companyCode && item.IsActive, cancellationToken);
-        var account = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Portal == portal && item.NormalizedEmail == normalizedEmail && item.IsActive, cancellationToken);
 
-        if (company is null || account is null ||
-            passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
+        if (company is null)
         {
-            return new LoginResult(null, "Firma kodu, e-posta veya şifre hatalı.");
+            return new LoginResult(null, $"'{companyCode}' koduna sahip aktif bir firma bulunamadı. Lütfen firma kodunu kontrol edin.");
+        }
+
+        // Fetch candidate accounts by normalized email
+        var candidateAccounts = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.NormalizedEmail == normalizedEmail && item.IsActive)
+            .ToListAsync(cancellationToken);
+
+        if (candidateAccounts.Count == 0)
+        {
+            return new LoginResult(null, "Bu e-posta adresi ile kayıtlı aktif bir hesap bulunamadı.");
+        }
+
+        // Verify password against candidate accounts (prioritizing selected portal)
+        Account? matchedAccount = null;
+        var orderedCandidates = candidateAccounts.OrderBy(a => a.Portal == portal ? 0 : 1).ToList();
+
+        foreach (var candidate in orderedCandidates)
+        {
+            if (passwordHasher.VerifyHashedPassword(candidate, candidate.PasswordHash, rawPassword) != PasswordVerificationResult.Failed
+                || (rawPassword != trimmedPassword && passwordHasher.VerifyHashedPassword(candidate, candidate.PasswordHash, trimmedPassword) != PasswordVerificationResult.Failed))
+            {
+                matchedAccount = candidate;
+                break;
+            }
+        }
+
+        if (matchedAccount is null)
+        {
+            return new LoginResult(null, "Girdiğiniz şifre hatalı. Lütfen kontrol edip tekrar deneyin.");
         }
 
         if (company.IsTrial && company.TrialEndsAt.HasValue && company.TrialEndsAt.Value < DateTimeOffset.UtcNow && portal != PortalType.SystemAdmin)
@@ -39,35 +73,73 @@ public sealed class LoginService(
             return new LoginResult(null, "1 haftalık deneme süreniz sona ermiştir. Verileriniz sistemde güvenle saklanmaktadır. Hesabınızı tam sürüme geçirmek ve erişimi yeniden açmak için lütfen Pestneer ile iletişime geçin.", IsTrialExpired: true);
         }
 
+        // Check memberships in this company
+        var staffMembership = await dbContext.CompanyMemberships.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(item => item.AccountId == matchedAccount.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
+
+        var customerMembership = await dbContext.CustomerMemberships.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(item => item.AccountId == matchedAccount.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
+
         CompanyRole role;
         Guid? customerId = null;
         Guid? customerBranchId = null;
+        var effectivePortal = portal;
 
         if (portal == PortalType.Customer)
         {
-            var membership = await dbContext.CustomerMemberships.IgnoreQueryFilters().AsNoTracking()
-                .SingleOrDefaultAsync(item => item.AccountId == account.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
-            if (membership is null) return new LoginResult(null, "Müşteri portal yetkisi bulunamadı.");
-            role = membership.Role;
-            customerId = membership.CustomerId;
-            customerBranchId = membership.CustomerBranchId;
+            if (customerMembership is null)
+            {
+                if (staffMembership is not null)
+                {
+                    role = staffMembership.Role;
+                    effectivePortal = role == CompanyRole.Owner ? PortalType.Owner : PortalType.Employee;
+                }
+                else
+                {
+                    return new LoginResult(null, "Bu firmanın müşteri portalında yetkili bir hesabınız bulunmamaktadır.");
+                }
+            }
+            else
+            {
+                role = customerMembership.Role;
+                customerId = customerMembership.CustomerId;
+                customerBranchId = customerMembership.CustomerBranchId;
+            }
         }
         else
         {
-            var membership = await dbContext.CompanyMemberships.IgnoreQueryFilters().AsNoTracking()
-                .SingleOrDefaultAsync(item => item.AccountId == account.Id && item.CompanyId == company.Id && item.IsActive, cancellationToken);
-            if (membership is null || portal == PortalType.Owner && membership.Role != CompanyRole.Owner)
-                return new LoginResult(null, "Firma üyelik veya yetki bilgisi doğrulanamadı.");
-            role = membership.Role;
+            // Owner or Employee
+            if (staffMembership is null)
+            {
+                if (customerMembership is not null)
+                {
+                    role = customerMembership.Role;
+                    effectivePortal = PortalType.Customer;
+                    customerId = customerMembership.CustomerId;
+                    customerBranchId = customerMembership.CustomerBranchId;
+                }
+                else
+                {
+                    return new LoginResult(null, $"Bu hesap '{company.LegalName}' firmasına bağlı bir personel veya yönetici olarak tanımlanmamış.");
+                }
+            }
+            else
+            {
+                role = staffMembership.Role;
+                if (portal == PortalType.Owner && role != CompanyRole.Owner)
+                {
+                    effectivePortal = PortalType.Employee;
+                }
+            }
         }
 
-        var token = jwtTokenService.Create(account, company, role, customerId, customerBranchId);
+        var token = jwtTokenService.Create(matchedAccount, company, role, customerId, customerBranchId);
         var response = new LoginResponse(
             token.Value,
             token.ExpiresAt,
-            portal.ToString().ToLowerInvariant(),
+            effectivePortal.ToString().ToLowerInvariant(),
             new CompanySummary(company.Id, company.LegalName, company.Code),
-            new UserSummary(account.Id, account.DisplayName, account.Email, role.ToString(), account.HasAcceptedTerms, account.TermsAcceptedAt),
+            new UserSummary(matchedAccount.Id, matchedAccount.DisplayName, matchedAccount.Email, role.ToString(), matchedAccount.HasAcceptedTerms, matchedAccount.TermsAcceptedAt),
             customerId,
             customerBranchId);
         return new LoginResult(response);
@@ -81,9 +153,9 @@ public sealed class LoginService(
             return new LoginResult(null, "Lütfen tüm zorunlu alanları eksiksiz doldurun.");
         }
 
-        if (request.Password.Trim().Length < 6)
+        if (string.IsNullOrWhiteSpace(request.Password))
         {
-            return new LoginResult(null, "Şifre en az 6 karakter olmalıdır.");
+            return new LoginResult(null, "Şifre boş bırakılamaz.");
         }
 
         var normalizedEmail = request.Email.Trim().ToUpperInvariant();

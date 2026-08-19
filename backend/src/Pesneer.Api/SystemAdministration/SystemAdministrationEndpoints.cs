@@ -411,7 +411,7 @@ public static class SystemAdministrationEndpoints
     {
         if (!MailAddress.TryCreate(email?.Trim(), out _)) return Validation("email", "Geçerli e-posta adresi girin.");
         if (string.IsNullOrWhiteSpace(name) || name.Trim().Length < 2) return Validation("name", "Ad en az 2 karakter olmalıdır.");
-        if (string.IsNullOrWhiteSpace(password) || password.Length < 6) return Validation("password", "Şifre en az 6 karakter olmalıdır.");
+        if (string.IsNullOrWhiteSpace(password)) return Validation("password", "Şifre boş bırakılamaz.");
         return null;
     }
     private static IResult Validation(string key, string message) => Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });

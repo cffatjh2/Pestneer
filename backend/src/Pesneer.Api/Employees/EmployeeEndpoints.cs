@@ -237,9 +237,9 @@ public static class EmployeeEndpoints
             errors["role"] = ["Geçerli bir personel yetkisi seçin."];
         }
 
-        if (request.Password.Length < 6)
+        if (string.IsNullOrWhiteSpace(request.Password))
         {
-            errors["password"] = ["Şifre en az 6 karakter olmalıdır."];
+            errors["password"] = ["Şifre boş bırakılamaz."];
         }
 
         return errors.Count == 0 ? null : Results.ValidationProblem(errors);
@@ -268,9 +268,9 @@ public static class EmployeeEndpoints
             errors["role"] = ["Geçerli bir personel yetkisi seçin."];
         }
 
-        if (!string.IsNullOrEmpty(request.NewPassword) && request.NewPassword.Length < 6)
+        if (request.NewPassword is not null && string.IsNullOrWhiteSpace(request.NewPassword))
         {
-            errors["newPassword"] = ["Yeni şifre en az 6 karakter olmalıdır."];
+            errors["newPassword"] = ["Yeni şifre boş bırakılamaz."];
         }
 
         return errors.Count == 0 ? null : Results.ValidationProblem(errors);
