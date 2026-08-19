@@ -42,6 +42,70 @@ export function exportTrendExcel(analytics: ServiceReportAnalytics, reports: Ser
   writeFile(workbook, `Pestneer_Trend_Risk_${analytics.from}_${analytics.to}.xlsx`, { compression: true });
 }
 
+export function exportMonthlyBiocideExcel(
+  monthLabel: string,
+  biocides: { productName: string; licenseNumber: string; activeIngredient: string; applicationMethod: string; totalAmount: number; unit: string; applicationCount: number; targetPests: Set<string> }[],
+  consumables: { productName: string; applicationMethod: string; totalAmount: number; unit: string; applicationCount: number; customers: Set<string> }[],
+  customerRows: { customerName: string; branchName: string; workOrderNumber: string; scheduledAt: string; productName: string; amount: number; unit: string; targetPests: string; operatorName: string }[],
+  companyName: string
+) {
+  const summarySheet = utils.aoa_to_sheet([
+    ['PESTNEER AYLIK BİYOSİDAL VE SARF TÜKETİM RAPORU'],
+    ['Firma Unvanı', companyName],
+    ['Rapor Dönemi', monthLabel],
+    ['Rapor Tarihi', new Date().toLocaleDateString('tr-TR')],
+    ['Toplam Biyosidal Çeşidi', biocides.length],
+    ['Toplam Sarf Çeşidi', consumables.length],
+    ['Toplam Tüketim Satırı', customerRows.length],
+  ]);
+  summarySheet['!cols'] = [{ wch: 28 }, { wch: 60 }];
+  summarySheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+
+  const biocidesSheet = utils.json_to_sheet(biocides.map((item, idx) => ({
+    'No': idx + 1,
+    'Biyosidal Ürün Ticari Adı': item.productName,
+    'Ruhsat No': item.licenseNumber,
+    'Aktif Madde': item.activeIngredient,
+    'Uygulama Yöntemi': item.applicationMethod,
+    'Aylık Tüketim': item.totalAmount,
+    'Birim': item.unit,
+    'Uygulama Sayısı': item.applicationCount,
+    'Hedef Zararlılar': Array.from(item.targetPests).join(', '),
+  })));
+  biocidesSheet['!cols'] = [{ wch: 6 }, { wch: 38 }, { wch: 18 }, { wch: 24 }, { wch: 24 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 32 }];
+
+  const consumablesSheet = utils.json_to_sheet(consumables.map((item, idx) => ({
+    'No': idx + 1,
+    'Sarf / Ekipman Adı': item.productName,
+    'Kullanım Alanı': item.applicationMethod,
+    'Aylık Tüketim': item.totalAmount,
+    'Birim': item.unit,
+    'Hizmet Verilen Müşteri Sayısı': item.customers.size,
+    'İş Emri Sayısı': item.applicationCount,
+  })));
+  consumablesSheet['!cols'] = [{ wch: 6 }, { wch: 38 }, { wch: 24 }, { wch: 16 }, { wch: 10 }, { wch: 26 }, { wch: 16 }];
+
+  const detailsSheet = utils.json_to_sheet(customerRows.map((row) => ({
+    'Tarih': formatDate(row.scheduledAt),
+    'Müşteri Adı': row.customerName,
+    'Şube': row.branchName,
+    'İş Emri No': row.workOrderNumber,
+    'Kullanılan Ürün / Sarf': row.productName,
+    'Miktar': row.amount,
+    'Birim': row.unit,
+    'Hedef Zararlı': row.targetPests,
+    'Uygulayıcı Personel': row.operatorName,
+  })));
+  detailsSheet['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 24 }, { wch: 18 }, { wch: 36 }, { wch: 12 }, { wch: 10 }, { wch: 24 }, { wch: 24 }];
+
+  const workbook = utils.book_new();
+  utils.book_append_sheet(workbook, summarySheet, 'Özet');
+  utils.book_append_sheet(workbook, biocidesSheet, 'Biyosidal İcmali');
+  utils.book_append_sheet(workbook, consumablesSheet, 'Sarf Malzemeleri');
+  utils.book_append_sheet(workbook, detailsSheet, 'Müşteri Detayları');
+  writeFile(workbook, `Pestneer_Aylik_Biyosidal_Tuketim_${safeName(monthLabel)}.xlsx`, { compression: true });
+}
+
 const riskLabel = (value: string) => ({ Low: 'Düşük', Medium: 'Orta', High: 'Yüksek' }[value] ?? value);
 const deviceLabel = (value: string) => ({ EFT: 'Elektrikli sinek tutucu', LiveCapture: 'Canlı yakalama', Rodent: 'Kemirgen istasyonu', InsectMonitor: 'Haşere monitörü', Other: 'Diğer' }[value] ?? value);
 const deviceStatusLabel = (value: string) => ({ Active: 'Aktif', Damaged: 'Hasarlı', Missing: 'Kayıp', Replaced: 'Değiştirildi', Passive: 'Pasif' }[value] ?? value);

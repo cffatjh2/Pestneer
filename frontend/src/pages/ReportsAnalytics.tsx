@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CheckCircle2, ClipboardCheck, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, FilterX, Gauge, Printer, RefreshCw, Search, Share2, ShieldAlert, Users, X } from 'lucide-react';
+import { Activity, BarChart3, Boxes, CheckCircle2, ClipboardCheck, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, FilterX, FlaskConical, Gauge, PackageCheck, Printer, RefreshCw, Search, Share2, ShieldAlert, Users, X } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import type { WorkOrder } from '../types';
 import ServiceReportModal from '../components/modals/ServiceReportModal';
 import StationActivationModal from '../components/modals/StationActivationModal';
 import ServiceReportPrintSheet from '../components/report/ServiceReportPrintSheet';
+import MonthlyBiocideReportPrintSheet from '../components/report/MonthlyBiocideReportPrintSheet';
 import { FieldSessionExpiredError, getWorkforceAnalytics, type WorkforceAnalytics } from '../services/fieldOperationsApi';
 import { getCompanyServiceReports, getServiceReportAnalytics, ReportSessionExpiredError, saveServiceReport, uploadServiceReportPhotos, type ReportPhotoUpload, type ServiceReportAnalytics, type ServiceReportRecord, type UpsertServiceReportInput } from '../services/serviceReportApi';
-import { exportServiceReportExcel, exportTrendExcel } from '../utils/serviceReportExcel';
+import { exportMonthlyBiocideExcel, exportServiceReportExcel, exportTrendExcel } from '../utils/serviceReportExcel';
 import { getVehicles, type VehicleRecord } from '../services/inventoryApi';
 import { getStationActivations, type StationActivationRecord } from '../services/stationActivationApi';
 import { shareOrDownloadFile } from '../utils/shareUtils';
 
 type Props = { accessToken: string; companyName: string; userName: string; workOrders: WorkOrder[]; onSessionExpired: () => void };
-type Tab = 'reports' | 'activations' | 'trends' | 'workforce';
+type Tab = 'reports' | 'activations' | 'biocides' | 'trends' | 'workforce';
 
 export default function ReportsAnalytics({ accessToken, companyName, userName, workOrders, onSessionExpired }: Props) {
   const [tab, setTab] = useState<Tab>('reports');
@@ -22,8 +23,10 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [editing, setEditing] = useState<{ order: WorkOrder; report?: ServiceReportRecord } | null>(null); const [preview, setPreview] = useState<ServiceReportRecord | null>(null);
   const [activationOrder, setActivationOrder] = useState<WorkOrder | null>(null);
+  const [biocidePrintMonth, setBiocidePrintMonth] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState(''); const [branchId, setBranchId] = useState(''); const [from, setFrom] = useState(defaultFrom()); const [to, setTo] = useState(dateKey(new Date()));
   const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pestneer_Saha_Raporu' });
+  const biocidePrintRef = useRef<HTMLDivElement>(null); const biocidePrint = useReactToPrint({ contentRef: biocidePrintRef, documentTitle: biocidePrintMonth ? `Pestneer_Aylik_Biyosidal_Tuketim_${biocidePrintMonth}` : 'Pestneer_Aylik_Biyosidal_Raporu' });
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -47,16 +50,24 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
 
   return <section className="page analytics-page phase3-reports-page">
     <div className="page-heading"><div><p className="eyebrow">SAHA KALİTE & UYUM</p><h1>Rapor & Analizler</h1><p>Uygulama raporlarını, saha trendlerini ve personel performansını tek merkezden yönetin.</p></div><button className="secondary-button" onClick={() => void load()}><RefreshCw size={16} />Verileri Yenile</button></div>
-    <nav className="report-module-tabs"><button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}><FileText size={17} /> EK-1 Raporları</button><button className={tab === 'activations' ? 'active' : ''} onClick={() => setTab('activations')}><ClipboardCheck size={17} /> Aktivasyon Listeleri</button><button className={tab === 'trends' ? 'active' : ''} onClick={() => setTab('trends')}><BarChart3 size={17} /> Trend Analizi</button><button className={tab === 'workforce' ? 'active' : ''} onClick={() => setTab('workforce')}><Users size={17} /> Personel Analizi</button></nav>
+    <nav className="report-module-tabs">
+      <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}><FileText size={17} /> EK-1 Raporları</button>
+      <button className={tab === 'activations' ? 'active' : ''} onClick={() => setTab('activations')}><ClipboardCheck size={17} /> Aktivasyon Listeleri</button>
+      <button className={tab === 'biocides' ? 'active' : ''} onClick={() => setTab('biocides')}><PackageCheck size={17} /> Biyosidal & Sarf Raporu</button>
+      <button className={tab === 'trends' ? 'active' : ''} onClick={() => setTab('trends')}><BarChart3 size={17} /> Trend Analizi</button>
+      <button className={tab === 'workforce' ? 'active' : ''} onClick={() => setTab('workforce')}><Users size={17} /> Personel Analizi</button>
+    </nav>
     {loading ? <div className="surface analytics-loading"><RefreshCw className="spin-icon" size={28} />Analizler hazırlanıyor…</div> : error ? <div className="surface analytics-loading analytics-error">{error}<button className="secondary-button" onClick={() => void load()}>Tekrar Dene</button></div> : <>
       {tab === 'reports' && <ReportsTab orders={reportableOrders} reportByOrder={reportByOrder} onEdit={(order, report) => setEditing({ order, report })} onPreview={setPreview} />}
       {tab === 'activations' && <ActivationsTab orders={reportableOrders} activationByOrder={activationByOrder} onOpen={setActivationOrder} />}
+      {tab === 'biocides' && <BiocidesTab reports={reports} activations={activations} customers={customers} companyName={companyName} onPrint={(m) => setBiocidePrintMonth(m)} />}
       {tab === 'trends' && analytics && <TrendsTab analytics={analytics} reports={reports} customers={customers} branches={branches} customerId={customerId} branchId={branchId} from={from} to={to} onCustomer={(value) => { setCustomerId(value); setBranchId(''); }} onBranch={setBranchId} onFrom={setFrom} onTo={setTo} />}
       {tab === 'workforce' && workforce && <WorkforceTab analytics={workforce} />}
     </>}
     {editing && <ServiceReportModal accessToken={accessToken} order={editing.order} existing={editing.report} companyName={companyName} operatorName={editing.order.technician || userName} vehicleStockItems={(vehicles.find((item) => item.assignedEmployeeAccountId === editing.order.employeeAccountId)?.stockItems ?? []).map((item) => ({ id: item.id, vehicleStockItemId: item.id, inventoryItemId: item.inventoryItemId, productName: item.productName, quantity: item.quantity, unit: item.unit, isManual: item.isManual, licenseNumber: item.licenseNumber, licenseDocumentId: item.licenseDocumentId }))} onClose={() => setEditing(null)} onSave={save} />}
     {activationOrder && <StationActivationModal accessToken={accessToken} order={activationOrder} onClose={() => setActivationOrder(null)} onSaved={(saved) => setActivations((current) => [saved, ...current.filter((item) => item.id !== saved.id)])} />}
     {preview && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>{preview.reportNumber}</strong><span>{preview.customerName} · {preview.branchName}</span></div><button onClick={() => exportServiceReportExcel(preview)}><FileSpreadsheet size={16} /> Excel</button><button onClick={print}><Printer size={16} /> PDF / Yazdır</button><button onClick={() => void shareOrDownloadFile({ title: `${preview.reportNumber} - EK-1 Hizmet Raporu`, text: `${preview.customerName} · ${preview.branchName} - ${preview.reportNumber} nolu EK-1 Hizmet Raporu`, url: window.location.href })}><Share2 size={16} /> Paylaş</button><button className="icon-button" onClick={() => setPreview(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={printRef}><ServiceReportPrintSheet report={preview} accessToken={accessToken} /></div></div></div></div>}
+    {biocidePrintMonth && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>Aylık Biyosidal ve Sarf Tüketim Raporu</strong><span>{biocidePrintMonth} Dönemi Resmi İcmali</span></div><button onClick={biocidePrint}><Printer size={16} /> PDF İndir / Yazdır</button><button className="icon-button" onClick={() => setBiocidePrintMonth(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={biocidePrintRef}><MonthlyBiocideReportPrintSheet accessToken={accessToken} companyName={companyName} monthKey={biocidePrintMonth} reports={reports} activations={activations} /></div></div></div></div>}
   </section>;
 }
 
@@ -322,6 +333,356 @@ function TrendsTab({ analytics, reports, customers, branches, customerId, branch
 }
 
 function WorkforceTab({ analytics }: { analytics: WorkforceAnalytics }) { return <><div className="analytics-kpis"><article className="surface"><span><Users size={20} /></span><div><small>Aktif personel</small><strong>{analytics.activeEmployees}</strong></div></article><article className="surface"><span className="green"><Clock3 size={20} /></span><div><small>Şu an mesaide</small><strong>{analytics.workingEmployees}</strong></div></article><article className="surface"><span className="purple"><CheckCircle2 size={20} /></span><div><small>Mesaiyi bitiren</small><strong>{analytics.completedEmployees}</strong></div></article><article className="surface"><span className="orange"><BarChart3 size={20} /></span><div><small>Bugün toplam çalışma</small><strong>{formatDuration(analytics.totalWorkedMinutes)}</strong></div></article></div><div className="surface workforce-table-card"><div className="analytics-section-heading"><div><p className="eyebrow">PERSONEL ÇALIŞMA RAPORU</p><h2>{formatDate(analytics.date)}</h2></div></div><div className="workforce-table-wrap"><table className="workforce-table"><thead><tr><th>Personel</th><th>Durum</th><th>Başlangıç</th><th>Bugün</th><th>Son 7 gün</th><th>Bu ay</th><th>Araç kontrolü</th></tr></thead><tbody>{analytics.employees.map((employee) => <tr key={employee.employeeId}><td><strong>{employee.name}</strong><span>{employee.email}</span></td><td><span className={`analytics-status status-${employee.status}`}>{statusLabels[employee.status]}</span></td><td>{formatTime(employee.startedAt)}</td><td><strong>{formatDuration(employee.todayWorkedMinutes)}</strong></td><td>{formatDuration(employee.weekWorkedMinutes)}</td><td>{formatDuration(employee.monthWorkedMinutes)}</td><td>{employee.lastStockCheckAt ? formatDateTime(employee.lastStockCheckAt) : '—'}</td></tr>)}</tbody></table></div></div></>; }
+
+function BiocidesTab({
+  reports,
+  activations,
+  customers,
+  companyName,
+  onPrint,
+}: {
+  reports: ServiceReportRecord[];
+  activations: StationActivationRecord[];
+  customers: { id: string; name: string }[];
+  companyName: string;
+  onPrint: (monthKey: string) => void;
+}) {
+  const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const [monthKey, setMonthKey] = useState<string>(currentMonth);
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'biocide' | 'consumable'>('all');
+  const [search, setSearch] = useState('');
+
+  const [yearStr, monthStr] = monthKey.split('-');
+  const year = parseInt(yearStr, 10) || new Date().getFullYear();
+  const month = parseInt(monthStr, 10) || (new Date().getMonth() + 1);
+  const monthStartDate = new Date(Date.UTC(year, month - 1, 1));
+  const monthEndDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+  const monthReports = useMemo(() => {
+    return reports.filter((r) => {
+      const d = new Date(r.scheduledAt || r.updatedAt);
+      if (d < monthStartDate || d > monthEndDate) return false;
+      if (customerFilter && r.customerId !== customerFilter) return false;
+      return true;
+    });
+  }, [reports, monthStartDate, monthEndDate, customerFilter]);
+
+  const { biocideItems, consumableItems, customerRows, totalSolidGrams, totalLiquidMl, totalConsumablePcs } = useMemo(() => {
+    const biocideMap = new Map<string, any>();
+    const consumableMap = new Map<string, any>();
+    const rows: any[] = [];
+
+    let solidGrams = 0;
+    let liquidMl = 0;
+    let consumablePcs = 0;
+
+    for (const report of monthReports) {
+      for (const prod of report.products) {
+        if (!prod.amountUsed || prod.amountUsed <= 0) continue;
+
+        const isConsumable =
+          prod.unit === 'Adet' ||
+          prod.productName.toLowerCase().includes('plaka') ||
+          prod.productName.toLowerCase().includes('levha') ||
+          prod.productName.toLowerCase().includes('tuzak') ||
+          prod.productName.toLowerCase().includes('kapan') ||
+          prod.productName.toLowerCase().includes('monitör');
+
+        const map = isConsumable ? consumableMap : biocideMap;
+        const key = `${prod.productName.trim().toUpperCase()}|${prod.unit.toUpperCase()}`;
+
+        const existing = map.get(key);
+        if (existing) {
+          existing.totalAmount += prod.amountUsed;
+          existing.applicationCount += 1;
+          existing.customers.add(report.customerName);
+          if (report.targetPests) existing.targetPests.add(report.targetPests);
+        } else {
+          map.set(key, {
+            productName: prod.productName.trim(),
+            category: isConsumable ? 'Sarf' : 'Biyosidal',
+            licenseNumber: prod.licenseNumber || '—',
+            activeIngredient: prod.activeIngredient || '—',
+            applicationMethod: prod.applicationMethod || (isConsumable ? 'İstasyon İçi' : 'Yemleme / Püskürtme'),
+            totalAmount: prod.amountUsed,
+            unit: prod.unit,
+            applicationCount: 1,
+            customers: new Set([report.customerName]),
+            targetPests: new Set(report.targetPests ? [report.targetPests] : []),
+          });
+        }
+
+        if (isConsumable) {
+          consumablePcs += prod.amountUsed;
+        } else if (prod.unit.toLowerCase().includes('gr') || prod.unit === 'Gram') {
+          solidGrams += prod.amountUsed;
+        } else if (prod.unit.toLowerCase().includes('kg') || prod.unit === 'Kilogram') {
+          solidGrams += prod.amountUsed * 1000;
+        } else if (prod.unit.toLowerCase().includes('ml') || prod.unit === 'Mililitre') {
+          liquidMl += prod.amountUsed;
+        } else if (prod.unit.toLowerCase().includes('lt') || prod.unit === 'Litre') {
+          liquidMl += prod.amountUsed * 1000;
+        }
+
+        rows.push({
+          customerName: report.customerName,
+          branchName: report.branchName,
+          workOrderNumber: report.workOrderNumber,
+          scheduledAt: report.scheduledAt,
+          productName: prod.productName,
+          amount: prod.amountUsed,
+          unit: prod.unit,
+          targetPests: report.targetPests || '—',
+          operatorName: report.operatorName || '—',
+        });
+      }
+    }
+
+    return {
+      biocideItems: Array.from(biocideMap.values()).sort((a, b) => b.totalAmount - a.totalAmount),
+      consumableItems: Array.from(consumableMap.values()).sort((a, b) => b.totalAmount - a.totalAmount),
+      customerRows: rows.sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
+      totalSolidGrams: solidGrams,
+      totalLiquidMl: liquidMl,
+      totalConsumablePcs: consumablePcs,
+    };
+  }, [monthReports]);
+
+  const filteredBiocides = useMemo(() => {
+    if (!search.trim()) return biocideItems;
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    return biocideItems.filter((i) => i.productName.toLocaleLowerCase('tr-TR').includes(q) || i.activeIngredient.toLocaleLowerCase('tr-TR').includes(q));
+  }, [biocideItems, search]);
+
+  const filteredConsumables = useMemo(() => {
+    if (!search.trim()) return consumableItems;
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    return consumableItems.filter((i) => i.productName.toLocaleLowerCase('tr-TR').includes(q));
+  }, [consumableItems, search]);
+
+  const monthLabel = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(monthStartDate);
+
+  return (
+    <>
+      <div className="surface report-filter-bar" style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
+        <label>
+          Rapor Ayı
+          <input
+            type="month"
+            value={monthKey}
+            onChange={(e) => setMonthKey(e.target.value)}
+          />
+        </label>
+        <label>
+          Müşteri Filtresi
+          <select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)}>
+            <option value="">Tüm Müşteriler</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Ürün Türü
+          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as any)}>
+            <option value="all">Tüm Ürün & Sarflar</option>
+            <option value="biocide">Sadece Biyosidal İlaçlar</option>
+            <option value="consumable">Sadece Sarf Malzemeleri</option>
+          </select>
+        </label>
+        <label className="document-search" style={{ flex: 1, minWidth: '160px' }}>
+          <span>Arama</span>
+          <i>
+            <Search size={16} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ürün, etken madde veya ruhsat…" />
+          </i>
+        </label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="primary-button" onClick={() => onPrint(monthKey)}>
+            <Printer size={16} /> PDF / Yazdır
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => exportMonthlyBiocideExcel(monthLabel, biocideItems, consumableItems, customerRows, companyName)}
+            disabled={!biocideItems.length && !consumableItems.length}
+          >
+            <FileSpreadsheet size={16} /> Excel İndir
+          </button>
+        </div>
+      </div>
+
+      <div className="analytics-kpis report-risk-kpis">
+        <article className="surface">
+          <span className="purple"><FlaskConical size={20} /></span>
+          <div>
+            <small>Katı / Yem Biyosidal</small>
+            <strong>{totalSolidGrams >= 1000 ? `${(totalSolidGrams / 1000).toFixed(2)} kg` : `${totalSolidGrams} gr`}</strong>
+          </div>
+        </article>
+        <article className="surface">
+          <span className="blue-orbit"><FlaskConical size={20} /></span>
+          <div>
+            <small>Sıvı / Jel İnsektisit</small>
+            <strong>{totalLiquidMl >= 1000 ? `${(totalLiquidMl / 1000).toFixed(2)} lt` : `${totalLiquidMl} ml`}</strong>
+          </div>
+        </article>
+        <article className="surface">
+          <span className="orange"><Boxes size={20} /></span>
+          <div>
+            <small>Sarf & Plaka Değişimi</small>
+            <strong>{totalConsumablePcs} Adet</strong>
+          </div>
+        </article>
+        <article className="surface">
+          <span className="green"><FileText size={20} /></span>
+          <div>
+            <small>{monthLabel} Saha Servisi</small>
+            <strong>{monthReports.length} İş Emri</strong>
+          </div>
+        </article>
+      </div>
+
+      {(categoryFilter === 'all' || categoryFilter === 'biocide') && (
+        <section className="surface full-table-surface" style={{ marginBottom: '24px' }}>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">SAĞLIK BAKANLIĞI RUHSATLI İLAÇLAR</p>
+              <h2>Biyosidal Ürün Tüketim İcmali ({filteredBiocides.length} Kalem)</h2>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ürün Adı</th>
+                  <th>Ruhsat No</th>
+                  <th>Aktif Madde</th>
+                  <th>Uygulama Yöntemi</th>
+                  <th>Aylık Tüketim</th>
+                  <th>Uygulama Adedi</th>
+                  <th>Hedef Zararlılar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredBiocides.length ? (
+                  filteredBiocides.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <strong>{item.productName}</strong>
+                      </td>
+                      <td>{item.licenseNumber}</td>
+                      <td>{item.activeIngredient}</td>
+                      <td>{item.applicationMethod}</td>
+                      <td><strong>{item.totalAmount} {item.unit}</strong></td>
+                      <td>{item.applicationCount} İş Emri</td>
+                      <td>{Array.from(item.targetPests).join(', ') || '—'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="stock-table-empty">
+                      Seçilen ayda kayıtlı biyosidal ilaç tüketimi bulunmuyor.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {(categoryFilter === 'all' || categoryFilter === 'consumable') && (
+        <section className="surface full-table-surface" style={{ marginBottom: '24px' }}>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">İSTASYON & EKİPMAN MATERYALLERİ</p>
+              <h2>Sarf Malzemeleri Tüketim İcmali ({filteredConsumables.length} Kalem)</h2>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sarf Malzemesi</th>
+                  <th>Kullanım Alanı / Şekli</th>
+                  <th>Toplam Tüketilen / Değiştirilen</th>
+                  <th>Hizmet Verilen Müşteri Sayısı</th>
+                  <th>Uygulama Adedi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredConsumables.length ? (
+                  filteredConsumables.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <strong>{item.productName}</strong>
+                      </td>
+                      <td>{item.applicationMethod}</td>
+                      <td><strong>{item.totalAmount} {item.unit}</strong></td>
+                      <td>{item.customers.size} Müşteri</td>
+                      <td>{item.applicationCount} İş Emri</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="stock-table-empty">
+                      Seçilen ayda kayıtlı sarf malzemesi tüketimi bulunmuyor.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {customerRows.length > 0 && (
+        <section className="surface full-table-surface">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">MÜŞTERİ BAZLI DETAYLAR</p>
+              <h2>Saha Tüketim Hareketleri Günlüğü</h2>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tarih</th>
+                  <th>Müşteri / Şube</th>
+                  <th>İş Emri</th>
+                  <th>Kullanılan Ürün / Sarf</th>
+                  <th>Miktar</th>
+                  <th>Hedef Zararlı</th>
+                  <th>Teknisyen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customerRows.slice(0, 30).map((row, idx) => (
+                  <tr key={idx}>
+                    <td>{formatDate(row.scheduledAt)}</td>
+                    <td><strong>{row.customerName}</strong> · {row.branchName}</td>
+                    <td>{row.workOrderNumber}</td>
+                    <td>{row.productName}</td>
+                    <td><strong>{row.amount} {row.unit}</strong></td>
+                    <td>{row.targetPests}</td>
+                    <td>{row.operatorName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {customerRows.length > 30 && (
+              <p style={{ padding: '12px', color: '#64748b', fontSize: '12px', textAlign: 'center', margin: 0 }}>
+                * Toplam {customerRows.length} tüketim hareketinin ilk 30 kaydı gösterilmektedir. Tüm döküm için Excel veya PDF raporu alabilirsiniz.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
 
 function EmptyTrend() { return <div className="analytics-empty"><BarChart3 size={28} /><strong>Seçilen dönemde veri yok</strong><span>Onaylanan saha raporları burada karşılaştırılır.</span></div>; }
 

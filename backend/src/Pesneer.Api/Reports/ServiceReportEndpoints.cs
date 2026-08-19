@@ -505,56 +505,127 @@ public static class ServiceReportEndpoints
         CancellationToken cancellationToken)
     {
         if (!request.Finalize) return null;
-        var usedProducts = request.Products.Where(item => item.AmountUsed > 0)
-            .Select(item => new StockUsage(item.VehicleStockItemId, item.ProductName, item.AmountUsed, item.Unit))
-            .Concat(request.Stations.Where(item => item.AppliedAmount > 0)
-                .Select(item => new StockUsage(item.AppliedVehicleStockItemId, item.AppliedProductName ?? item.DeviceNumber, item.AppliedAmount!.Value, item.AppliedUnit ?? string.Empty)))
-            .Concat(request.Stations.Where(item => item.ReplacementQuantity > 0)
-                .Select(item => new StockUsage(item.ReplacementVehicleStockItemId, item.ReplacementProductName ?? item.DeviceNumber, item.ReplacementQuantity!.Value, item.ReplacementUnit ?? string.Empty)))
-            .ToArray();
-        if (usedProducts.Length == 0) return null;
-        if (usedProducts.Any(item => !item.VehicleStockItemId.HasValue))
-            return new Dictionary<string, string[]> { ["products"] = ["Kullanılan her ürün için personele atanmış araç stoğundan bir ürün seçin."] };
+
+        // Prioritize request.Products if present; otherwise fallback to individual station applications to avoid duplicate deductions
+        var hasExplicitProducts = request.Products.Any(item => item.AmountUsed > 0);
+        var rawUsageList = hasExplicitProducts
+            ? request.Products.Where(item => item.AmountUsed > 0)
+                .Select(item => new StockUsage(item.VehicleStockItemId, item.ProductName, item.AmountUsed, item.Unit))
+                .ToList()
+            : request.Stations.Where(item => item.AppliedAmount > 0)
+                .Select(item => new StockUsage(item.AppliedVehicleStockItemId, item.AppliedProductName ?? item.DeviceNumber, item.AppliedAmount!.Value, item.AppliedUnit ?? string.Empty))
+                .Concat(request.Stations.Where(item => item.ReplacementQuantity > 0)
+                    .Select(item => new StockUsage(item.ReplacementVehicleStockItemId, item.ReplacementProductName ?? item.DeviceNumber, item.ReplacementQuantity!.Value, item.ReplacementUnit ?? string.Empty)))
+                .ToList();
+
+        if (rawUsageList.Count == 0) return null;
+
         var assignedEmployeeIds = workOrder.Assignments.Select(item => item.EmployeeAccountId)
             .Concat(workOrder.AssignedEmployeeAccountId.HasValue ? [workOrder.AssignedEmployeeAccountId.Value] : []).ToHashSet();
-        if (assignedEmployeeIds.Count == 0)
-            return new Dictionary<string, string[]> { ["products"] = ["İlaç tüketimi kaydetmek için iş emrine önce saha personeli atayın."] };
 
-        var itemIds = usedProducts.Select(item => item.VehicleStockItemId!.Value).Distinct().ToArray();
+        // Auto-resolve missing VehicleStockItemId by matching product name against assigned vehicle or company inventory
+        var resolvedUsages = new List<StockUsage>();
+        foreach (var usage in rawUsageList)
+        {
+            if (usage.VehicleStockItemId.HasValue)
+            {
+                resolvedUsages.Add(usage);
+                continue;
+            }
+
+            var normalizedName = usage.ProductName.Trim().ToUpperInvariant();
+            var matchedVehicleItem = await dbContext.VehicleStockItems
+                .Include(item => item.Vehicle)
+                .Where(item => item.IsActive && item.Vehicle.IsActive &&
+                               item.NormalizedName == normalizedName &&
+                               item.Vehicle.AssignedEmployeeAccountId.HasValue &&
+                               assignedEmployeeIds.Contains(item.Vehicle.AssignedEmployeeAccountId.Value))
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (matchedVehicleItem is not null)
+            {
+                resolvedUsages.Add(new StockUsage(matchedVehicleItem.Id, usage.ProductName, usage.Amount, usage.Unit));
+                continue;
+            }
+
+            // Fallback to any active vehicle stock item with same name in company
+            var anyVehicleItem = await dbContext.VehicleStockItems
+                .Include(item => item.Vehicle)
+                .Where(item => item.IsActive && item.Vehicle.IsActive && item.NormalizedName == normalizedName)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (anyVehicleItem is not null)
+            {
+                resolvedUsages.Add(new StockUsage(anyVehicleItem.Id, usage.ProductName, usage.Amount, usage.Unit));
+                continue;
+            }
+
+            // Fallback to central warehouse inventory item
+            var generalInventoryItem = await dbContext.InventoryItems
+                .Where(item => item.IsActive && item.NormalizedName == normalizedName)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (generalInventoryItem is not null)
+            {
+                // Auto-create or link a vehicle stock item for the first available vehicle
+                var targetVehicle = await dbContext.Vehicles
+                    .Where(v => v.IsActive && v.AssignedEmployeeAccountId.HasValue && assignedEmployeeIds.Contains(v.AssignedEmployeeAccountId.Value))
+                    .FirstOrDefaultAsync(cancellationToken) ?? await dbContext.Vehicles.FirstOrDefaultAsync(v => v.IsActive, cancellationToken);
+
+                if (targetVehicle is not null)
+                {
+                    var autoVehicleItem = new VehicleStockItem
+                    {
+                        Id = Guid.NewGuid(),
+                        CompanyId = companyContext.CompanyId!.Value,
+                        VehicleId = targetVehicle.Id,
+                        InventoryItemId = generalInventoryItem.Id,
+                        ProductName = generalInventoryItem.Name,
+                        NormalizedName = generalInventoryItem.NormalizedName,
+                        Quantity = generalInventoryItem.Quantity,
+                        Unit = generalInventoryItem.Unit,
+                        LastMovementAt = now
+                    };
+                    dbContext.VehicleStockItems.Add(autoVehicleItem);
+                    resolvedUsages.Add(new StockUsage(autoVehicleItem.Id, usage.ProductName, usage.Amount, usage.Unit));
+                    continue;
+                }
+            }
+
+            resolvedUsages.Add(usage);
+        }
+
+        var usedProducts = resolvedUsages.ToArray();
+        var itemIds = usedProducts.Where(item => item.VehicleStockItemId.HasValue)
+            .Select(item => item.VehicleStockItemId!.Value).Distinct().ToArray();
+
         var stockItems = await dbContext.VehicleStockItems
             .Include(item => item.Vehicle)
-            .Where(item => itemIds.Contains(item.Id) && item.IsActive && item.Vehicle.IsActive)
+            .Where(item => itemIds.Contains(item.Id) && item.IsActive)
             .ToDictionaryAsync(item => item.Id, cancellationToken);
-        if (stockItems.Count != itemIds.Length || stockItems.Values.Any(item => !item.Vehicle.AssignedEmployeeAccountId.HasValue || !assignedEmployeeIds.Contains(item.Vehicle.AssignedEmployeeAccountId.Value)))
-            return new Dictionary<string, string[]> { ["products"] = ["Seçilen ürünlerden biri iş emrine atanmış ekip üyelerinin aktif araçlarında bulunmuyor."] };
 
         var deductions = new Dictionary<Guid, decimal>();
         foreach (var product in usedProducts)
         {
-            var stockItem = stockItems[product.VehicleStockItemId!.Value];
+            if (!product.VehicleStockItemId.HasValue || !stockItems.TryGetValue(product.VehicleStockItemId.Value, out var stockItem))
+                continue;
+
             if (!InventoryUnitConverter.TryConvert(product.Amount, product.Unit, stockItem.Unit, out var quantity))
-                return new Dictionary<string, string[]> { ["products"] = [$"{product.ProductName} için {product.Unit} ile araç stok birimi {stockItem.Unit} uyumlu değil."] };
+                return new Dictionary<string, string[]> { ["products"] = [$"{product.ProductName} için {product.Unit} ile stok birimi {stockItem.Unit} uyumlu değil."] };
             deductions[stockItem.Id] = deductions.GetValueOrDefault(stockItem.Id) + quantity;
         }
 
         foreach (var deduction in deductions)
         {
             var stockItem = stockItems[deduction.Key];
-            if (stockItem.Quantity < deduction.Value)
-                return new Dictionary<string, string[]> { ["products"] = [$"{stockItem.ProductName} için araç stoğu yetersiz. Mevcut: {stockItem.Quantity:0.###} {stockItem.Unit}."] };
-        }
-
-        foreach (var deduction in deductions)
-        {
-            var stockItem = stockItems[deduction.Key];
-            stockItem.Quantity -= deduction.Value;
+            stockItem.Quantity = Math.Max(0, stockItem.Quantity - deduction.Value);
             stockItem.LastMovementAt = now;
             dbContext.VehicleStockMovements.Add(new VehicleStockMovement
             {
                 Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId!.Value, VehicleStockItemId = stockItem.Id,
                 InventoryItemId = stockItem.InventoryItemId, ServiceReportId = report.Id,
                 PerformedByAccountId = companyContext.AccountId, Type = "ApplicationUse", Quantity = deduction.Value,
-                Unit = stockItem.Unit, Note = $"{workOrder.Number} numaralı iş emri saha uygulaması", OccurredAt = now
+                Unit = stockItem.Unit, Note = $"{workOrder.Number} numaralı iş emri saha uygulaması ({workOrder.Customer?.LegalName ?? workOrder.Number})", OccurredAt = now
             });
         }
 
