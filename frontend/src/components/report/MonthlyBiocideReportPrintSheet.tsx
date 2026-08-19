@@ -222,23 +222,23 @@ export default function MonthlyBiocideReportPrintSheet({
         </div>
       </section>
 
-      {/* Summary KPI Strip */}
-      <section className="official-report-section" style={{ marginTop: '14px' }}>
+      {/* Summary KPI Grid */}
+      <section className="official-report-section">
         <h2>1. Dönem Tüketim ve Faaliyet Özeti</h2>
-        <div className="official-risk-strip" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          <div>
+        <div className="biocide-kpi-grid">
+          <div className="biocide-kpi-card">
             <span>Katı / Yem Biyosidal</span>
             <strong>{totalSolidGrams >= 1000 ? `${(totalSolidGrams / 1000).toFixed(2)} kg` : `${totalSolidGrams} gr`}</strong>
           </div>
-          <div>
+          <div className="biocide-kpi-card">
             <span>Sıvı / Jel İnsektisit</span>
             <strong>{totalLiquidMl >= 1000 ? `${(totalLiquidMl / 1000).toFixed(2)} lt` : `${totalLiquidMl} ml`}</strong>
           </div>
-          <div>
+          <div className="biocide-kpi-card">
             <span>Sarf & Yapışkan Plaka</span>
             <strong>{totalConsumablePcs} Adet</strong>
           </div>
-          <div>
+          <div className="biocide-kpi-card">
             <span>Toplam Saha Servisi</span>
             <strong>{filteredReports.length} İş Emri</strong>
           </div>
@@ -248,111 +248,115 @@ export default function MonthlyBiocideReportPrintSheet({
       {/* Section 2: Biocidal Products Table */}
       <section className="official-report-section">
         <h2>2. Kullanılan Biyosidal Ürünler İcmali</h2>
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: '32px' }}>No</th>
-              <th>Biyosidal Ürün Ticari Adı</th>
-              <th>Ruhsat No</th>
-              <th>Aktif Madde</th>
-              <th>Uygulama Yöntemi</th>
-              <th>Aylık Tüketim</th>
-              <th>İş Emri</th>
-            </tr>
-          </thead>
-          <tbody>
-            {biocideItems.length ? (
-              biocideItems.map((item, idx) => (
-                <tr key={idx}>
-                  <td><strong>{idx + 1}</strong></td>
-                  <td><strong>{item.productName}</strong></td>
-                  <td>{item.licenseNumber}</td>
-                  <td>{item.activeIngredient}</td>
-                  <td>{item.applicationMethod}</td>
-                  <td><strong>{item.totalAmount} {item.unit}</strong></td>
-                  <td>{item.applicationCount}</td>
-                </tr>
-              ))
-            ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '12px', color: '#64748b' }}>
-                  Bu dönemde kayıtlı biyosidal ürün tüketimi bulunmamaktadır.
-                </td>
+                <th style={{ width: '6%', textAlign: 'center' }}>No</th>
+                <th style={{ width: '26%' }}>Biyosidal Ürün Ticari Adı</th>
+                <th style={{ width: '14%' }}>Ruhsat No</th>
+                <th style={{ width: '16%' }}>Aktif Madde</th>
+                <th style={{ width: '14%' }}>Uygulama Yöntemi</th>
+                <th style={{ width: '14%' }}>Aylık Tüketim</th>
+                <th style={{ width: '10%', textAlign: 'center' }}>İş Emri</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {biocideItems.length ? (
+                biocideItems.map((item, idx) => (
+                  <tr key={idx}>
+                    <td style={{ textAlign: 'center' }}><strong>{idx + 1}</strong></td>
+                    <td><strong>{item.productName}</strong></td>
+                    <td>{item.licenseNumber}</td>
+                    <td>{item.activeIngredient}</td>
+                    <td>{item.applicationMethod}</td>
+                    <td><strong>{item.totalAmount} {item.unit}</strong></td>
+                    <td style={{ textAlign: 'center' }}>{item.applicationCount}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '12px', color: '#64748b' }}>
+                    Bu dönemde kayıtlı biyosidal ürün tüketimi bulunmamaktadır.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* Section 3: Consumables Table */}
       <section className="official-report-section">
         <h2>3. Kullanılan Sarf Malzemeleri & İstasyon Ekipmanları</h2>
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: '32px' }}>No</th>
-              <th>Sarf Malzemesi / Ekipman Adı</th>
-              <th>Kullanım Alanı</th>
-              <th>Toplam Değiştirilen / Kullanılan Miktar</th>
-              <th>Uygulanan Müşteri Sayısı</th>
-              <th>İş Emri</th>
-            </tr>
-          </thead>
-          <tbody>
-            {consumableItems.length ? (
-              consumableItems.map((item, idx) => (
-                <tr key={idx}>
-                  <td><strong>{idx + 1}</strong></td>
-                  <td><strong>{item.productName}</strong></td>
-                  <td>{item.applicationMethod}</td>
-                  <td><strong>{item.totalAmount} {item.unit}</strong></td>
-                  <td>{item.customers.size} Müşteri</td>
-                  <td>{item.applicationCount}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '12px', color: '#64748b' }}>
-                  Bu dönemde kayıtlı sarf malzemesi tüketimi bulunmamaktadır.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-
-      {/* Section 4: Customer Distribution (Top 10 / Overview) */}
-      {customerRows.length > 0 && (
-        <section className="official-report-section">
-          <h2>4. Müşteri ve İş Emri Bazlı Tüketim Dağılımı (İlk 15 Kayıt)</h2>
+        <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Tarih</th>
-                <th>Müşteri / Şube</th>
-                <th>İş Emri</th>
-                <th>Kullanılan Ürün / Sarf</th>
-                <th>Miktar</th>
-                <th>Hedef Zararlı</th>
-                <th>Uygulayıcı</th>
+                <th style={{ width: '6%', textAlign: 'center' }}>No</th>
+                <th style={{ width: '30%' }}>Sarf Malzemesi / Ekipman Adı</th>
+                <th style={{ width: '20%' }}>Kullanım Alanı</th>
+                <th style={{ width: '20%' }}>Toplam Miktar</th>
+                <th style={{ width: '14%' }}>Müşteri Sayısı</th>
+                <th style={{ width: '10%', textAlign: 'center' }}>İş Emri</th>
               </tr>
             </thead>
             <tbody>
-              {customerRows.slice(0, 15).map((row, idx) => (
-                <tr key={idx}>
-                  <td>{formatDate(row.scheduledAt)}</td>
-                  <td><strong>{row.customerName}</strong> · {row.branchName}</td>
-                  <td>{row.workOrderNumber}</td>
-                  <td>{row.productName}</td>
-                  <td><strong>{row.amount} {row.unit}</strong></td>
-                  <td>{row.targetPests}</td>
-                  <td>{row.operatorName}</td>
+              {consumableItems.length ? (
+                consumableItems.map((item, idx) => (
+                  <tr key={idx}>
+                    <td style={{ textAlign: 'center' }}><strong>{idx + 1}</strong></td>
+                    <td><strong>{item.productName}</strong></td>
+                    <td>{item.applicationMethod}</td>
+                    <td><strong>{item.totalAmount} {item.unit}</strong></td>
+                    <td>{item.customers.size} Müşteri</td>
+                    <td style={{ textAlign: 'center' }}>{item.applicationCount}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '12px', color: '#64748b' }}>
+                    Bu dönemde kayıtlı sarf malzemesi tüketimi bulunmamaktadır.
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      {/* Section 4: Customer Distribution */}
+      {customerRows.length > 0 && (
+        <section className="official-report-section">
+          <h2>4. Müşteri ve İş Emri Bazlı Tüketim Dağılımı (İlk 15 Kayıt)</h2>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: '12%' }}>Tarih</th>
+                  <th style={{ width: '24%' }}>Müşteri / Şube</th>
+                  <th style={{ width: '14%' }}>İş Emri</th>
+                  <th style={{ width: '20%' }}>Kullanılan Ürün / Sarf</th>
+                  <th style={{ width: '12%' }}>Miktar</th>
+                  <th style={{ width: '18%' }}>Hedef Zararlı</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customerRows.slice(0, 15).map((row, idx) => (
+                  <tr key={idx}>
+                    <td>{formatDate(row.scheduledAt)}</td>
+                    <td><strong>{row.customerName}</strong><br /><small style={{ color: '#64748b' }}>{row.branchName}</small></td>
+                    <td><span style={{ fontSize: '8px', color: '#0369a1', fontWeight: 700 }}>{row.workOrderNumber}</span></td>
+                    <td><strong>{row.productName}</strong></td>
+                    <td><strong>{row.amount} {row.unit}</strong></td>
+                    <td><small style={{ fontSize: '8px' }}>{row.targetPests}</small></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {customerRows.length > 15 && (
-            <p style={{ fontSize: '7.5px', color: '#64748b', margin: '4px 0 0 0', textAlign: 'right' }}>
+            <p style={{ fontSize: '8px', color: '#64748b', margin: '4px 0 0 0', textAlign: 'right' }}>
               * Toplam {customerRows.length} tüketim kaydı bulunmaktadır. Tüm liste Excel dökümünde yer almaktadır.
             </p>
           )}
@@ -363,14 +367,14 @@ export default function MonthlyBiocideReportPrintSheet({
       <section className="official-signatures">
         <div>
           <span>Mesul Müdür / Şirket Yetkilisi</span>
-          <div className="official-signature-empty" style={{ height: '54px' }}>
+          <div className="official-signature-box">
             Kaşe & İmza
           </div>
           <strong>{responsibleManager}</strong>
         </div>
         <div>
           <span>Ekip Sorumlusu / Operasyon Yöneticisi</span>
-          <div className="official-signature-empty" style={{ height: '54px' }}>
+          <div className="official-signature-box">
             İmza
           </div>
           <strong>{ek1Defaults?.teamManager || 'Operasyon Sorumlusu'}</strong>

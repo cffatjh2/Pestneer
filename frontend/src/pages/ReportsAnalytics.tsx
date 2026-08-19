@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, BarChart3, Boxes, CheckCircle2, ClipboardCheck, Clock3, Download, FilePlus2, FileSpreadsheet, FileText, FilterX, FlaskConical, Gauge, PackageCheck, Printer, RefreshCw, Search, Share2, ShieldAlert, Users, X } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import type { WorkOrder } from '../types';
 import ServiceReportModal from '../components/modals/ServiceReportModal';
 import StationActivationModal from '../components/modals/StationActivationModal';
@@ -25,8 +27,48 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
   const [activationOrder, setActivationOrder] = useState<WorkOrder | null>(null);
   const [biocidePrintMonth, setBiocidePrintMonth] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState(''); const [branchId, setBranchId] = useState(''); const [from, setFrom] = useState(defaultFrom()); const [to, setTo] = useState(dateKey(new Date()));
+  const [isDownloadingBiocidePdf, setIsDownloadingBiocidePdf] = useState(false);
   const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pestneer_Saha_Raporu' });
   const biocidePrintRef = useRef<HTMLDivElement>(null); const biocidePrint = useReactToPrint({ contentRef: biocidePrintRef, documentTitle: biocidePrintMonth ? `Pestneer_Aylik_Biyosidal_Tuketim_${biocidePrintMonth}` : 'Pestneer_Aylik_Biyosidal_Raporu' });
+
+  const downloadBiocidePdf = async () => {
+    if (!biocidePrintRef.current) return;
+    setIsDownloadingBiocidePdf(true);
+    try {
+      const element = biocidePrintRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = pdfHeight;
+      let position = 0;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`Pestneer_Aylik_Biyosidal_Tuketim_${biocidePrintMonth || 'Raporu'}.pdf`);
+    } catch (err) {
+      console.error('Biocide PDF download error:', err);
+      biocidePrint();
+    } finally {
+      setIsDownloadingBiocidePdf(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -67,7 +109,47 @@ export default function ReportsAnalytics({ accessToken, companyName, userName, w
     {editing && <ServiceReportModal accessToken={accessToken} order={editing.order} existing={editing.report} companyName={companyName} operatorName={editing.order.technician || userName} vehicleStockItems={(vehicles.find((item) => item.assignedEmployeeAccountId === editing.order.employeeAccountId)?.stockItems ?? []).map((item) => ({ id: item.id, vehicleStockItemId: item.id, inventoryItemId: item.inventoryItemId, productName: item.productName, quantity: item.quantity, unit: item.unit, isManual: item.isManual, licenseNumber: item.licenseNumber, licenseDocumentId: item.licenseDocumentId }))} onClose={() => setEditing(null)} onSave={save} />}
     {activationOrder && <StationActivationModal accessToken={accessToken} order={activationOrder} onClose={() => setActivationOrder(null)} onSaved={(saved) => setActivations((current) => [saved, ...current.filter((item) => item.id !== saved.id)])} />}
     {preview && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>{preview.reportNumber}</strong><span>{preview.customerName} · {preview.branchName}</span></div><button onClick={() => exportServiceReportExcel(preview)}><FileSpreadsheet size={16} /> Excel</button><button onClick={print}><Printer size={16} /> PDF / Yazdır</button><button onClick={() => void shareOrDownloadFile({ title: `${preview.reportNumber} - EK-1 Hizmet Raporu`, text: `${preview.customerName} · ${preview.branchName} - ${preview.reportNumber} nolu EK-1 Hizmet Raporu`, url: window.location.href })}><Share2 size={16} /> Paylaş</button><button className="icon-button" onClick={() => setPreview(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={printRef}><ServiceReportPrintSheet report={preview} accessToken={accessToken} /></div></div></div></div>}
-    {biocidePrintMonth && <div className="modal-layer report-preview-layer"><div className="report-preview-dialog"><div className="report-preview-toolbar"><div><strong>Aylık Biyosidal ve Sarf Tüketim Raporu</strong><span>{biocidePrintMonth} Dönemi Resmi İcmali</span></div><button onClick={biocidePrint}><Printer size={16} /> PDF İndir / Yazdır</button><button className="icon-button" onClick={() => setBiocidePrintMonth(null)}><X size={19} /></button></div><div className="report-print-canvas"><div ref={biocidePrintRef}><MonthlyBiocideReportPrintSheet accessToken={accessToken} companyName={companyName} monthKey={biocidePrintMonth} reports={reports} activations={activations} /></div></div></div></div>}
+    {biocidePrintMonth && (
+      <div className="modal-layer report-preview-layer">
+        <div className="report-preview-dialog" style={{ maxWidth: '860px' }}>
+          <div className="report-preview-toolbar">
+            <div>
+              <strong>Aylık Biyosidal ve Sarf Tüketim Raporu</strong>
+              <span>{biocidePrintMonth} Dönemi Resmi T.C. Sağlık Bakanlığı İcmali</span>
+            </div>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={isDownloadingBiocidePdf}
+              onClick={() => void downloadBiocidePdf()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#0284c7', borderColor: '#0284c7', color: '#fff', padding: '0 12px', minHeight: '36px', borderRadius: '6px', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}
+            >
+              <Download size={16} /> {isDownloadingBiocidePdf ? 'PDF Hazırlanıyor…' : 'PDF İndir'}
+            </button>
+            <button type="button" onClick={biocidePrint} title="Yazdır">
+              <Printer size={16} /> Yazdır
+            </button>
+            <button
+              type="button"
+              onClick={() => void shareOrDownloadFile({
+                title: 'Aylık Biyosidal Tüketim Raporu',
+                text: `${companyName} - ${biocidePrintMonth} Aylık Biyosidal ve Sarf Tüketim Raporu`,
+                url: window.location.href,
+              })}
+              title="Paylaş"
+            >
+              <Share2 size={16} /> Paylaş
+            </button>
+            <button className="icon-button" onClick={() => setBiocidePrintMonth(null)}><X size={19} /></button>
+          </div>
+          <div className="report-print-canvas">
+            <div ref={biocidePrintRef}>
+              <MonthlyBiocideReportPrintSheet accessToken={accessToken} companyName={companyName} monthKey={biocidePrintMonth} reports={reports} activations={activations} />
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
   </section>;
 }
 

@@ -21,6 +21,234 @@
 .official-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 18px; padding: 0 30px; }.official-signatures > div { display: grid; justify-items: center; min-height: 100px; border-bottom: 1px solid #94a3b8; }.official-signatures span { color: #64748b; font-size: 8px; font-weight: 700; }.official-signatures img { width: 170px; height: 62px; object-fit: contain; }.official-signatures strong { font-size: 9px; }.official-signature-empty { display: grid; place-items: center; width: 170px; height: 62px; color: #94a3b8; font-size: 7px; }.official-report-sheet footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 16px; padding-top: 8px; border-top: 2px solid #13a987; color: #52657a; font-size: 7px; }.official-report-sheet footer strong { color: #b45309; }
 @media print { .official-report-sheet { width: 100%; min-height: 0; margin: 0; padding: 0; box-shadow: none; } }
 
+/* ── Biocide Monthly Report Sheet Specific Styles ── */
+.biocide-monthly-report-sheet {
+  width: 794px !important;
+  min-height: 1123px;
+  margin: 0 auto;
+  padding: 32px 36px !important;
+  color: #0f172a !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+.biocide-monthly-report-sheet header {
+  display: grid;
+  grid-template-columns: 210px 1fr 140px !important;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 3px solid #0284c7 !important;
+}
+
+.biocide-monthly-report-sheet header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  text-align: center;
+  line-height: 1.3;
+  letter-spacing: 0.2px;
+}
+
+.biocide-monthly-report-sheet header p {
+  margin: 4px 0 0;
+  color: #0284c7 !important;
+  font-size: 9px !important;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.biocide-monthly-report-sheet .official-report-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) !important;
+  margin: 14px 0 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.biocide-monthly-report-sheet .official-report-meta > div {
+  padding: 8px 12px !important;
+  border-right: 1px solid #cbd5e1 !important;
+}
+
+.biocide-monthly-report-sheet .official-report-meta > div:last-child {
+  border-right: none !important;
+}
+
+.biocide-monthly-report-sheet .official-report-meta span {
+  color: #64748b;
+  font-size: 8px !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.biocide-monthly-report-sheet .official-report-meta strong {
+  display: block;
+  margin-top: 3px;
+  color: #0f172a;
+  font-size: 10.5px !important;
+  font-weight: 700;
+}
+
+.biocide-monthly-report-sheet .official-report-section {
+  margin-top: 14px !important;
+  break-inside: avoid;
+}
+
+.biocide-monthly-report-sheet .official-report-section h2 {
+  margin: 0;
+  padding: 6px 12px !important;
+  color: #ffffff !important;
+  background: #0369a1 !important;
+  font-size: 9.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border-radius: 4px 4px 0 0;
+}
+
+.biocide-monthly-report-sheet .table-wrap {
+  border: 1px solid #cbd5e1;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  overflow: hidden;
+}
+
+.biocide-monthly-report-sheet table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  font-size: 8.5px !important;
+  line-height: 1.35;
+}
+
+.biocide-monthly-report-sheet th {
+  padding: 6px 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+  background: #e0f2fe !important;
+  font-size: 8px !important;
+  font-weight: 800 !important;
+  text-align: left;
+  letter-spacing: 0.2px;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  box-sizing: border-box;
+}
+
+.biocide-monthly-report-sheet td {
+  padding: 6px 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #334155 !important;
+  vertical-align: middle;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  box-sizing: border-box;
+}
+
+.biocide-monthly-report-sheet tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.biocide-monthly-report-sheet .biocide-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.biocide-monthly-report-sheet .biocide-kpi-card {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.biocide-monthly-report-sheet .biocide-kpi-card span {
+  color: #64748b;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.biocide-monthly-report-sheet .biocide-kpi-card strong {
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.biocide-monthly-report-sheet .official-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 36px !important;
+  margin-top: 22px !important;
+  padding: 0 20px !important;
+}
+
+.biocide-monthly-report-sheet .official-signatures > div {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  padding: 10px !important;
+  border: 1px dashed #94a3b8 !important;
+  border-radius: 6px;
+  background: #f8fafc;
+  min-height: 80px;
+}
+
+.biocide-monthly-report-sheet .official-signatures span {
+  color: #475569 !important;
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+}
+
+.biocide-monthly-report-sheet .official-signature-box {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.biocide-monthly-report-sheet .official-signatures strong {
+  margin-top: 4px;
+  color: #0f172a !important;
+  font-size: 10px !important;
+  font-weight: 700;
+}
+
+.biocide-monthly-report-sheet footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 2px solid #0284c7 !important;
+  color: #64748b !important;
+  font-size: 7.5px !important;
+}
+
+.biocide-monthly-report-sheet footer strong {
+  color: #dc2626 !important;
+  font-weight: 800;
+}
+
 /* ── Report Sidebar ────────────────────────────────────────────── */
 .report-sidebar {
   position: sticky;
