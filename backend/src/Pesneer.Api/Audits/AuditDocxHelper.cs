@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Security;
 using System.Text;
@@ -315,6 +316,85 @@ internal static class AuditDocxHelper
             tableHeaders: headers,
             tableRows: rows,
             columnWidthsPct: new[] { 6, 22, 16, 26, 20, 10 }
+        );
+    }
+
+    public static byte[] CreateGenericJsonDocx(
+        string fileName,
+        string jsonContent,
+        string companyName,
+        string customerName,
+        string? branchName)
+    {
+        var headers = new List<string>();
+        var rows = new List<string[]>();
+        var title = Path.GetFileNameWithoutExtension(fileName).Replace('-', ' ').Replace('_', ' ');
+        title = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(title);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonContent);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                var array = doc.RootElement.EnumerateArray().ToList();
+                if (array.Count > 0 && array[0].ValueKind == JsonValueKind.Object)
+                {
+                    headers = array[0].EnumerateObject().Select(p => p.Name).ToList();
+                    foreach (var el in array)
+                    {
+                        var row = new List<string>();
+                        foreach (var h in headers)
+                        {
+                            if (el.TryGetProperty(h, out var prop))
+                            {
+                                row.Add(prop.ToString() ?? "—");
+                            }
+                            else
+                            {
+                                row.Add("—");
+                            }
+                        }
+                        rows.Add(row.ToArray());
+                    }
+                }
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                headers = new List<string> { "Parametre / Alan", "Değer" };
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    rows.Add(new[] { prop.Name, prop.Value.ToString() ?? "—" });
+                }
+            }
+        }
+        catch
+        {
+            headers = new List<string> { "Veri" };
+            rows.Add(new[] { jsonContent });
+        }
+
+        if (headers.Count == 0)
+        {
+            headers.Add("Kayıt");
+            rows.Add(new[] { "Veri bulunmuyor" });
+        }
+
+        var colWidths = new int[headers.Count];
+        for (var i = 0; i < headers.Count; i++) colWidths[i] = Math.Max(5, 100 / headers.Count);
+
+        return BuildTableDocument(
+            title: $"{title} Raporu",
+            subtitle: "Pestneer Denetim Dosyası Veri Cetveli",
+            meta: new[]
+            {
+                ("Uygulayıcı Firma", companyName),
+                ("Müşteri / Şube", $"{customerName} · {branchName ?? "Merkez"}"),
+                ("Belge", fileName),
+                ("Tarih", DateTimeOffset.UtcNow.ToString("dd.MM.yyyy HH:mm"))
+            },
+            tableHeaders: headers.ToArray(),
+            tableRows: rows,
+            columnWidthsPct: colWidths
         );
     }
 

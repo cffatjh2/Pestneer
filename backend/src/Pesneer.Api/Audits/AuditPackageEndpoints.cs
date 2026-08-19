@@ -71,10 +71,14 @@ public static class AuditPackageEndpoints
 
     private static async Task<IResult> DownloadZipAsync(Guid packageId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
-        var package = await AccessiblePackages(dbContext, context).AsNoTracking().SingleOrDefaultAsync(item => item.Id == packageId, cancellationToken);
-        return package is null
-            ? Results.NotFound(new { message = "Denetim dosyası bulunamadı." })
-            : Results.File(package.ZipData, "application/zip", $"{package.Number}.zip");
+        var package = await AccessiblePackages(dbContext, context).AsNoTracking()
+            .Include(item => item.Customer).Include(item => item.CustomerBranch)
+            .SingleOrDefaultAsync(item => item.Id == packageId, cancellationToken);
+        if (package is null)
+            return Results.NotFound(new { message = "Denetim dosyası bulunamadı." });
+
+        var sanitizedZip = EnsureNoJsonInZip(package.ZipData, package);
+        return Results.File(sanitizedZip, "application/zip", $"{package.Number}.zip");
     }
 
     private static async Task<IResult> DownloadItemAsync(Guid packageId, Guid itemId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -444,7 +448,6 @@ public static class AuditPackageEndpoints
         {
             WriteEntry(archive, $"00_{number}.pdf", pdfData);
             WriteEntry(archive, "00_DENETIM_DOSYASI_OZETI.docx", AuditDocxHelper.CreateManifestSummaryDocx(manifest, evidence));
-            WriteEntry(archive, "00_manifest.json", Encoding.UTF8.GetBytes(manifestJson));
             var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in evidence)
             {
@@ -457,6 +460,78 @@ public static class AuditPackageEndpoints
             }
         }
         return output.ToArray();
+    }
+
+    private static byte[] EnsureNoJsonInZip(byte[] rawZip, AuditPackage package)
+    {
+        try
+        {
+            using var inputStream = new MemoryStream(rawZip);
+            using var inArchive = new ZipArchive(inputStream, ZipArchiveMode.Read);
+
+            var hasJson = inArchive.Entries.Any(e => e.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+            if (!hasJson) return rawZip;
+
+            using var outputStream = new MemoryStream();
+            using (var outArchive = new ZipArchive(outputStream, ZipArchiveMode.Create, true, Encoding.UTF8))
+            {
+                AuditManifest? manifest = null;
+                if (!string.IsNullOrWhiteSpace(package.ManifestJson))
+                {
+                    try { manifest = JsonSerializer.Deserialize<AuditManifest>(package.ManifestJson, JsonOptions); } catch { }
+                }
+
+                var hasWordDoc = inArchive.Entries.Any(e => e.FullName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase));
+                if (!hasWordDoc && manifest is not null)
+                {
+                    var summaryDocx = AuditDocxHelper.CreateManifestSummaryDocx(manifest, []);
+                    WriteEntry(outArchive, "00_DENETIM_DOSYASI_OZETI.docx", summaryDocx);
+                }
+
+                foreach (var entry in inArchive.Entries)
+                {
+                    if (entry.FullName.Equals("00_manifest.json", StringComparison.OrdinalIgnoreCase) ||
+                        entry.FullName.EndsWith("/00_manifest.json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    using var entryStream = entry.Open();
+                    using var ms = new MemoryStream();
+                    entryStream.CopyTo(ms);
+                    var entryData = ms.ToArray();
+
+                    if (entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var jsonText = Encoding.UTF8.GetString(entryData);
+                        var docxData = AuditDocxHelper.CreateGenericJsonDocx(
+                            Path.GetFileName(entry.FullName),
+                            jsonText,
+                            package.Customer.LegalName,
+                            package.Customer.LegalName,
+                            package.CustomerBranch?.Name
+                        );
+
+                        var dir = Path.GetDirectoryName(entry.FullName)?.Replace('\\', '/');
+                        var fileNameWithoutExt = Path.GetFileNameWithoutExtension(entry.FullName);
+                        var newPath = string.IsNullOrEmpty(dir)
+                            ? $"{fileNameWithoutExt}.docx"
+                            : $"{dir}/{fileNameWithoutExt}.docx";
+
+                        WriteEntry(outArchive, newPath, docxData);
+                    }
+                    else
+                    {
+                        WriteEntry(outArchive, entry.FullName, entryData);
+                    }
+                }
+            }
+            return outputStream.ToArray();
+        }
+        catch
+        {
+            return rawZip;
+        }
     }
 
     private static void WriteEntry(ZipArchive archive, string path, byte[] data)
