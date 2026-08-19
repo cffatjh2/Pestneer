@@ -221,7 +221,7 @@ public static class CustomerPortalEndpoints
         if (item is null || employeeOnly && item.AssignedEmployeeAccountId != context.AccountId) return Results.NotFound(new { message = "Talep bulunamadı." });
         if (request.EmployeeAccountId.HasValue)
         {
-            var employeeExists = await dbContext.CompanyMemberships.AsNoTracking().AnyAsync(value => value.AccountId == request.EmployeeAccountId && value.IsActive && value.Account.IsActive && value.Account.Portal == PortalType.Employee, cancellationToken);
+            var employeeExists = await dbContext.CompanyMemberships.AsNoTracking().AnyAsync(value => value.AccountId == request.EmployeeAccountId && value.IsActive && value.Account.IsActive, cancellationToken);
             if (!employeeExists) return Validation("employeeAccountId", "Aktif bir personel seçin.");
             item.AssignedEmployeeAccountId = request.EmployeeAccountId;
         }
@@ -312,7 +312,40 @@ public static class CustomerPortalEndpoints
         var employeeName = team.Length > 0 ? string.Join(", ", team) : item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor";
         return new(item.Id, item.Number, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.ServiceType, item.VisitType, item.ScheduledAt, item.DurationMinutes, item.Status, employeeName, item.CustomerDurationMinutes, item.TotalLaborMinutes, item.CompletionNote, item.Recommendation);
     }
-    private static EmergencyRequestResponse ToResponse(EmergencyRequest item) => new(item.Id, item.Number, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId, item.CustomerBranch?.Name ?? "Merkez", item.RequestType, item.Subject, item.ServiceType, item.CustomerContractId, item.ContractCoverage, item.ChargeAmount, item.SlaDueAt, item.Priority, item.Status, item.Description, item.ContactPhone, item.AssignedEmployeeAccountId, item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor", item.RequestedAt, item.DueAt, item.RequestedAppointmentAt, item.ClosureApprovalStatus, item.ClosureApprovedAt, item.ClosureApprovalNote, item.AcknowledgedAt, item.CompletedAt, item.History.OrderBy(history => history.OccurredAt).Select(history => new EmergencyHistoryResponse(history.Status, history.Note, history.OccurredAt, history.ChangedByAccount.DisplayName)).ToArray());
+    private static EmergencyRequestResponse ToResponse(EmergencyRequest item) => new(
+        item.Id,
+        item.Number,
+        item.CustomerId,
+        item.Customer?.LegalName ?? "Bilinmeyen Müşteri",
+        item.CustomerBranchId,
+        item.CustomerBranch?.Name ?? "Merkez",
+        item.RequestType,
+        item.Subject,
+        item.ServiceType,
+        item.CustomerContractId,
+        item.ContractCoverage,
+        item.ChargeAmount,
+        item.SlaDueAt,
+        item.Priority,
+        item.Status,
+        item.Description,
+        item.ContactPhone,
+        item.AssignedEmployeeAccountId,
+        item.AssignedEmployeeAccount?.DisplayName ?? "Atama bekliyor",
+        item.RequestedAt,
+        item.DueAt,
+        item.RequestedAppointmentAt,
+        item.ClosureApprovalStatus,
+        item.ClosureApprovedAt,
+        item.ClosureApprovalNote,
+        item.AcknowledgedAt,
+        item.CompletedAt,
+        item.History.OrderBy(history => history.OccurredAt).Select(history => new EmergencyHistoryResponse(
+            history.Status,
+            history.Note,
+            history.OccurredAt,
+            history.ChangedByAccount?.DisplayName ?? "Yetkili"
+        )).ToArray());
     private static EmergencyRequestHistory NewHistory(EmergencyRequest item, Guid accountId, string status, string? note) => new() { Id = Guid.NewGuid(), CompanyId = item.CompanyId, EmergencyRequestId = item.Id, ChangedByAccountId = accountId, Status = status, Note = note };
     private static string TypeLabel(string type) => type switch { "Complaint" => "Şikâyet", "NewBranch" => "Yeni şube talebi", "AppointmentChange" => "Randevu değişikliği", "DocumentRequest" => "Belge talebi", "StructuralCompletion" => "Yapısal faaliyet tamamlandı", _ => "Acil çağrı" };
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
