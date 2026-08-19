@@ -224,10 +224,98 @@ function DocumentLibrary({ items, category, onCategory, staff, onScan, onUpload,
 }
 
 function TrendAnalysisModal({ locations, onClose, onSubmit }: { locations: QualityLocation[]; onClose: () => void; onSubmit: (input: CreateTrendAnalysisInput) => Promise<void> }) {
-  const [locationKey, setLocationKey] = useState(locationValue(locations[0])); const [periodEnd, setPeriodEnd] = useState(dateKey(new Date())); const [periodStart, setPeriodStart] = useState(monthStart(3)); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
-  const setMonths = (months: number) => setPeriodStart(monthStart(months, new Date(`${periodEnd}T12:00:00`)));
-  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const location = findLocation(locations, locationKey); if (!location) return setError('Müşteri veya şube seçin.'); const data = new FormData(event.currentTarget); setSaving(true); setError(null); try { await onSubmit({ customerId: location.customerId, branchId: location.branchId, periodStart, periodEnd, title: optional(data, 'title'), findings: optional(data, 'findings'), recommendations: optional(data, 'recommendations') }); } catch (submitError) { setError(messageOf(submitError)); } finally { setSaving(false); } };
-  return <div className="modal-layer"><div className="modal quality-form-modal"><ModalTitle icon={<BarChart3 />} eyebrow="TREND ANALİZİ" title="Canlı yakalama & aktivite trendi" description="Onaylı saha raporlarındaki istasyon hareketleri seçilen tarih aralığında otomatik karşılaştırılır." onClose={onClose} /><form onSubmit={submit}><div className="quality-form-note"><FileSpreadsheet /><div><strong>Otomatik veri kaynağı</strong><span>Toplam istasyon, aktivite görülen istasyon, plaka değişimi, yakalama sayısı ve zararlı türleri saha formlarından alınır.</span></div></div><div className="form-grid"><LocationSelect locations={locations} value={locationKey} onChange={setLocationKey} /><label>Analiz başlığı<input name="title" /></label><label>Başlangıç<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} required /></label><label>Bitiş<input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} required /></label><div className="form-field-wide period-presets"><span>Hızlı dönem</span><button type="button" onClick={() => setMonths(1)}>1 aylık</button><button type="button" onClick={() => setMonths(2)}>2 aylık</button><button type="button" onClick={() => setMonths(3)}>3 aylık</button></div><label className="form-field-wide">Saha bulguları<textarea name="findings" rows={3} placeholder="Dönemi etkileyen operasyonel değişiklikler, tadilat, mevsimsel koşullar…" /></label><label className="form-field-wide">Sonuç ve öneriler<textarea name="recommendations" rows={3} placeholder="İstasyon yerleşimi, takip sıklığı veya düzeltici faaliyet önerileri…" /></label></div>{error && <div className="modal-form-error">{error}</div>}<ModalActions saving={saving} onClose={onClose} label="Trend Analizini Yayınla" /></form></div></div>;
+  const [locationKey, setLocationKey] = useState(locationValue(locations[0]));
+  const [periodEnd, setPeriodEnd] = useState(dateKey(new Date()));
+  const [periodStart, setPeriodStart] = useState(() => {
+    const end = new Date();
+    const s = new Date(end);
+    s.setMonth(s.getMonth() - 3);
+    s.setDate(s.getDate() + 1);
+    return dateKey(s);
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setDays = (days: number) => {
+    const end = new Date(`${periodEnd}T12:00:00`);
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    setPeriodStart(dateKey(start));
+  };
+
+  const setMonths = (months: number) => {
+    const end = new Date(`${periodEnd}T12:00:00`);
+    const start = new Date(end);
+    start.setMonth(start.getMonth() - months);
+    start.setDate(start.getDate() + 1);
+    setPeriodStart(dateKey(start));
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const location = findLocation(locations, locationKey);
+    if (!location) return setError('Müşteri veya şube seçin.');
+    const data = new FormData(event.currentTarget);
+    setSaving(true);
+    setError(null);
+    try {
+      await onSubmit({
+        customerId: location.customerId,
+        branchId: location.branchId,
+        periodStart,
+        periodEnd,
+        title: optional(data, 'title'),
+        findings: optional(data, 'findings'),
+        recommendations: optional(data, 'recommendations')
+      });
+    } catch (submitError) {
+      setError(messageOf(submitError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-layer">
+      <div className="modal quality-form-modal">
+        <ModalTitle
+          icon={<BarChart3 />}
+          eyebrow="TREND ANALİZİ"
+          title="Canlı yakalama & aktivite trendi"
+          description="Onaylı saha raporlarındaki istasyon hareketleri seçilen tarih aralığında otomatik karşılaştırılır."
+          onClose={onClose}
+        />
+        <form onSubmit={submit}>
+          <div className="quality-form-note">
+            <FileSpreadsheet />
+            <div>
+              <strong>Otomatik veri kaynağı</strong>
+              <span>Toplam istasyon, aktivite görülen istasyon, plaka değişimi, yakalama sayısı ve zararlı türleri saha formlarından alınır.</span>
+            </div>
+          </div>
+          <div className="form-grid">
+            <LocationSelect locations={locations} value={locationKey} onChange={setLocationKey} />
+            <label>Analiz başlığı<input name="title" placeholder="Örn: 2026 Trend Değerlendirmesi" /></label>
+            <label>Başlangıç<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} required /></label>
+            <label>Bitiş<input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} required /></label>
+            <div className="form-field-wide period-presets" style={{ flexWrap: 'wrap', gap: '6px' }}>
+              <span>Hızlı dönem</span>
+              <button type="button" onClick={() => setDays(7)}>1 haftalık</button>
+              <button type="button" onClick={() => setMonths(1)}>1 aylık</button>
+              <button type="button" onClick={() => setMonths(2)}>2 aylık</button>
+              <button type="button" onClick={() => setMonths(3)}>3 aylık</button>
+              <button type="button" onClick={() => setMonths(6)}>6 aylık</button>
+              <button type="button" onClick={() => setMonths(12)}>1 yıllık</button>
+            </div>
+            <label className="form-field-wide">Saha bulguları<textarea name="findings" rows={3} placeholder="Dönemi etkileyen operasyonel değişiklikler, tadilat, mevsimsel koşullar…" /></label>
+            <label className="form-field-wide">Sonuç ve öneriler<textarea name="recommendations" rows={3} placeholder="İstasyon yerleşimi, takip sıklığı veya düzeltici faaliyet önerileri…" /></label>
+          </div>
+          {error && <div className="modal-form-error">{error}</div>}
+          <ModalActions saving={saving} onClose={onClose} label="Trend Analizini Yayınla" />
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function RiskAnalysisModal({ accessToken, locations, onClose, onSubmit }: { accessToken: string; locations: QualityLocation[]; onClose: () => void; onSubmit: (input: CreateRiskAnalysisInput) => Promise<void> }) {

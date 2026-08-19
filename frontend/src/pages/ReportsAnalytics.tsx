@@ -405,13 +405,48 @@ function ReportsTab({ orders, reportByOrder, onEdit, onPreview }: { orders: Work
 }
 
 function TrendsTab({ analytics, reports, customers, branches, customerId, branchId, from, to, onCustomer, onBranch, onFrom, onTo }: { analytics: ServiceReportAnalytics; reports: ServiceReportRecord[]; customers: { id: string; name: string }[]; branches: { id: string; name: string }[]; customerId: string; branchId: string; from: string; to: string; onCustomer: (value: string) => void; onBranch: (value: string) => void; onFrom: (value: string) => void; onTo: (value: string) => void }) {
-  const [granularity, setGranularity] = useState<'month' | 'quarter'>('month');
-  const periods = granularity === 'month' ? analytics.periods : aggregateQuarters(analytics.periods);
+  const [granularity, setGranularity] = useState<'month' | 'quarter' | 'year'>('month');
+  const periods = granularity === 'month' ? analytics.periods : granularity === 'quarter' ? aggregateQuarters(analytics.periods) : aggregateYears(analytics.periods);
   const maxCaught = Math.max(1, ...periods.map((item) => item.totalCaught));
-  return <><div className="surface report-filter-bar"><label>Müşteri<select value={customerId} onChange={(event) => onCustomer(event.target.value)}><option value="">Tüm müşteriler</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Şube<select value={branchId} onChange={(event) => onBranch(event.target.value)}><option value="">Tüm şubeler</option>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Başlangıç<input type="date" value={from} onChange={(event) => onFrom(event.target.value)} /></label><label>Bitiş<input type="date" value={to} onChange={(event) => onTo(event.target.value)} /></label><div style={{ display: 'flex', gap: '8px' }}><button className="secondary-button" onClick={() => exportTrendExcel(analytics, reports)}><Download size={16} /> Excel dışa aktar</button><button className="secondary-button" onClick={() => void shareOrDownloadFile({ title: 'Trend & Risk Analizi', text: `${analytics.from} - ${analytics.to} Trend ve Risk Analizi Raporu`, url: window.location.href })}><Share2 size={16} /> Paylaş</button></div></div>
+
+  const setDays = (days: number) => {
+    const end = new Date(`${to || dateKey(new Date())}T12:00:00`);
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    onFrom(dateKey(start));
+  };
+
+  const setMonths = (months: number) => {
+    const end = new Date(`${to || dateKey(new Date())}T12:00:00`);
+    const start = new Date(end);
+    start.setMonth(start.getMonth() - months);
+    start.setDate(start.getDate() + 1);
+    onFrom(dateKey(start));
+  };
+
+  return <>
+    <div className="surface report-filter-bar" style={{ flexWrap: 'wrap', gap: '10px', alignItems: 'flex-end' }}>
+      <label>Müşteri<select value={customerId} onChange={(event) => onCustomer(event.target.value)}><option value="">Tüm müşteriler</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label>Şube<select value={branchId} onChange={(event) => onBranch(event.target.value)}><option value="">Tüm şubeler</option>{branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label>Başlangıç<input type="date" value={from} onChange={(event) => onFrom(event.target.value)} /></label>
+      <label>Bitiş<input type="date" value={to} onChange={(event) => onTo(event.target.value)} /></label>
+      <div className="period-presets" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 6px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--gray-500)' }}>Hızlı dönem:</span>
+        <button type="button" onClick={() => setDays(7)}>1 haftalık</button>
+        <button type="button" onClick={() => setMonths(1)}>1 aylık</button>
+        <button type="button" onClick={() => setMonths(2)}>2 aylık</button>
+        <button type="button" onClick={() => setMonths(3)}>3 aylık</button>
+        <button type="button" onClick={() => setMonths(6)}>6 aylık</button>
+        <button type="button" onClick={() => setMonths(12)}>1 yıllık</button>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+        <button className="secondary-button" onClick={() => exportTrendExcel(analytics, reports)}><Download size={16} /> Excel dışa aktar</button>
+        <button className="secondary-button" onClick={() => void shareOrDownloadFile({ title: 'Trend & Risk Analizi', text: `${analytics.from} - ${analytics.to} Trend ve Risk Analizi Raporu`, url: window.location.href })}><Share2 size={16} /> Paylaş</button>
+      </div>
+    </div>
     <div className="analytics-kpis report-risk-kpis"><article className="surface"><span><FileText size={20} /></span><div><small>Onaylı rapor</small><strong>{analytics.reportCount}</strong></div></article><article className="surface"><span className="green"><Activity size={20} /></span><div><small>Aktivite oranı</small><strong>%{formatNumber(analytics.activityRate)}</strong></div></article><article className="surface"><span className="orange"><Gauge size={20} /></span><div><small>Toplam yakalanan</small><strong>{analytics.totalCaught}</strong></div></article><article className="surface"><span className="purple"><BarChart3 size={20} /></span><div><small>Plaka değişimi</small><strong>{analytics.periods.reduce((sum, item) => sum + item.plateChanges, 0)}</strong></div></article></div>
-    <div className="trend-layout"><section className="surface trend-chart-card"><div className="analytics-section-heading"><div><p className="eyebrow">DÖNEMSEL KARŞILAŞTIRMA</p><h2>Yakalanan zararlı & aktivite</h2></div><div className="analytics-period-switch"><button className={granularity === 'month' ? 'active' : ''} onClick={() => setGranularity('month')}>Aylık</button><button className={granularity === 'quarter' ? 'active' : ''} onClick={() => setGranularity('quarter')}>Çeyreklik</button></div></div>{periods.length ? <div className="trend-bars">{periods.map((item) => <div key={item.period}><div className="trend-bar-track"><span style={{ height: `${Math.max(8, item.totalCaught / maxCaught * 100)}%` }}><b>{item.totalCaught}</b></span></div><strong>{granularity === 'month' ? formatPeriod(item.period) : item.period}</strong><small>%{formatNumber(item.activityRate)} aktivite</small></div>)}</div> : <EmptyTrend />}</section><section className="surface pest-distribution"><div className="analytics-section-heading"><div><p className="eyebrow">ZARARLI DAĞILIMI</p><h2>Tür bazlı toplam</h2></div></div>{analytics.pestTotals.length ? analytics.pestTotals.map((item) => <div key={item.pest}><span>{item.pest}</span><div><i style={{ width: `${Math.max(5, item.totalCaught / Math.max(1, analytics.totalCaught) * 100)}%` }} /></div><strong>{item.totalCaught}</strong></div>) : <EmptyTrend />}</section></div>
-    </>;
+    <div className="trend-layout"><section className="surface trend-chart-card"><div className="analytics-section-heading"><div><p className="eyebrow">DÖNEMSEL KARŞILAŞTIRMA</p><h2>Yakalanan zararlı & aktivite</h2></div><div className="analytics-period-switch"><button className={granularity === 'month' ? 'active' : ''} onClick={() => setGranularity('month')}>Aylık</button><button className={granularity === 'quarter' ? 'active' : ''} onClick={() => setGranularity('quarter')}>Çeyreklik</button><button className={granularity === 'year' ? 'active' : ''} onClick={() => setGranularity('year')}>Yıllık</button></div></div>{periods.length ? <div className="trend-bars">{periods.map((item) => <div key={item.period}><div className="trend-bar-track"><span style={{ height: `${Math.max(8, item.totalCaught / maxCaught * 100)}%` }}><b>{item.totalCaught}</b></span></div><strong>{granularity === 'month' ? formatPeriod(item.period) : item.period}</strong><small>%{formatNumber(item.activityRate)} aktivite</small></div>)}</div> : <EmptyTrend />}</section><section className="surface pest-distribution"><div className="analytics-section-heading"><div><p className="eyebrow">ZARARLI DAĞILIMI</p><h2>Tür bazlı toplam</h2></div></div>{analytics.pestTotals.length ? analytics.pestTotals.map((item) => <div key={item.pest}><span>{item.pest}</span><div><i style={{ width: `${Math.max(5, item.totalCaught / Math.max(1, analytics.totalCaught) * 100)}%` }} /></div><strong>{item.totalCaught}</strong></div>) : <EmptyTrend />}</section></div>
+  </>;
 }
 
 function WorkforceTab({ analytics }: { analytics: WorkforceAnalytics }) { return <><div className="analytics-kpis"><article className="surface"><span><Users size={20} /></span><div><small>Aktif personel</small><strong>{analytics.activeEmployees}</strong></div></article><article className="surface"><span className="green"><Clock3 size={20} /></span><div><small>Şu an mesaide</small><strong>{analytics.workingEmployees}</strong></div></article><article className="surface"><span className="purple"><CheckCircle2 size={20} /></span><div><small>Mesaiyi bitiren</small><strong>{analytics.completedEmployees}</strong></div></article><article className="surface"><span className="orange"><BarChart3 size={20} /></span><div><small>Bugün toplam çalışma</small><strong>{formatDuration(analytics.totalWorkedMinutes)}</strong></div></article></div><div className="surface workforce-table-card"><div className="analytics-section-heading"><div><p className="eyebrow">PERSONEL ÇALIŞMA RAPORU</p><h2>{formatDate(analytics.date)}</h2></div></div><div className="workforce-table-wrap"><table className="workforce-table"><thead><tr><th>Personel</th><th>Durum</th><th>Başlangıç</th><th>Bugün</th><th>Son 7 gün</th><th>Bu ay</th><th>Araç kontrolü</th></tr></thead><tbody>{analytics.employees.map((employee) => <tr key={employee.employeeId}><td><strong>{employee.name}</strong><span>{employee.email}</span></td><td><span className={`analytics-status status-${employee.status}`}>{statusLabels[employee.status]}</span></td><td>{formatTime(employee.startedAt)}</td><td><strong>{formatDuration(employee.todayWorkedMinutes)}</strong></td><td>{formatDuration(employee.weekWorkedMinutes)}</td><td>{formatDuration(employee.monthWorkedMinutes)}</td><td>{employee.lastStockCheckAt ? formatDateTime(employee.lastStockCheckAt) : '—'}</td></tr>)}</tbody></table></div></div></>; }
@@ -829,4 +864,30 @@ function aggregateQuarters(periods: ServiceReportAnalytics['periods']): ServiceR
   const groups = new Map<string, ServiceReportAnalytics['periods']>();
   periods.forEach((item) => { const [year, month] = item.period.split('-').map(Number); const key = `${year} Q${Math.ceil(month / 3)}`; groups.set(key, [...(groups.get(key) ?? []), item]); });
   return Array.from(groups, ([period, items]) => { const totalStations = items.reduce((sum, item) => sum + item.totalStations, 0); const activeStations = items.reduce((sum, item) => sum + item.activeStations, 0); const totalCaught = items.reduce((sum, item) => sum + item.totalCaught, 0); const riskScore = Math.min(100, Math.round((totalStations ? activeStations / totalStations * 50 : 0) + Math.min(50, totalCaught))); return { period, reportCount: items.reduce((sum, item) => sum + item.reportCount, 0), totalStations, activeStations, plateChanges: items.reduce((sum, item) => sum + item.plateChanges, 0), totalCaught, activityRate: totalStations ? activeStations / totalStations * 100 : 0, riskScore, riskLevel: riskScore >= 70 || totalCaught >= 30 ? 'High' : riskScore >= 40 || totalCaught >= 20 ? 'Medium' : 'Low' }; });
+}
+
+function aggregateYears(periods: ServiceReportAnalytics['periods']): ServiceReportAnalytics['periods'] {
+  const groups = new Map<string, ServiceReportAnalytics['periods']>();
+  periods.forEach((item) => {
+    const [year] = item.period.split('-');
+    const key = `${year} Yılı`;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  });
+  return Array.from(groups, ([period, items]) => {
+    const totalStations = items.reduce((sum, item) => sum + item.totalStations, 0);
+    const activeStations = items.reduce((sum, item) => sum + item.activeStations, 0);
+    const totalCaught = items.reduce((sum, item) => sum + item.totalCaught, 0);
+    const riskScore = Math.min(100, Math.round((totalStations ? activeStations / totalStations * 50 : 0) + Math.min(50, totalCaught)));
+    return {
+      period,
+      reportCount: items.reduce((sum, item) => sum + item.reportCount, 0),
+      totalStations,
+      activeStations,
+      plateChanges: items.reduce((sum, item) => sum + item.plateChanges, 0),
+      totalCaught,
+      activityRate: totalStations ? activeStations / totalStations * 100 : 0,
+      riskScore,
+      riskLevel: riskScore >= 70 || totalCaught >= 30 ? 'High' : riskScore >= 40 || totalCaught >= 20 ? 'Medium' : 'Low'
+    };
+  });
 }
