@@ -59,6 +59,15 @@ export async function updateEmployee(
   });
 }
 
+export async function deleteEmployee(
+  accessToken: string,
+  employeeId: string,
+): Promise<{ message: string }> {
+  return request<{ message: string }>(`/api/company/employees/${employeeId}`, accessToken, {
+    method: 'DELETE',
+  });
+}
+
 async function request<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
   let response: Response;
 

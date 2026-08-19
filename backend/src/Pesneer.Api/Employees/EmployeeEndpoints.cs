@@ -23,6 +23,7 @@ public static class EmployeeEndpoints
         group.MapGet("/", GetEmployeesAsync);
         group.MapPost("/", CreateEmployeeAsync);
         group.MapPut("/{accountId:guid}", UpdateEmployeeAsync);
+        group.MapDelete("/{accountId:guid}", DeleteEmployeeAsync);
 
         return app;
     }
@@ -220,6 +221,103 @@ public static class EmployeeEndpoints
             membership.Role.ToString(),
             membership.Account.IsActive,
             membership.CanSelfSchedule));
+    }
+
+    private static async Task<IResult> DeleteEmployeeAsync(
+        Guid accountId,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!companyContext.CompanyId.HasValue) return Results.Forbid();
+
+        if (!await IsActiveCompanyAsync(dbContext, companyContext.CompanyId.Value, cancellationToken))
+        {
+            return ExpiredSession();
+        }
+
+        if (companyContext.AccountId.HasValue && companyContext.AccountId.Value == accountId)
+        {
+            return Results.Conflict(new { message = "Kendi yönetici hesabınızı silemezsiniz." });
+        }
+
+        var membership = await dbContext.CompanyMemberships
+            .Include(item => item.Account)
+            .SingleOrDefaultAsync(item =>
+                item.CompanyId == companyContext.CompanyId.Value &&
+                item.AccountId == accountId &&
+                item.Account.Portal == PortalType.Employee,
+                cancellationToken);
+
+        if (membership is null)
+        {
+            return Results.NotFound(new { message = "Silinecek personel hesabı bulunamadı." });
+        }
+
+        var employeeName = membership.Account.DisplayName;
+
+        // 1. Unassign from future/planned work orders so assignments don't get stuck
+        var plannedOrders = await dbContext.WorkOrders
+            .Where(item => item.CompanyId == companyContext.CompanyId.Value &&
+                           item.Status == "Planned" &&
+                           item.AssignedEmployeeAccountId == accountId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var order in plannedOrders)
+        {
+            order.AssignedEmployeeAccountId = null;
+        }
+
+        var plannedAssignments = await dbContext.WorkOrderAssignments
+            .Include(item => item.WorkOrder)
+            .Where(item => item.WorkOrder.CompanyId == companyContext.CompanyId.Value &&
+                           item.WorkOrder.Status == "Planned" &&
+                           item.EmployeeAccountId == accountId)
+            .ToListAsync(cancellationToken);
+
+        if (plannedAssignments.Count > 0)
+        {
+            dbContext.WorkOrderAssignments.RemoveRange(plannedAssignments);
+        }
+
+        // 2. Unassign active vehicles if any
+        var assignedVehicles = await dbContext.Vehicles
+            .Where(v => v.CompanyId == companyContext.CompanyId.Value && v.AssignedEmployeeAccountId == accountId)
+            .ToListAsync(cancellationToken);
+        foreach (var v in assignedVehicles)
+        {
+            v.AssignedEmployeeAccountId = null;
+        }
+
+        // 3. Remove membership & account or soft-deactivate if historical reports/shifts exist
+        try
+        {
+            dbContext.CompanyMemberships.Remove(membership);
+            var otherMemberships = await dbContext.CompanyMemberships.AnyAsync(item => item.AccountId == accountId && item.Id != membership.Id, cancellationToken);
+            if (!otherMemberships)
+            {
+                dbContext.Accounts.Remove(membership.Account);
+            }
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            var m = await dbContext.CompanyMemberships
+                .Include(item => item.Account)
+                .SingleOrDefaultAsync(item => item.Id == membership.Id, cancellationToken);
+            if (m is not null)
+            {
+                m.IsActive = false;
+                m.Account.IsActive = false;
+                m.Account.NormalizedEmail = $"{Guid.NewGuid():N}_{m.Account.NormalizedEmail}";
+                m.Account.Email = $"deleted_{Guid.NewGuid():N}_{m.Account.Email}";
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        return Results.Ok(new { message = $"{employeeName} hesabı başarıyla silindi." });
     }
 
     private static IResult? Validate(CreateEmployeeRequest request)

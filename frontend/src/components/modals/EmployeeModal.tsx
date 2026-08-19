@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { Check, Eye, EyeOff, KeyRound, Pencil, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { Check, Eye, EyeOff, KeyRound, Pencil, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import type {
   CreateEmployeeInput,
   EmployeeRecord,
@@ -12,9 +12,10 @@ type EmployeeModalProps = {
   employee?: EmployeeRecord | null;
   onClose: () => void;
   onSubmit: (input: CreateEmployeeInput | UpdateEmployeeInput) => Promise<void>;
+  onDelete?: (employee: EmployeeRecord) => void;
 };
 
-export default function EmployeeModal({ companyCode, employee, onClose, onSubmit }: EmployeeModalProps) {
+export default function EmployeeModal({ companyCode, employee, onClose, onSubmit, onDelete }: EmployeeModalProps) {
   const isEditing = Boolean(employee);
   const nameParts = useMemo(() => splitName(employee?.name ?? ''), [employee?.name]);
   const [showPassword, setShowPassword] = useState(false);
@@ -144,11 +145,24 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
 
           {error && <div className="modal-form-error" role="alert">{error}</div>}
 
-          <div className="modal-actions">
-            <button type="button" className="secondary-button" onClick={onClose} disabled={isSubmitting}>İptal</button>
-            <button type="submit" className="primary-button" disabled={isSubmitting}>
-              {isSubmitting ? (isEditing ? 'Kaydediliyor…' : 'Hesap oluşturuluyor…') : (isEditing ? 'Değişiklikleri Kaydet' : 'Hesabı Oluştur')} <Check size={17} />
-            </button>
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: isEditing && employee && onDelete ? 'space-between' : 'flex-end', width: '100%', alignItems: 'center' }}>
+            {isEditing && employee && onDelete && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => onDelete(employee)}
+                style={{ color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                disabled={isSubmitting}
+              >
+                <Trash2 size={16} /> Personeli Sil
+              </button>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="button" className="secondary-button" onClick={onClose} disabled={isSubmitting}>İptal</button>
+              <button type="submit" className="primary-button" disabled={isSubmitting}>
+                {isSubmitting ? (isEditing ? 'Kaydediliyor…' : 'Hesap oluşturuluyor…') : (isEditing ? 'Değişiklikleri Kaydet' : 'Hesabı Oluştur')} <Check size={17} />
+              </button>
+            </div>
           </div>
         </form>
       </div>
