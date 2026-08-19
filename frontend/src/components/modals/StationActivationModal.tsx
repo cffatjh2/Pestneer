@@ -370,40 +370,27 @@ export default function StationActivationModal({ accessToken, order, onClose, on
           </div>
 
           {/* ── Barkod & QR Kod Tanımlama Şeridi ── */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '10px',
-            flexWrap: 'wrap',
-            padding: '7px 12px',
-            background: current.qrCode ? '#f0fdf4' : '#f8fafc',
-            border: current.qrCode ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
-            borderRadius: '8px',
-            marginBottom: '12px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Barcode size={17} color={current.qrCode ? '#16a34a' : '#64748b'} />
-              <span style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>Tanımlı Barkod / QR:</span>
+          <div className="activation-barcode-bar">
+            <div className="activation-barcode-info">
+              <Barcode size={17} color={current.qrCode ? '#2563eb' : '#64748b'} />
+              <span>Tanımlı Barkod / QR:</span>
               {current.qrCode ? (
-                <code style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>
-                  {current.qrCode}
-                </code>
+                <span className="activation-barcode-badge">{current.qrCode}</span>
               ) : (
-                <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Henüz kod tanımlanmadı</span>
+                <span className="activation-barcode-empty">Henüz kod tanımlanmadı</span>
               )}
             </div>
             {!readOnly && (
-              <div style={{ display: 'flex', gap: '6px' }}>
+              <div className="activation-barcode-actions">
                 <button
                   type="button"
                   className="secondary-button"
-                  style={{ padding: '4px 10px', fontSize: '11.5px', height: '28px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  style={{ minHeight: '32px', padding: '0 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                   onClick={() => {
                     setPairingStationIndex(selected);
                     setScannerOpen(true);
                   }}
-                  title="Fiziksel istasyon kutusundaki barkod veya QR kodu kamerayla okutarak bu istasyonla eşleştir"
+                  title="Fiziksel barkod veya QR kodu okutarak bu istasyonla eşleştir"
                 >
                   <ScanLine size={14} /> {current.qrCode ? 'Kodu Değiştir' : 'Barkod / QR Eşle'}
                 </button>
@@ -411,11 +398,11 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                   <button
                     type="button"
                     className="icon-button"
-                    style={{ width: '28px', height: '28px', padding: 0 }}
+                    style={{ width: '32px', height: '32px' }}
                     onClick={() => update({ qrCode: undefined })}
                     title="Tanımlı barkodu kaldır"
                   >
-                    <X size={14} />
+                    <X size={15} />
                   </button>
                 )}
               </div>
@@ -468,11 +455,11 @@ export default function StationActivationModal({ accessToken, order, onClose, on
 
           {/* ── 1. Biyosidal / İlaç & Yem Uygulaması (Kimyasallar) ── */}
           {current.deviceStatus !== 'Unchecked' && (
-            <div className="activation-biocide-panel">
-              <div className="activation-biocide-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <PackageCheck size={16} color="#0d9488" />
-                  <strong style={{ fontSize: '13px', color: '#0f766e' }}>1. İlaç / Yem & Biyosidal Uygulaması</strong>
+            <div className="activation-sub-panel">
+              <div className="activation-sub-panel-header">
+                <div className="activation-sub-panel-title">
+                  <PackageCheck size={16} color="#059669" />
+                  <span>1. İlaç / Yem & Biyosidal Uygulaması</span>
                 </div>
                 {current.appliedProductName && (
                   <button
@@ -487,13 +474,13 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                       baitGelCompleted: false,
                     })}
                   >
-                    Kaldır
+                    Temizle
                   </button>
                 )}
               </div>
 
-              <div className="activation-biocide-grid">
-                <label className="activation-control">
+              <div className="activation-sub-panel-grid">
+                <label>
                   <span>Biyosidal Ürün / Yem / İlaç</span>
                   <select
                     value={current.appliedProductName || ''}
@@ -547,38 +534,37 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                   </select>
                 </label>
 
-                <div className="activation-biocide-amount-row">
-                  <label className="activation-control" style={{ flex: 1 }}>
-                    <span>Uygulanan Miktar</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={current.appliedAmount || ''}
-                      disabled={readOnly || !current.appliedProductName}
-                      placeholder="0"
-                      onChange={(e) => update({ appliedAmount: Number(e.target.value) || 0 })}
-                    />
-                  </label>
-                  <label className="activation-control" style={{ width: '120px' }}>
-                    <span>Birim</span>
-                    <select
-                      value={current.appliedUnit || 'Gram'}
-                      disabled={readOnly || !current.appliedProductName}
-                      onChange={(e) => update({ appliedUnit: e.target.value })}
-                    >
-                      <option value="Gram">Gram (gr)</option>
-                      <option value="Mililitre">Mililitre (ml)</option>
-                      <option value="Litre">Litre (lt)</option>
-                      <option value="Kilogram">Kilogram (kg)</option>
-                    </select>
-                  </label>
-                </div>
+                <label>
+                  <span>Uygulanan Miktar</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={current.appliedAmount || ''}
+                    disabled={readOnly || !current.appliedProductName}
+                    placeholder="0"
+                    onChange={(e) => update({ appliedAmount: Number(e.target.value) || 0 })}
+                  />
+                </label>
+
+                <label>
+                  <span>Birim</span>
+                  <select
+                    value={current.appliedUnit || 'Gram'}
+                    disabled={readOnly || !current.appliedProductName}
+                    onChange={(e) => update({ appliedUnit: e.target.value })}
+                  >
+                    <option value="Gram">Gram (gr)</option>
+                    <option value="Mililitre">Mililitre (ml)</option>
+                    <option value="Litre">Litre (lt)</option>
+                    <option value="Kilogram">Kilogram (kg)</option>
+                  </select>
+                </label>
               </div>
 
               {!readOnly && (
-                <div className="activation-quick-dosage">
-                  <span className="activation-quick-dosage-label">Hızlı Doz:</span>
+                <div className="activation-quick-chips">
+                  <span className="activation-quick-chips-label">Hızlı Doz:</span>
                   <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Brodifacoum %0.005 Mum Blok Yem', appliedAmount: 20, appliedUnit: 'Gram', baitGelCompleted: true })}>+20 gr Blok Yem</button>
                   <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Bromadiolone %0.005 Pasta Yem', appliedAmount: 15, appliedUnit: 'Gram', baitGelCompleted: true })}>+15 gr Pasta Yem</button>
                   <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Maxforce IC %2.15 Hamamböceği Jeli', appliedAmount: 5, appliedUnit: 'Gram', baitGelCompleted: true })}>+5 gr Jel</button>
@@ -591,11 +577,11 @@ export default function StationActivationModal({ accessToken, order, onClose, on
 
           {/* ── 2. Sarf Malzemesi & Parça Değişimi (Yapışkan Plaka / UV Lamba / Cihaz) ── */}
           {current.deviceStatus !== 'Unchecked' && (
-            <div className="activation-biocide-panel" style={{ marginTop: '12px', background: '#f8fafc', border: '1px solid #cbd5e1' }}>
-              <div className="activation-biocide-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="activation-sub-panel">
+              <div className="activation-sub-panel-header">
+                <div className="activation-sub-panel-title">
                   <PackageCheck size={16} color="#0284c7" />
-                  <strong style={{ fontSize: '13px', color: '#0369a1' }}>2. Sarf Malzemesi & Parça Değişimi</strong>
+                  <span>2. Sarf Malzemesi & Parça Değişimi</span>
                 </div>
                 {current.replacementProductName && (
                   <button
@@ -611,13 +597,13 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                       stationReplaced: false,
                     })}
                   >
-                    Kaldır
+                    Temizle
                   </button>
                 )}
               </div>
 
-              <div className="activation-biocide-grid">
-                <label className="activation-control">
+              <div className="activation-sub-panel-grid">
+                <label>
                   <span>Kullanılan Sarf / Değişen Parça</span>
                   <select
                     value={current.replacementProductName || ''}
@@ -667,33 +653,31 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                   </select>
                 </label>
 
-                <div className="activation-biocide-amount-row">
-                  <label className="activation-control" style={{ flex: 1 }}>
-                    <span>Değişen Adet</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={current.replacementQuantity || ''}
-                      disabled={readOnly || !current.replacementProductName}
-                      placeholder="1"
-                      onChange={(e) => update({ replacementQuantity: Number(e.target.value) || 0 })}
-                    />
-                  </label>
-                  <label className="activation-control" style={{ width: '120px' }}>
-                    <span>Birim</span>
-                    <input
-                      value={current.replacementUnit || 'Adet'}
-                      disabled
-                      style={{ background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
-                    />
-                  </label>
-                </div>
+                <label>
+                  <span>Değişen Adet</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={current.replacementQuantity || ''}
+                    disabled={readOnly || !current.replacementProductName}
+                    placeholder="1"
+                    onChange={(e) => update({ replacementQuantity: Number(e.target.value) || 0 })}
+                  />
+                </label>
+
+                <label>
+                  <span>Birim</span>
+                  <input
+                    value={current.replacementUnit || 'Adet'}
+                    disabled
+                  />
+                </label>
               </div>
 
               {!readOnly && (
-                <div className="activation-quick-dosage" style={{ marginTop: '8px' }}>
-                  <span className="activation-quick-dosage-label" style={{ color: '#0369a1' }}>Hızlı Sarf:</span>
+                <div className="activation-quick-chips">
+                  <span className="activation-quick-chips-label">Hızlı Sarf:</span>
                   <button
                     type="button"
                     onClick={() => update({

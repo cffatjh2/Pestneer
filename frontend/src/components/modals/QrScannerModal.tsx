@@ -256,11 +256,11 @@ export default function QrScannerModal({
               onScan(manual.trim());
             }
           }}
-          style={{ marginTop: '12px' }}
+          style={{ marginTop: '14px' }}
         >
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Keyboard size={15} /> Barkod veya QR Kodunu Manuel Girin / El Terminali
+              <Keyboard size={15} color="#2563eb" /> Barkod veya QR Kodunu Manuel Girin / El Terminali
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
@@ -270,18 +270,24 @@ export default function QrScannerModal({
                 autoFocus={!!cameraError}
                 style={{
                   flex: 1,
-                  padding: '9px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13.5px',
+                  minHeight: '42px',
+                  height: '42px',
+                  padding: '0 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #d7e1ec',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  background: '#ffffff',
                   outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
               <button
                 type="submit"
                 className="primary-button"
                 disabled={!manual.trim()}
-                style={{ padding: '0 18px', whiteSpace: 'nowrap' }}
+                style={{ minHeight: '42px', padding: '0 20px', whiteSpace: 'nowrap', borderRadius: '10px', fontWeight: 700 }}
               >
                 İstasyonu Aç
               </button>
