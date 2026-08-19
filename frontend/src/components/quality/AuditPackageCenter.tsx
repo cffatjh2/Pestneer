@@ -11,16 +11,17 @@ type Props = {
   accessToken: string;
   mode: 'staff' | 'customer';
   locations: QualityLocation[];
+  selectedLocationKey?: string;
   onSessionExpired: () => void;
   onCount?: (count: number) => void;
 };
 
 const profiles = ['BRCGS', 'IFS', 'FSSC 22000', 'ISO 22000', 'EN 16636', 'Kurumsal'];
 
-export default function AuditPackageCenter({ accessToken, mode, locations, onSessionExpired, onCount }: Props) {
+export default function AuditPackageCenter({ accessToken, mode, locations, selectedLocationKey = '', onSessionExpired, onCount }: Props) {
   const [packages, setPackages] = useState<AuditPackage[]>([]);
   const [preflight, setPreflight] = useState<AuditPreflight | null>(null);
-  const [locationKey, setLocationKey] = useState('');
+  const [locationKey, setLocationKey] = useState(selectedLocationKey || '');
   const [periodEnd, setPeriodEnd] = useState(dateKey(new Date()));
   const [periodStart, setPeriodStart] = useState(monthStart(3));
   const [profile, setProfile] = useState('BRCGS');
@@ -35,13 +36,30 @@ export default function AuditPackageCenter({ accessToken, mode, locations, onSes
     setLoading(true); setError(null);
     try {
       const items = await getAuditPackages(accessToken);
-      setPackages(items); onCount?.(items.length);
+      setPackages(items);
     } catch (loadError) { handleError(loadError, onSessionExpired, setError); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { void load(); }, [accessToken]);
-  useEffect(() => { if (!locationKey && locations[0]) setLocationKey(locationValue(locations[0])); }, [locations, locationKey]);
+
+  useEffect(() => {
+    if (selectedLocationKey) {
+      setLocationKey(selectedLocationKey);
+    } else if (!locationKey && locations[0]) {
+      setLocationKey(locationValue(locations[0]));
+    }
+  }, [selectedLocationKey, locations]);
+
+  const [selCustId, selBrId] = (selectedLocationKey || '').split('|');
+  const scopedPackages = useMemo(() => {
+    if (!selectedLocationKey || !selCustId) return packages;
+    return packages.filter((item) => item.customerId === selCustId && (!selBrId || !item.branchId || item.branchId === selBrId));
+  }, [packages, selectedLocationKey, selCustId, selBrId]);
+
+  useEffect(() => {
+    onCount?.(scopedPackages.length);
+  }, [scopedPackages.length, onCount]);
 
   const input = useMemo<AuditPackageFilter | null>(() => {
     const location = locations.find((item) => locationValue(item) === locationKey);
@@ -62,7 +80,7 @@ export default function AuditPackageCenter({ accessToken, mode, locations, onSes
     setCreating(true); setError(null);
     try {
       const created = await createAuditPackage(accessToken, { ...input, acknowledgeWarnings: preflight.blockingIssueCount === 0 || acknowledged });
-      setPackages((current) => [created, ...current]); onCount?.(packages.length + 1); setPreflight(null); setAcknowledged(false);
+      setPackages((current) => [created, ...current]); setPreflight(null); setAcknowledged(false);
     } catch (createError) { handleError(createError, onSessionExpired, setError); }
     finally { setCreating(false); }
   };
@@ -92,8 +110,8 @@ export default function AuditPackageCenter({ accessToken, mode, locations, onSes
     </form>}
     {preflight && <PreflightPanel value={preflight} acknowledged={acknowledged} onAcknowledged={setAcknowledged} creating={creating} onCreate={() => void create()} />}
     <section className="audit-package-list">
-      <div className="audit-list-heading"><div><Archive /><span><strong>Oluşturulan paketler</strong><small>PDF özet dosyası ve kaynak kanıt ZIP'i değiştirilemez biçimde saklanır.</small></span></div><b>{packages.length} paket</b></div>
-      {loading ? <div className="surface quality-loading"><RefreshCw className="spin-icon" /><strong>Denetim paketleri yükleniyor…</strong></div> : packages.length === 0 ? <div className="surface quality-empty"><PackageCheck /><strong>Henüz denetim dosyası yok</strong><span>{mode === 'staff' ? 'İlk ön kontrolü çalıştırarak profesyonel kanıt paketini oluşturun.' : 'Firmanız tarafından yayımlanan denetim paketleri burada görünür.'}</span></div> : <div className="audit-package-grid">{packages.map((item) => <article className="surface audit-package-card" key={item.id}>
+      <div className="audit-list-heading"><div><Archive /><span><strong>Oluşturulan paketler</strong><small>PDF özet dosyası ve kaynak kanıt ZIP'i değiştirilemez biçimde saklanır.</small></span></div><b>{scopedPackages.length} paket</b></div>
+      {loading ? <div className="surface quality-loading"><RefreshCw className="spin-icon" /><strong>Denetim paketleri yükleniyor…</strong></div> : scopedPackages.length === 0 ? <div className="surface quality-empty"><PackageCheck /><strong>Henüz denetim dosyası yok</strong><span>{mode === 'staff' ? 'İlk ön kontrolü çalıştırarak profesyonel kanıt paketini oluşturun.' : 'Firmanız tarafından yayımlanan denetim paketleri burada görünür.'}</span></div> : <div className="audit-package-grid">{scopedPackages.map((item) => <article className="surface audit-package-card" key={item.id}>
         <header><span className={item.readinessScore >= 85 ? 'ready' : 'finding'}><ShieldCheck /></span><div><small>{item.number}</small><strong>{item.title}</strong><p>{item.auditProfile} · {formatRange(item.periodStart, item.periodEnd)}</p></div><b>%{item.readinessScore}<small>hazırlık</small></b></header>
         <dl><div><dt>Konum</dt><dd>{item.customerName}<small>{item.branchName}</small></dd></div><div><dt>Kanıt</dt><dd>{item.itemCount} dosya</dd></div><div><dt>Oluşturan</dt><dd>{item.createdBy}<small>{formatDate(item.createdAt)}</small></dd></div></dl>
         <footer><span title={item.zipSha256}>SHA-256 · {item.zipSha256.slice(0, 12)}…</span><div><button onClick={() => void download(item, 'pdf', true)} title="Görüntüle"><Eye size={15} /> PDF</button><button onClick={() => void download(item, 'zip')} title="İndir"><Download size={15} /> ZIP</button><button onClick={() => void share(item)} title="Paylaş"><Share2 size={15} /> Paylaş</button></div></footer>

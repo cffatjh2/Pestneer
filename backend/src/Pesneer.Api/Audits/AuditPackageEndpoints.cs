@@ -121,7 +121,7 @@ public static class AuditPackageEndpoints
         var manifestJson = JsonSerializer.Serialize(manifest, JsonOptions);
         var preflightJson = JsonSerializer.Serialize(snapshot.Preflight, JsonOptions);
         var pdfData = AuditPackageRenderer.RenderPackage(number, now, snapshot);
-        var zipData = BuildZip(number, pdfData, manifestJson, snapshot.Evidence);
+        var zipData = BuildZip(number, pdfData, manifest, manifestJson, snapshot.Evidence);
         var qualityDocument = new QualityDocument
         {
             Id = Guid.NewGuid(), CompanyId = context.CompanyId.Value, CustomerId = request.CustomerId, CustomerBranchId = request.BranchId,
@@ -226,7 +226,7 @@ public static class AuditPackageEndpoints
         var documents = (await documentQuery.AsSplitQuery().ToListAsync(cancellationToken))
             .Where(item => item.CreatedAt < rangeEnd).OrderByDescending(item => item.CreatedAt).Take(500).ToList();
 
-        var evidence = BuildEvidence(company, customer, branch, contracts, reports, plans, analyses, actions, inspections, waste, documents);
+        var evidence = BuildEvidence(company, customer, branch, filter, contracts, reports, plans, analyses, actions, inspections, waste, documents);
         var preflight = BuildPreflight(filter, customer, branch, contracts, reports, plans, analyses, actions, inspections, waste, documents, evidence);
         return new AuditBuildSnapshot(company, customer, branch, creator, filter, preflight, evidence, contracts, reports, plans, analyses, actions, inspections, waste);
     }
@@ -235,6 +235,7 @@ public static class AuditPackageEndpoints
         Company company,
         Customer customer,
         CustomerBranch? branch,
+        AuditPackageFilterRequest filter,
         IReadOnlyList<CustomerContract> contracts,
         IReadOnlyList<ServiceReport> reports,
         IReadOnlyList<SitePlan> plans,
@@ -266,8 +267,10 @@ public static class AuditPackageEndpoints
                 AddEvidence(evidence, "site-plans", "SitePlan", plan.Id, plan.Number, plan.Title, document.FileName, document.ContentType,
                     $"Revizyon {plan.Revision}", plan.AreaName, plan.UpdatedAt, document.FileData);
             }
-            AddEvidence(evidence, "site-plans", "StationList", plan.Id, plan.Number, $"{plan.Title} - istasyon veri seti", $"{plan.Number}-istasyon-listesi.json", "application/json",
-                $"Revizyon {plan.Revision}", plan.AreaName, plan.UpdatedAt, Encoding.UTF8.GetBytes(plan.CanvasJson));
+            var stationDocx = AuditDocxHelper.CreateStationListDocx(plan, company.LegalName, customer.LegalName, plan.AreaName);
+            AddEvidence(evidence, "site-plans", "StationList", plan.Id, plan.Number, $"{plan.Title} - İstasyon Yerleşim Listesi", $"{plan.Number}-İstasyon-Listesi.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                $"Revizyon {plan.Revision}", plan.AreaName, plan.UpdatedAt, stationDocx);
         }
 
         foreach (var report in reports)
@@ -282,16 +285,16 @@ public static class AuditPackageEndpoints
         var productNames = reports.SelectMany(item => item.Products).Select(item => item.ProductName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (productNames.Length > 0)
         {
-            var payload = reports.SelectMany(item => item.Products).GroupBy(item => item.ProductName, StringComparer.OrdinalIgnoreCase).Select(group => new
-            {
-                product = group.Key,
-                amount = group.Sum(item => item.AmountUsed),
-                unit = string.Join(", ", group.Select(item => item.Unit).Distinct()),
-                licenseNumbers = group.Select(item => item.LicenseNumber).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(),
-                activeIngredients = group.Select(item => item.ActiveIngredient).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct()
-            });
-            AddJson(evidence, "product-safety", "ProductUsage", null, "URUN-KULLANIM", "Dönemsel ürün kullanım özeti", "urun-kullanim-ozeti.json",
-                branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, payload);
+            var productItems = reports.SelectMany(item => item.Products).GroupBy(item => item.ProductName, StringComparer.OrdinalIgnoreCase).Select(group => (
+                Product: group.Key,
+                Amount: group.Sum(item => item.AmountUsed),
+                Unit: string.Join(", ", group.Select(item => item.Unit).Distinct()),
+                License: string.Join(", ", group.Select(item => item.LicenseNumber).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct()),
+                ActiveIngredient: string.Join(", ", group.Select(item => item.ActiveIngredient).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct())
+            )).ToArray();
+            var productDocx = AuditDocxHelper.CreateProductUsageDocx(company.LegalName, customer.LegalName, branch?.Name, filter.PeriodStart, filter.PeriodEnd, productItems);
+            AddEvidence(evidence, "product-safety", "ProductUsage", null, "URUN-KULLANIM", "Dönemsel Ürün Kullanım Özeti", "Dönemsel-Ürün-Kullanım-Özeti.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", null, branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, productDocx);
         }
 
         foreach (var document in documents.Where(item => IsSafetyDocument(item, productNames)))
@@ -307,12 +310,9 @@ public static class AuditPackageEndpoints
 
         if (actions.Count > 0)
         {
-            AddJson(evidence, "corrective-actions", "CorrectiveActionRegister", null, "DÖF-LİSTE", "Düzeltici faaliyet izleme listesi", "duzeltici-faaliyetler.json",
-                branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, actions.Select(item => new
-                {
-                    item.Number, item.Category, item.Title, item.Problem, item.RootCause, item.ProposedAction, item.ResponsibleParty,
-                    item.Priority, item.Status, item.DueDate, item.CompletedAt, item.VerifiedAt, item.CustomerApprovalStatus, item.RecurrenceCount
-                }));
+            var actionsDocx = AuditDocxHelper.CreateCorrectiveActionsDocx(company.LegalName, customer.LegalName, branch?.Name, filter.PeriodStart, filter.PeriodEnd, actions);
+            AddEvidence(evidence, "corrective-actions", "CorrectiveActionRegister", null, "DÖF-LİSTE", "Düzeltici ve Önleyici Faaliyetler (DÖF) Listesi", "Düzeltici-Faaliyetler-Listesi.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", null, branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, actionsDocx);
             foreach (var action in actions)
                 foreach (var file in action.Evidence)
                     AddEvidence(evidence, "corrective-actions", "CorrectiveActionEvidence", file.Id, action.Number, $"{action.Title} - {file.Stage}", file.FileName,
@@ -320,22 +320,17 @@ public static class AuditPackageEndpoints
         }
 
         if (inspections.Count > 0)
-            AddJson(evidence, "quality-controls", "QualityInspectionRegister", null, "KK-LİSTE", "Kalite kontrol ve ikinci kontrol listesi", "kalite-kontrolleri.json",
-                branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, inspections.Select(item => new
-                {
-                    item.Number, item.InspectionType, item.SelectionReason, item.Status, item.ScheduledAt, item.InspectedAt,
-                    item.PhotoQualityScore, item.StationCompletionScore, item.ProductDoseScore, item.SignatureScore,
-                    item.TimelinessScore, item.ReportCompletenessScore, item.TotalScore, item.Grade, item.Findings, item.Notes
-                }));
+        {
+            var inspectionsDocx = AuditDocxHelper.CreateQualityInspectionsDocx(company.LegalName, customer.LegalName, branch?.Name, filter.PeriodStart, filter.PeriodEnd, inspections);
+            AddEvidence(evidence, "quality-controls", "QualityInspectionRegister", null, "KK-LİSTE", "Kalite Kontrol ve İç Denetim Kayıtları", "Kalite-Kontrolleri-Listesi.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", null, branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, inspectionsDocx);
+        }
 
         if (waste.Count > 0)
         {
-            AddJson(evidence, "waste", "WasteRegister", null, "ATIK-LİSTE", "Atık ve bertaraf izleme listesi", "atik-bertaraf-kayitlari.json",
-                branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, waste.Select(item => new
-                {
-                    item.Number, item.WasteType, item.Quantity, item.Unit, item.Status, item.GeneratedAt, item.TemporaryStorage,
-                    item.RecipientName, item.CarrierOrFacility, item.DisposalMethod, item.DocumentNumber, item.Notes
-                }));
+            var wasteDocx = AuditDocxHelper.CreateWasteRecordsDocx(company.LegalName, customer.LegalName, branch?.Name, filter.PeriodStart, filter.PeriodEnd, waste);
+            AddEvidence(evidence, "waste", "WasteRegister", null, "ATIK-LİSTE", "Atık ve Bertaraf İzleme Listesi", "Atık-ve-Bertaraf-Kayıtları.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", null, branch?.Name ?? customer.LegalName, DateTimeOffset.UtcNow, wasteDocx);
             foreach (var record in waste)
                 foreach (var file in record.Evidence)
                     AddEvidence(evidence, "waste", "WasteEvidence", file.Id, record.Number, $"{record.Number} bertaraf kanıtı", file.FileName,
@@ -442,12 +437,13 @@ public static class AuditPackageEndpoints
         return productNames.Any(product => product.Length >= 4 && haystack.Contains(product, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static byte[] BuildZip(string number, byte[] pdfData, string manifestJson, IReadOnlyList<AuditEvidenceFile> evidence)
+    private static byte[] BuildZip(string number, byte[] pdfData, AuditManifest manifest, string manifestJson, IReadOnlyList<AuditEvidenceFile> evidence)
     {
         using var output = new MemoryStream();
         using (var archive = new ZipArchive(output, ZipArchiveMode.Create, true, Encoding.UTF8))
         {
             WriteEntry(archive, $"00_{number}.pdf", pdfData);
+            WriteEntry(archive, "00_DENETIM_DOSYASI_OZETI.docx", AuditDocxHelper.CreateManifestSummaryDocx(manifest, evidence));
             WriteEntry(archive, "00_manifest.json", Encoding.UTF8.GetBytes(manifestJson));
             var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in evidence)

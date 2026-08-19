@@ -21,6 +21,7 @@ type Props = {
   accessToken: string;
   mode: 'staff' | 'customer';
   locations: QualityLocation[];
+  selectedLocationKey?: string;
   onSessionExpired: () => void;
   onCount?: (count: number) => void;
   onSaved?: () => void | Promise<void>;
@@ -48,12 +49,12 @@ const emptyCanvas = (): SitePlanCanvas => ({
 });
 const uid = () => crypto.randomUUID();
 
-export default function SitePlanCenter({ accessToken, mode, locations, onSessionExpired, onCount, onSaved }: Props) {
+export default function SitePlanCenter({ accessToken, mode, locations, selectedLocationKey = '', onSessionExpired, onCount, onSaved }: Props) {
   const [plans, setPlans] = useState<SitePlanRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<SitePlanRecord | 'new' | null>(null);
-  const [filterLocationKey, setFilterLocationKey] = useState('');
+  const [filterLocationKey, setFilterLocationKey] = useState(selectedLocationKey || '');
   const [loadingBlueprint, setLoadingBlueprint] = useState(false);
   const [editorInitialCanvas, setEditorInitialCanvas] = useState<SitePlanCanvas | null>(null);
   const [editorSuggestedTitle, setEditorSuggestedTitle] = useState<string | undefined>();
@@ -63,7 +64,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
     setLoading(true); setError(null);
     try {
       const items = await getSitePlans(accessToken);
-      setPlans(items); onCount?.(items.length);
+      setPlans(items);
     } catch (loadError) {
       if (loadError instanceof SitePlanSessionExpiredError) return onSessionExpired();
       setError(messageOf(loadError));
@@ -71,10 +72,24 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
   };
   useEffect(() => { void load(); }, [accessToken]);
 
+  useEffect(() => {
+    if (selectedLocationKey) {
+      setFilterLocationKey(selectedLocationKey);
+    } else {
+      setFilterLocationKey('');
+    }
+  }, [selectedLocationKey]);
+
+  const [selCustId, selBrId] = (selectedLocationKey || filterLocationKey || '').split('|');
   const visiblePlans = useMemo(() => {
-    if (!filterLocationKey) return plans;
-    return plans.filter((p) => `${p.customerId}|${p.branchId ?? ''}` === filterLocationKey);
-  }, [plans, filterLocationKey]);
+    const activeKey = selectedLocationKey || filterLocationKey;
+    if (!activeKey) return plans;
+    return plans.filter((p) => p.customerId === selCustId && (!selBrId || !p.branchId || p.branchId === selBrId));
+  }, [plans, selectedLocationKey, filterLocationKey, selCustId, selBrId]);
+
+  useEffect(() => {
+    onCount?.(visiblePlans.length);
+  }, [visiblePlans.length, onCount]);
 
   const download = async (plan: SitePlanRecord, open = false) => {
     try { await downloadSitePlan(accessToken, plan, open); }
