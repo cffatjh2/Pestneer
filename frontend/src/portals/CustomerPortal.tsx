@@ -34,6 +34,13 @@ export default function CustomerPortal({ session, onLogout }: { session: Authent
   useEffect(() => { void load(); }, [session.accessToken]);
   const openRequests = summary?.emergencyRequests.filter((item) => !['Completed', 'Cancelled'].includes(item.status)).length ?? 0;
   const allServices = useMemo(() => [...(summary?.upcomingWorkOrders ?? []), ...(summary?.completedWorkOrders ?? [])].sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)), [summary]);
+  const sortedReports = useMemo(() => {
+    return [...reports].sort((a, b) => {
+      const timeA = new Date(a.scheduledAt || a.updatedAt || 0).getTime();
+      const timeB = new Date(b.scheduledAt || b.updatedAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [reports]);
   const submitRequest = async (input: CreateEmergencyRequestInput) => { const created = await createEmergencyRequest(session.accessToken, input); setSummary((current) => current ? { ...current, emergencyRequests: [created, ...current.emergencyRequests] } : current); setRequestOpen(false); setTab('requests'); };
   const updateRequest = (updated: EmergencyRequestRecord) => setSummary((current) => current ? { ...current, emergencyRequests: current.emergencyRequests.map((item) => item.id === updated.id ? updated : item) } : current);
 
@@ -44,13 +51,65 @@ export default function CustomerPortal({ session, onLogout }: { session: Authent
       {loading ? <PortalState icon={<RefreshCw className="spin-icon" />} text="Müşteri portalı hazırlanıyor…" /> : error || !summary ? <PortalState icon={<AlertTriangle />} text={error ?? 'Müşteri kaydı bulunamadı.'} action={() => void load()} /> : <>
         {tab === 'overview' && <><div className="customer-kpis"><Kpi label="Yetkili şube" value={summary.branches.length} detail={summary.scope === 'Branch' ? 'Şube kapsamlı hesap' : 'Çatı müşteri hesabı'} icon={<Building2 />} /><Kpi label="Yaklaşan hizmet" value={summary.upcomingWorkOrders.length} detail="Planlanan ve sahadaki" icon={<CalendarDays />} /><Kpi label="İmzalı rapor" value={reports.length} detail="Yayınlanan hizmet raporu" icon={<FileCheck2 />} /><Kpi label="Açık çağrı" value={openRequests} detail="Takip edilen talep" icon={<ShieldAlert />} /></div>
           <div className="customer-layout"><section className="role-surface upcoming-service"><div className="role-section-title"><div><p>YAKLAŞAN HİZMET</p><h2>Bir sonraki uygulama</h2></div></div>{summary.upcomingWorkOrders[0] ? <ServiceCard item={summary.upcomingWorkOrders[0]} /> : <Empty icon={<CalendarDays />} text="Planlanmış yaklaşan hizmet bulunmuyor." />}</section>
-          <section className="role-surface recent-documents"><div className="role-section-title"><div><p>BELGELER</p><h2>Son hizmet raporları</h2></div><button onClick={() => setTab('reports')}>Tüm raporlar</button></div>{reports.slice(0, 3).map((report) => <button className="document-row customer-document-button" key={report.id} onClick={() => setPreview(report)}><span><FileText size={18} /></span><div><strong>{report.branchName}</strong><small>{formatDate(report.scheduledAt)} · {report.reportNumber}</small></div><Printer size={17} /></button>)}{reports.length === 0 && <Empty icon={<FileText />} text="Henüz yayınlanmış rapor yok." />}</section></div></>}
+          <section className="role-surface recent-documents"><div className="role-section-title"><div><p>BELGELER</p><h2>Son hizmet raporları</h2></div><button onClick={() => setTab('reports')}>Tüm raporlar</button></div>{sortedReports.slice(0, 3).map((report) => <button className="document-row customer-document-button" key={report.id} onClick={() => setPreview(report)}><span><FileText size={18} /></span><div><strong>{report.branchName}</strong><small>{formatReportDate(report.scheduledAt)} · {report.reportNumber}</small></div><Printer size={17} /></button>)}{reports.length === 0 && <Empty icon={<FileText />} text="Henüz yayınlanmış rapor yok." />}</section></div></>}
         {tab === 'services' && <section className="role-surface customer-list-surface"><div className="role-section-title"><div><p>HİZMET GEÇMİŞİ</p><h2>Planlanan ve tamamlanan işler</h2></div></div><div className="customer-service-list">{allServices.map((item) => <ServiceCard key={item.id} item={item} />)}{allServices.length === 0 && <Empty icon={<CalendarDays />} text="Hizmet kaydı bulunmuyor." />}</div></section>}
         {tab === 'stations' && <section className="role-surface customer-list-surface"><div className="role-section-title"><div><p>İSTASYON İZLEME</p><h2>Sahada tanımlı istasyonlar ve kontrol durumları</h2></div></div>{stationActivations.length > 0 ? <div className="customer-station-activations">{stationActivations.map((activation) => <article key={activation.id} className="customer-station-card"><header><div><strong>{activation.branchName}</strong><small>{activation.workOrderNumber} · {activation.operatorName} · {formatDate(activation.scheduledAt)}</small></div><em>{activation.status === 'Finalized' ? 'Onaylandı' : 'Taslak'}</em></header><div className="customer-station-stats"><span><strong>{activation.totalStations}</strong> toplam</span><span className="activity"><strong>{activation.activeStations}</strong> aktivite</span><span className="damaged"><strong>{activation.damagedStations}</strong> hasarlı</span><span className="inaccessible"><strong>{activation.inaccessibleStations}</strong> ulaşılamadı</span></div><div className="customer-station-list">{activation.stations.map((station, i) => <div key={i} className={`customer-station-row status-${station.deviceStatus.toLowerCase()}`}><strong>{station.deviceNumber}</strong><span>{station.area}</span><em>{stationStatusLabel(station.deviceStatus)}</em></div>)}</div>{activation.notes && <p className="customer-station-note">{activation.notes}</p>}</article>)}</div> : <Empty icon={<FileCheck2 />} text="Henüz sahada istasyon tanımı yapılmamış." />}</section>}
         {tab === 'commercial' && commercial && <CustomerCommercialCenter data={commercial} token={session.accessToken} onChanged={(proposal) => setCommercial((current) => current ? { ...current, pendingProposalCount: current.pendingProposalCount - 1, proposals: current.proposals.map((item) => item.id === proposal.id ? proposal : item) } : current)} />}
         {tab === 'health' && <section className="role-surface customer-health-surface"><HealthWasteCenter accessToken={session.accessToken} mode="customer" onSessionExpired={onLogout} /></section>}
         {tab === 'weather' && <WeatherRiskPanel overview={weatherRisk} loading={loading} error={error} onRefresh={() => void load(true)} />}
-        {tab === 'reports' && <section className="role-surface customer-list-surface"><div className="role-section-title"><div><p>RESMİ BELGELER</p><h2>İmzalı hizmet raporları</h2></div></div><div className="customer-report-grid">{reports.map((report) => <article key={report.id}><span><FileCheck2 /></span><div><strong>{report.reportNumber}</strong><small>{report.branchName} · {formatDate(report.scheduledAt)}</small><em>{report.totalStations} istasyon · %{report.activityRate} aktivite</em></div><div className="customer-report-actions"><button onClick={() => setPreview(report)}><Printer size={15} /> Görüntüle</button><button onClick={() => void downloadReport(report)}><Download size={15} /> PDF</button><button onClick={() => void shareReport(report)}><Share2 size={15} /> Paylaş</button></div></article>)}{reports.length === 0 && <Empty icon={<FileText />} text="Henüz yayınlanmış rapor yok." />}</div></section>}
+        {tab === 'reports' && (
+          <section className="role-surface customer-list-surface">
+            <div className="role-section-title">
+              <div>
+                <p>RESMİ BELGELER</p>
+                <h2>İmzalı hizmet raporları ({sortedReports.length})</h2>
+              </div>
+            </div>
+            <div className="customer-report-grid">
+              {sortedReports.map((report) => (
+                <article key={report.id} className="customer-report-card">
+                  <div className="customer-report-card-top">
+                    <div className="customer-report-date-block">
+                      <CalendarDays size={18} className="customer-report-date-icon" />
+                      <div>
+                        <strong className="customer-report-main-date">{formatReportDate(report.scheduledAt)}</strong>
+                        <small className="customer-report-sub-day">{formatReportDayOfWeek(report.scheduledAt)}</small>
+                      </div>
+                    </div>
+                    <span className="customer-report-code-badge">{report.reportNumber}</span>
+                  </div>
+
+                  <div className="customer-report-meta-row">
+                    <div className="customer-report-branch-info">
+                      <MapPin size={14} color="#64748b" />
+                      <span>{report.branchName || 'Merkez Şube'}</span>
+                    </div>
+                    <div className="customer-report-stats-strip">
+                      <span><strong>{report.totalStations}</strong> İstasyon</span>
+                      <span>·</span>
+                      <span className={report.activityRate > 0 ? 'activity-alert' : 'activity-clean'}>
+                        %{report.activityRate} Aktivite
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="customer-report-actions">
+                    <button type="button" onClick={() => setPreview(report)}>
+                      <Printer size={15} /> Görüntüle
+                    </button>
+                    <button type="button" onClick={() => void downloadReport(report)}>
+                      <Download size={15} /> PDF
+                    </button>
+                    <button type="button" onClick={() => void shareReport(report)}>
+                      <Share2 size={15} /> Paylaş
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {sortedReports.length === 0 && <Empty icon={<FileText />} text="Henüz yayınlanmış rapor yok." />}
+            </div>
+          </section>
+        )}
         {tab === 'documents' && <QualityCenter accessToken={session.accessToken} mode="customer" onSessionExpired={onLogout} />}
         {tab === 'actions' && <CorrectiveActionCenter accessToken={session.accessToken} mode="customer" onSessionExpired={onLogout} />}
         {tab === 'requests' && <section className="role-surface customer-list-surface"><div className="role-section-title"><div><p>TALEP & ŞİKÂYET MERKEZİ</p><h2>Talepler, mesajlar ve kapanış onayı</h2></div><button className="role-primary-button" onClick={() => setRequestOpen(true)}><Plus size={16} /> Yeni talep</button></div><div className="emergency-request-list">{summary.emergencyRequests.map((item) => <CustomerRequestCard key={item.id} item={item} token={session.accessToken} onUpdated={updateRequest} />)}{summary.emergencyRequests.length === 0 && <Empty icon={<ShieldAlert />} text="Henüz talep bulunmuyor." />}</div></section>}
@@ -91,8 +150,29 @@ function Empty({ icon, text }: { icon: React.ReactNode; text: string }) { return
 function PortalState({ icon, text, action }: { icon: React.ReactNode; text: string; action?: () => void }) { return <div className="role-surface customer-portal-state">{icon}<strong>{text}</strong>{action && <button onClick={action}>Tekrar dene</button>}</div>; }
 function formatDate(value: string) { return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(value)); }
 function formatDateTime(value: string) { return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)); }
+function formatReportDate(value?: string | null) {
+  if (!value) return 'Tarih belirtilmedi';
+  try {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return value;
+    return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }).format(d);
+  } catch {
+    return value;
+  }
+}
+function formatReportDayOfWeek(value?: string | null) {
+  if (!value) return '';
+  try {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('tr-TR', { weekday: 'long' }).format(d);
+  } catch {
+    return '';
+  }
+}
 function formatMinutes(minutes: number) { return minutes < 60 ? `${minutes} dk.` : `${Math.floor(minutes / 60)} sa. ${minutes % 60} dk.`; }
 function formatDuration(start: string, end: string) { const minutes = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000)); return minutes < 60 ? `${minutes} dk.` : `${Math.floor(minutes / 60)} sa. ${minutes % 60} dk.`; }
 function statusLabel(value: string) { return ({ New: 'Yeni', Acknowledged: 'Kabul edildi', Planned: 'Planlandı', Completed: 'Tamamlandı', Cancelled: 'İptal', InProgress: 'İşlemde', AwaitingCustomerApproval: 'Onayınız bekleniyor' } as Record<string,string>)[value] ?? value; }
 function priorityLabel(value: string) { return ({ Low: 'Düşük', Normal: 'Normal', Urgent: 'Acil', Critical: 'Kritik' } as Record<string,string>)[value] ?? value; }
 function stationStatusLabel(value: string) { return ({ Unchecked: 'Kontrol bekliyor', NoActivity: 'Aktivite yok', Activity: 'Aktivite var', Damaged: 'Kırık / hasarlı', Inaccessible: 'Ulaşılamadı' } as Record<string,string>)[value] ?? value; }
+
