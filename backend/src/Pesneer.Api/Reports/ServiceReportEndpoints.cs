@@ -184,6 +184,7 @@ public static class ServiceReportEndpoints
         request = request with { Products = licenseResolution.Products };
 
         var now = DateTimeOffset.UtcNow;
+        workOrder.StartedAt ??= now;
         if (report is null)
         {
             report = new ServiceReport

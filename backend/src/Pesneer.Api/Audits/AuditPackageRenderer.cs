@@ -357,13 +357,13 @@ internal static class AuditPackageRenderer
 
     private static void Ek1MetaStrip(IContainer container, ServiceReport report)
     {
-        var scheduled = report.WorkOrder.ScheduledAt.ToOffset(TimeSpan.FromHours(3));
-        var completed = (report.WorkOrder.CompletedAt ?? report.WorkOrder.ScheduledAt.AddHours(1)).ToOffset(TimeSpan.FromHours(3));
+        var start = (report.WorkOrder.StartedAt ?? report.WorkOrder.ScheduledAt).ToOffset(TimeSpan.FromHours(3));
+        var completed = (report.WorkOrder.CompletedAt ?? report.FinalizedAt ?? report.UpdatedAt).ToOffset(TimeSpan.FromHours(3));
         container.Background("#EBF3FA").Border(1).BorderColor(Border).PaddingVertical(4).PaddingHorizontal(8).Row(row =>
         {
             row.RelativeItem().Text(t => { t.Span("İş Emri No: ").Bold().FontColor(Navy); t.Span(report.WorkOrder.Number); });
-            row.RelativeItem().Text(t => { t.Span("Uygulama Tarihi: ").Bold().FontColor(Navy); t.Span(scheduled.ToString("dd.MM.yyyy")); });
-            row.RelativeItem().Text(t => { t.Span("Saat: ").Bold().FontColor(Navy); t.Span($"{scheduled:HH:mm} - {completed:HH:mm}"); });
+            row.RelativeItem().Text(t => { t.Span("Uygulama Tarihi: ").Bold().FontColor(Navy); t.Span(start.ToString("dd.MM.yyyy")); });
+            row.RelativeItem().Text(t => { t.Span("Saat: ").Bold().FontColor(Navy); t.Span($"{start:HH:mm} - {completed:HH:mm}"); });
             row.RelativeItem().AlignRight().Text(t => { t.Span("Doğrulama: ").Bold().FontColor(Navy); t.Span(report.VerificationCode.Length >= 12 ? report.VerificationCode[..12].ToUpperInvariant() : report.VerificationCode); });
         });
     }
