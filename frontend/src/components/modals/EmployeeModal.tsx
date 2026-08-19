@@ -137,6 +137,9 @@ export default function EmployeeModal({ companyCode, employee, onClose, onSubmit
                 <input name="passwordConfirmation" type={showPassword ? 'text' : 'password'} autoComplete="new-password" data-lpignore="true" minLength={6} placeholder={isEditing ? 'Yeni şifreyi tekrar girin' : 'Şifreyi tekrar girin'} required={!isEditing} />
               </span>
             </label>
+            <p className="form-field-wide" style={{ fontSize: '12px', color: '#64748b', margin: '-4px 0 4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>ℹ️</span> <span>Giriş şifresi <strong>en az 6 karakter</strong> olmalıdır.</span>
+            </p>
           </div>
 
           {error && <div className="modal-form-error" role="alert">{error}</div>}

@@ -102,11 +102,12 @@ export function CompanyAccountResetCard({ accessToken, onSessionExpired, onNotif
     <header><span><UserCog size={21} /></span><div><strong>Bağlı hesapların şifreleri</strong><small>Yalnızca firmanıza bağlı personel ve müşteri portalı hesaplarına geçici şifre atayın.</small></div></header>
     <form onSubmit={submit}>
       <label className="wide">Hesap<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} required><option value="">Hesap seçin</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {portalLabel(account.portal)} · {account.email}</option>)}</select></label>
-      <label>Geçici şifre<input name="newPassword" type="password" minLength={8} autoComplete="new-password" required /></label>
-      <label>Geçici şifre tekrarı<input name="confirmation" type="password" minLength={8} autoComplete="new-password" required /></label>
+      <label>Geçici şifre<input name="newPassword" type="password" minLength={8} placeholder="En az 8 karakter (harf + rakam)" autoComplete="new-password" required /></label>
+      <label>Geçici şifre tekrarı<input name="confirmation" type="password" minLength={8} placeholder="Şifreyi tekrar girin" autoComplete="new-password" required /></label>
       {error && <div className="account-security-error wide">{error}</div>}
       <button className="secondary-button" disabled={busy || !selectedId}>{busy ? <RefreshCw className="spin-icon" size={16} /> : <CheckCircle2 size={16} />}Geçici şifre ata</button>
     </form>
+    <p>Geçici şifre en az 8 karakter olmalı, en az bir harf ve bir rakam içermelidir.</p>
   </section>;
 }
 

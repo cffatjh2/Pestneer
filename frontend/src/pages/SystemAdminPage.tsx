@@ -832,14 +832,17 @@ function FormFields({ mode, accounts }: { mode: Mode; accounts: SystemAccount[] 
       </label>
       <label>
         Geçici şifre
-        <input name="password" type="password" minLength={8} autoComplete="new-password" required />
+        <input name="password" type="password" minLength={8} placeholder="En az 8 karakter (harf + rakam)" autoComplete="new-password" required />
       </label>
       {mode === 'company' && (
         <label>
           Geçici şifre tekrarı
-          <input name="passwordConfirmation" type="password" minLength={8} autoComplete="new-password" required />
+          <input name="passwordConfirmation" type="password" minLength={8} placeholder="Şifreyi tekrar girin" autoComplete="new-password" required />
         </label>
       )}
+      <p className="wide" style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span>ℹ️</span> <span>Şifre en az 8 karakter olmalı, <strong>en az bir harf</strong> ve <strong>bir rakam</strong> içermelidir.</span>
+      </p>
       {mode === 'employee' && (
         <>
           <label>
