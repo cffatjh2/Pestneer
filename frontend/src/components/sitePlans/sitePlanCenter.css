@@ -76,5 +76,51 @@
 .blueprint-quick-btns .btn-blueprint-remove:hover{background:#fee2e2;color:#991b1b}
 .background-inspector-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff}
 .inspector-slider-row{display:flex;flex-direction:column;gap:5px}
-.inspector-slider-row label{font-size:11px;font-weight:800;color:#1e40af}
 .site-plan-toolbar-right{display:flex;gap:5px}
+
+.site-plan-upload-trigger-btn {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+}
+.site-plan-upload-trigger-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+  transform: translateY(-1px);
+}
+.site-plan-upload-trigger-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toolbar-blueprint-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.toolbar-blueprint-btn:hover {
+  background: #dbeafe;
+  color: #1e40af;
+}
+

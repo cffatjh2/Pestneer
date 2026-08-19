@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Ban, Barcode, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, FilePlus2, Filter, Hash, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, Barcode, BrainCircuit, Car, Check, CheckCircle2, ChevronDown, FileDown, FilePlus2, Filter, Hash, Info, Layers, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getServiceReportCatalog, type ReportPestObservationInput, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
 import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
@@ -235,10 +235,96 @@ export default function StationActivationModal({ accessToken, order, onClose, on
     damaged: stations.filter((item) => item.deviceStatus === 'Damaged').length,
     inaccessible: stations.filter((item) => item.deviceStatus === 'Inaccessible').length,
   }), [stations]);
+
+  const biocideStock = useMemo(() => {
+    return (vehicleStock?.items || []).filter((item) =>
+      item.unit === 'Gram' ||
+      item.unit === 'Mililitre' ||
+      item.unit === 'Litre' ||
+      item.unit === 'Kilogram' ||
+      item.productName.toLowerCase().includes('yem') ||
+      item.productName.toLowerCase().includes('jel') ||
+      item.productName.toLowerCase().includes('blok') ||
+      item.productName.toLowerCase().includes('pasta') ||
+      item.productName.toLowerCase().includes('sc') ||
+      item.productName.toLowerCase().includes('ec') ||
+      item.productName.toLowerCase().includes('ilaç') ||
+      item.productName.toLowerCase().includes('insektisit') ||
+      item.productName.toLowerCase().includes('rodentisit')
+    );
+  }, [vehicleStock]);
+
+  const consumableStock = useMemo(() => {
+    return (vehicleStock?.items || []).filter((item) =>
+      item.unit === 'Adet' ||
+      item.productName.toLowerCase().includes('plaka') ||
+      item.productName.toLowerCase().includes('yapışkan') ||
+      item.productName.toLowerCase().includes('levha') ||
+      item.productName.toLowerCase().includes('lamba') ||
+      item.productName.toLowerCase().includes('istasyon') ||
+      item.productName.toLowerCase().includes('kapan') ||
+      item.productName.toLowerCase().includes('tüp') ||
+      item.productName.toLowerCase().includes('ekipman')
+    );
+  }, [vehicleStock]);
+
+  const appliedStockItem = useMemo(() => {
+    if (!current?.appliedProductName && !current?.appliedVehicleStockItemId) return null;
+    return (vehicleStock?.items || []).find((item) =>
+      (current.appliedVehicleStockItemId && (item.vehicleStockItemId === current.appliedVehicleStockItemId || item.id === current.appliedVehicleStockItemId)) ||
+      (current.appliedProductName && item.productName.toLocaleUpperCase('tr-TR') === current.appliedProductName.toLocaleUpperCase('tr-TR'))
+    ) || null;
+  }, [current?.appliedProductName, current?.appliedVehicleStockItemId, vehicleStock]);
+
+  const replacementStockItem = useMemo(() => {
+    if (!current?.replacementProductName && !current?.replacementVehicleStockItemId) return null;
+    return (vehicleStock?.items || []).find((item) =>
+      (current.replacementVehicleStockItemId && (item.vehicleStockItemId === current.replacementVehicleStockItemId || item.id === current.replacementVehicleStockItemId)) ||
+      (current.replacementProductName && item.productName.toLocaleUpperCase('tr-TR') === current.replacementProductName.toLocaleUpperCase('tr-TR'))
+    ) || null;
+  }, [current?.replacementProductName, current?.replacementVehicleStockItemId, vehicleStock]);
+
   const update = (patch: Partial<ReportStationInput>) => setStations((items) => items.map((item, index) => index === selected ? { ...item, ...patch } : item));
   const choose = (status: string) => update(current?.deviceStatus === status
     ? { deviceStatus: 'Unchecked', hasActivity: false, caughtCount: 0 }
     : { deviceStatus: status, hasActivity: status === 'Activity', caughtCount: status === 'Activity' ? current?.caughtCount ?? 0 : 0 });
+
+  const applyQuickBiocide = (preferredName: string, amount: number, unit: string, keyword: string) => {
+    const stockMatch = (vehicleStock?.items || []).find((item) =>
+      item.productName.toLowerCase().includes(keyword.toLowerCase()) ||
+      item.productName.toLowerCase().includes(preferredName.toLowerCase())
+    );
+    const finalName = stockMatch ? stockMatch.productName : preferredName;
+    const finalUnit = stockMatch ? stockMatch.unit : unit;
+    const finalStockId = stockMatch?.vehicleStockItemId || stockMatch?.id;
+
+    update({
+      appliedProductName: finalName,
+      appliedVehicleStockItemId: finalStockId,
+      appliedAmount: amount,
+      appliedUnit: finalUnit,
+      baitGelCompleted: true,
+    });
+  };
+
+  const applyQuickConsumable = (preferredName: string, quantity: number, unit: string, keyword: string) => {
+    const stockMatch = (vehicleStock?.items || []).find((item) =>
+      item.productName.toLowerCase().includes(keyword.toLowerCase()) ||
+      item.productName.toLowerCase().includes(preferredName.toLowerCase())
+    );
+    const finalName = stockMatch ? stockMatch.productName : preferredName;
+    const finalUnit = stockMatch ? stockMatch.unit : unit;
+    const finalStockId = stockMatch?.vehicleStockItemId || stockMatch?.id;
+
+    update({
+      replacementProductName: finalName,
+      replacementVehicleStockItemId: finalStockId,
+      replacementQuantity: quantity,
+      replacementUnit: finalUnit,
+      stickyPlateChanged: keyword.includes('plaka') || keyword.includes('yapışkan') || preferredName.includes('Plaka') || preferredName.includes('Yapışkan'),
+      stationReplaced: keyword.includes('istasyon') || keyword.includes('gövde') || preferredName.includes('İstasyon'),
+    });
+  };
 
   /* ── toplu istasyon ekleme ── */
   const addBulkStations = (prefix: string, start: number, end: number, area: string, deviceType: string) => {
@@ -319,6 +405,18 @@ export default function StationActivationModal({ accessToken, order, onClose, on
     <div className="modal-header"><div><p className="eyebrow">BAĞIMSIZ İSTASYON MODÜLÜ · {order.id}</p><h2>İstasyon aktivasyon listesi</h2><p>{order.client} · {order.branch} · EK-1 uygulama formundan bağımsız çalışır.</p></div><button className="icon-button" onClick={onClose}><X /></button></div>
     {loading ? <div className="inspection-loading">İstasyon listesi hazırlanıyor…</div> : <>
       <section className="activation-summary"><div><strong>{completed}/{stations.length}</strong><span>Kontrol edilen</span></div><span><Activity /> {summary.activity} aktivite</span><span><Wrench /> {summary.damaged} hasarlı</span><span><Ban /> {summary.inaccessible} ulaşılamadı</span></section>
+
+      {vehicleStock && (
+        <div className="activation-vehicle-stock-bar">
+          <div className="activation-vehicle-stock-info">
+            <Car size={16} color="#059669" />
+            <span><strong>Mevcut Araç Deponuz:</strong> {biocideStock.length} çeşit Biyosidal İlaç & {consumableStock.length} çeşit Sarf Malzemesi hazır</span>
+          </div>
+          <span className="activation-vehicle-stock-hint">
+            ⚡ İstasyonlarda seçilen ürünler iş bitiminde EK-1 üzerinden araç stoğundan otomatik düşülecektir.
+          </span>
+        </div>
+      )}
 
       {/* ── Filtre bar ── */}
       <div className="activation-filter-bar">
@@ -506,7 +604,7 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                         });
                         return;
                       }
-                      const stockMatch = vehicleStock?.items?.find((item) => item.productName === val);
+                      const stockMatch = vehicleStock?.items?.find((item) => item.productName === val || item.vehicleStockItemId === val || item.id === val);
                       const catalogMatch = defaultBiocideOptions.find((item) => item.name === val);
                       const unit = stockMatch ? stockMatch.unit : catalogMatch ? catalogMatch.unit : 'Gram';
                       const defaultAmt = current.appliedAmount && current.appliedAmount > 0
@@ -514,8 +612,8 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                         : catalogMatch?.defaultAmount ?? (unit === 'Gram' ? 20 : unit === 'Mililitre' ? 50 : 1);
 
                       update({
-                        appliedProductName: val,
-                        appliedVehicleStockItemId: stockMatch?.vehicleStockItemId,
+                        appliedProductName: stockMatch ? stockMatch.productName : val,
+                        appliedVehicleStockItemId: stockMatch?.vehicleStockItemId || stockMatch?.id,
                         appliedUnit: unit,
                         appliedAmount: defaultAmt,
                         baitGelCompleted: true,
@@ -523,18 +621,16 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                     }}
                   >
                     <option value="">İlaç / yem uygulanmadı</option>
-                    {vehicleStock?.items && vehicleStock.items.length > 0 && (
-                      <optgroup label="🚗 Araç Stoğundaki Biyosidaller">
-                        {vehicleStock.items
-                          .filter((item) => item.unit === 'Gram' || item.unit === 'Mililitre' || item.unit === 'Litre' || item.unit === 'Kilogram' || item.productName.toLowerCase().includes('yem') || item.productName.toLowerCase().includes('jel') || item.productName.toLowerCase().includes('blok'))
-                          .map((item) => (
-                            <option key={item.id} value={item.productName}>
-                              {item.productName} ({item.quantity} {item.unit})
-                            </option>
-                          ))}
+                    {biocideStock.length > 0 && (
+                      <optgroup label="🚗 Araç Stoğundaki Biyosidaller (Öncelikli & Otomatik Düşüm)">
+                        {biocideStock.map((item) => (
+                          <option key={item.id || item.vehicleStockItemId} value={item.productName}>
+                            🚗 [Araç Stoğu] {item.productName} · Kalan: {item.quantity} {item.unit}
+                          </option>
+                        ))}
                       </optgroup>
                     )}
-                    <optgroup label="🏷️ Sağlık Bakanlığı Onaylı Biyosidal Kataloğu">
+                    <optgroup label="🏷️ Sağlık Bakanlığı Onaylı Standart Biyosidal Kataloğu">
                       {defaultBiocideOptions.map((opt) => (
                         <option key={opt.name} value={opt.name}>
                           {opt.name} · {opt.category} ({opt.unit})
@@ -572,14 +668,44 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                 </label>
               </div>
 
+              {appliedStockItem ? (
+                <div className="activation-stock-status-pill in-stock">
+                  <PackageCheck size={14} color="#059669" />
+                  <span>Araç Stoğuna Bağlı: <strong>{appliedStockItem.quantity} {appliedStockItem.unit}</strong> mevcut</span>
+                  {current.appliedAmount && current.appliedAmount > 0 ? (
+                    <span className={appliedStockItem.quantity < current.appliedAmount ? 'stock-alert' : 'stock-after'}>
+                      {appliedStockItem.quantity < current.appliedAmount
+                        ? `⚠️ Yetersiz Stok! (Eksik: ${Number((current.appliedAmount - appliedStockItem.quantity).toFixed(2))} ${appliedStockItem.unit})`
+                        : `(Uygulama sonrası kalan: ${Number((appliedStockItem.quantity - current.appliedAmount).toFixed(2))} ${appliedStockItem.unit})`
+                      }
+                    </span>
+                  ) : null}
+                </div>
+              ) : current.appliedProductName ? (
+                <div className="activation-stock-status-pill catalog-notice">
+                  <Info size={14} color="#64748b" />
+                  <span>Standart Katalog Ürünü (Araç stoğunda bulunamadı)</span>
+                </div>
+              ) : null}
+
               {!readOnly && (
                 <div className="activation-quick-chips">
                   <span className="activation-quick-chips-label">Hızlı Doz:</span>
-                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Brodifacoum %0.005 Mum Blok Yem', appliedAmount: 20, appliedUnit: 'Gram', baitGelCompleted: true })}>+20 gr Blok Yem</button>
-                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Bromadiolone %0.005 Pasta Yem', appliedAmount: 15, appliedUnit: 'Gram', baitGelCompleted: true })}>+15 gr Pasta Yem</button>
-                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Maxforce IC %2.15 Hamamböceği Jeli', appliedAmount: 5, appliedUnit: 'Gram', baitGelCompleted: true })}>+5 gr Jel</button>
-                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'K-Othrine SC 25 Sıvı İnsektisit', appliedAmount: 50, appliedUnit: 'Mililitre' })}>+50 ml Sıvı</button>
-                  <button type="button" onClick={() => update({ appliedProductName: current.appliedProductName || 'Chrysamed Forte Konsantre İnsektisit', appliedAmount: 100, appliedUnit: 'Mililitre' })}>+100 ml</button>
+                  <button type="button" onClick={() => applyQuickBiocide('Brodifacoum %0.005 Mum Blok Yem', 20, 'Gram', 'blok')}>
+                    +20 gr Blok Yem
+                  </button>
+                  <button type="button" onClick={() => applyQuickBiocide('Bromadiolone %0.005 Pasta Yem', 15, 'Gram', 'pasta')}>
+                    +15 gr Pasta Yem
+                  </button>
+                  <button type="button" onClick={() => applyQuickBiocide('Maxforce IC %2.15 Hamamböceği Jeli', 5, 'Gram', 'jel')}>
+                    +5 gr Jel
+                  </button>
+                  <button type="button" onClick={() => applyQuickBiocide('K-Othrine SC 25 Sıvı İnsektisit', 50, 'Mililitre', 'sc')}>
+                    +50 ml Sıvı
+                  </button>
+                  <button type="button" onClick={() => applyQuickBiocide('Chrysamed Forte Konsantre İnsektisit', 100, 'Mililitre', 'konsantre')}>
+                    +100 ml
+                  </button>
                 </div>
               )}
             </div>
@@ -626,31 +752,32 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                           replacementQuantity: 0,
                           replacementUnit: undefined,
                           replacementVehicleStockItemId: undefined,
+                          stickyPlateChanged: false,
+                          stationReplaced: false,
                         });
                         return;
                       }
-                      const stockMatch = vehicleStock?.items?.find((item) => item.productName === val);
+                      const stockMatch = vehicleStock?.items?.find((item) => item.productName === val || item.vehicleStockItemId === val || item.id === val);
                       const catalogMatch = defaultConsumableOptions.find((item) => item.name === val);
+                      const prodName = stockMatch ? stockMatch.productName : val;
                       update({
-                        replacementProductName: val,
-                        replacementVehicleStockItemId: stockMatch?.vehicleStockItemId,
+                        replacementProductName: prodName,
+                        replacementVehicleStockItemId: stockMatch?.vehicleStockItemId || stockMatch?.id,
                         replacementUnit: stockMatch?.unit || catalogMatch?.unit || 'Adet',
                         replacementQuantity: current.replacementQuantity && current.replacementQuantity > 0 ? current.replacementQuantity : 1,
-                        stickyPlateChanged: val.includes('Plaka') || val.includes('Yapışkan') || val.includes('Levha') ? true : current.stickyPlateChanged,
-                        stationReplaced: val.includes('İstasyon') || val.includes('Kapan') ? true : current.stationReplaced,
+                        stickyPlateChanged: prodName.includes('Plaka') || prodName.includes('Yapışkan') || prodName.includes('Levha') ? true : current.stickyPlateChanged,
+                        stationReplaced: prodName.includes('İstasyon') || prodName.includes('Kapan') ? true : current.stationReplaced,
                       });
                     }}
                   >
                     <option value="">Sarf malzeme / parça değişimi yapılmadı</option>
-                    {vehicleStock?.items && vehicleStock.items.length > 0 && (
-                      <optgroup label="🚗 Araç Stoğundaki Sarf Malzemeleri">
-                        {vehicleStock.items
-                          .filter((item) => item.unit === 'Adet' || item.productName.toLowerCase().includes('plaka') || item.productName.toLowerCase().includes('lamba') || item.productName.toLowerCase().includes('istasyon') || item.productName.toLowerCase().includes('kapan'))
-                          .map((item) => (
-                            <option key={item.id} value={item.productName}>
-                              {item.productName} ({item.quantity} {item.unit})
-                            </option>
-                          ))}
+                    {consumableStock.length > 0 && (
+                      <optgroup label="🚗 Araç Stoğundaki Sarf Malzemeleri (Öncelikli & Otomatik Düşüm)">
+                        {consumableStock.map((item) => (
+                          <option key={item.id || item.vehicleStockItemId} value={item.productName}>
+                            🚗 [Araç Stoğu] {item.productName} · Kalan: {item.quantity} {item.unit}
+                          </option>
+                        ))}
                       </optgroup>
                     )}
                     <optgroup label="📦 Standart Sarf & Ekipman Kataloğu">
@@ -685,61 +812,42 @@ export default function StationActivationModal({ accessToken, order, onClose, on
                 </label>
               </div>
 
+              {replacementStockItem ? (
+                <div className="activation-stock-status-pill in-stock">
+                  <PackageCheck size={14} color="#0284c7" />
+                  <span>Araç Stoğuna Bağlı: <strong>{replacementStockItem.quantity} {replacementStockItem.unit}</strong> mevcut</span>
+                  {current.replacementQuantity && current.replacementQuantity > 0 ? (
+                    <span className={replacementStockItem.quantity < current.replacementQuantity ? 'stock-alert' : 'stock-after'}>
+                      {replacementStockItem.quantity < current.replacementQuantity
+                        ? `⚠️ Yetersiz Stok! (Eksik: ${Number((current.replacementQuantity - replacementStockItem.quantity).toFixed(2))} ${replacementStockItem.unit})`
+                        : `(Değişim sonrası kalan: ${Number((replacementStockItem.quantity - current.replacementQuantity).toFixed(2))} ${replacementStockItem.unit})`
+                      }
+                    </span>
+                  ) : null}
+                </div>
+              ) : current.replacementProductName ? (
+                <div className="activation-stock-status-pill catalog-notice">
+                  <Info size={14} color="#64748b" />
+                  <span>Standart Sarf Kataloğu (Araç stoğunda bulunamadı)</span>
+                </div>
+              ) : null}
+
               {!readOnly && (
                 <div className="activation-quick-chips">
                   <span className="activation-quick-chips-label">Hızlı Sarf:</span>
-                  <button
-                    type="button"
-                    onClick={() => update({
-                      replacementProductName: 'Fare & Sıçan Yapışkanlı Levha (Plaka)',
-                      replacementQuantity: 1,
-                      replacementUnit: 'Adet',
-                      stickyPlateChanged: true,
-                    })}
-                  >
+                  <button type="button" onClick={() => applyQuickConsumable('Fare & Sıçan Yapışkanlı Levha (Plaka)', 1, 'Adet', 'plaka')}>
                     +1 Fare Yapışkanı
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => update({
-                      replacementProductName: 'EFK Sinek Cihazı UV Yapışkan Levhası',
-                      replacementQuantity: 1,
-                      replacementUnit: 'Adet',
-                      stickyPlateChanged: true,
-                    })}
-                  >
+                  <button type="button" onClick={() => applyQuickConsumable('EFK Sinek Cihazı UV Yapışkan Levhası', 1, 'Adet', 'sinek')}>
                     +1 Sinek Yapışkanı
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => update({
-                      replacementProductName: 'Hamamböceği Monitör Yapışkan Kapanı',
-                      replacementQuantity: 1,
-                      replacementUnit: 'Adet',
-                      stickyPlateChanged: true,
-                    })}
-                  >
+                  <button type="button" onClick={() => applyQuickConsumable('Hamamböceği Monitör Yapışkan Kapanı', 1, 'Adet', 'kapan')}>
                     +1 Böcek Monitör
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => update({
-                      replacementProductName: '15W UV-A Floresan Sinek Lambası',
-                      replacementQuantity: 1,
-                      replacementUnit: 'Adet',
-                    })}
-                  >
+                  <button type="button" onClick={() => applyQuickConsumable('15W UV-A Floresan Sinek Lambası', 1, 'Adet', 'lamba')}>
                     +1 UV Lamba
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => update({
-                      replacementProductName: 'Kemirgen Yemleme İstasyonu Gövdesi',
-                      replacementQuantity: 1,
-                      replacementUnit: 'Adet',
-                      stationReplaced: true,
-                    })}
-                  >
+                  <button type="button" onClick={() => applyQuickConsumable('Kemirgen Yemleme İstasyonu Gövdesi', 1, 'Adet', 'istasyon')}>
                     +1 İstasyon Gövdesi
                   </button>
                 </div>

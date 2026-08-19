@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.FieldOperations;
+using Pesneer.Api.Inventory;
 using Pesneer.Api.Reports;
 
 namespace Pesneer.Api.StationActivations;
@@ -179,10 +180,117 @@ public static class StationActivationEndpoints
                 });
             }
             else { existingDocument.FileData = pdf; existingDocument.SizeBytes = pdf.Length; existingDocument.CreatedAt = now; }
+
+            // Deduct biocide and consumable usages directly from vehicle inventory
+            await ApplyStationVehicleConsumptionAsync(request, workOrder, db, context, now, cancellationToken);
+
             await db.SaveChangesAsync(cancellationToken);
         }
         var response = await Query(db).SingleAsync(item => item.Id == activation.Id, cancellationToken);
         return Results.Ok(ToResponse(response));
+    }
+
+    private static async Task ApplyStationVehicleConsumptionAsync(
+        UpsertStationActivationRequest request,
+        WorkOrder workOrder,
+        PesneerDbContext db,
+        ICompanyContext context,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var itemsToDeduct = new List<(Guid? StockItemId, string ProductName, decimal Amount, string Unit)>();
+
+        foreach (var station in request.Stations)
+        {
+            if (!string.IsNullOrWhiteSpace(station.AppliedProductName) && station.AppliedAmount is > 0)
+            {
+                itemsToDeduct.Add((
+                    station.AppliedVehicleStockItemId,
+                    station.AppliedProductName.Trim(),
+                    station.AppliedAmount.Value,
+                    station.AppliedUnit ?? "Gram"
+                ));
+            }
+
+            if (!string.IsNullOrWhiteSpace(station.ReplacementProductName) && station.ReplacementQuantity is > 0)
+            {
+                itemsToDeduct.Add((
+                    station.ReplacementVehicleStockItemId,
+                    station.ReplacementProductName.Trim(),
+                    station.ReplacementQuantity.Value,
+                    station.ReplacementUnit ?? "Adet"
+                ));
+            }
+        }
+
+        if (itemsToDeduct.Count == 0) return;
+
+        // Find technician's vehicle or company vehicle
+        var employeeId = context.AccountId ?? workOrder.AssignedEmployeeAccountId;
+        Vehicle? vehicle = null;
+        if (employeeId.HasValue)
+        {
+            vehicle = await db.Vehicles
+                .Include(v => v.StockItems)
+                .FirstOrDefaultAsync(v => v.AssignedEmployeeAccountId == employeeId.Value && v.IsActive, cancellationToken);
+        }
+        vehicle ??= await db.Vehicles
+            .Include(v => v.StockItems)
+            .FirstOrDefaultAsync(v => v.IsActive, cancellationToken);
+
+        var explicitIds = itemsToDeduct.Where(x => x.StockItemId.HasValue).Select(x => x.StockItemId!.Value).Distinct().ToArray();
+        var stockItems = await db.VehicleStockItems
+            .Include(item => item.Vehicle)
+            .Where(item => explicitIds.Contains(item.Id) && item.IsActive)
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+
+        var deductions = new Dictionary<Guid, decimal>();
+
+        foreach (var usage in itemsToDeduct)
+        {
+            VehicleStockItem? targetStock = null;
+            if (usage.StockItemId.HasValue && stockItems.TryGetValue(usage.StockItemId.Value, out var foundStock))
+            {
+                targetStock = foundStock;
+            }
+            else if (vehicle is not null)
+            {
+                targetStock = vehicle.StockItems.FirstOrDefault(si =>
+                    si.IsActive && string.Equals(si.ProductName, usage.ProductName, StringComparison.OrdinalIgnoreCase)
+                );
+            }
+
+            if (targetStock is null) continue;
+
+            if (InventoryUnitConverter.TryConvert(usage.Amount, usage.Unit, targetStock.Unit, out var convertedQty))
+            {
+                deductions[targetStock.Id] = deductions.GetValueOrDefault(targetStock.Id) + convertedQty;
+                if (!stockItems.ContainsKey(targetStock.Id))
+                {
+                    stockItems[targetStock.Id] = targetStock;
+                }
+            }
+        }
+
+        foreach (var deduction in deductions)
+        {
+            var stockItem = stockItems[deduction.Key];
+            stockItem.Quantity = Math.Max(0, stockItem.Quantity - deduction.Value);
+            stockItem.LastMovementAt = now;
+            db.VehicleStockMovements.Add(new VehicleStockMovement
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = context.CompanyId!.Value,
+                VehicleStockItemId = stockItem.Id,
+                InventoryItemId = stockItem.InventoryItemId,
+                PerformedByAccountId = context.AccountId,
+                Type = "ApplicationUse",
+                Quantity = deduction.Value,
+                Unit = stockItem.Unit,
+                Note = $"{workOrder.Number} nolu iş emri istasyon uygulaması ({workOrder.Customer?.LegalName ?? workOrder.Number})",
+                OccurredAt = now
+            });
+        }
     }
 
     private static async Task<IResult> DownloadPdfAsync(Guid id, PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)

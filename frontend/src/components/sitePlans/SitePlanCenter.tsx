@@ -14,6 +14,7 @@ import QrScannerModal from '../modals/QrScannerModal';
 import { downloadSitePlanStationLabels } from '../../utils/stationQr';
 import { getCompanyBranding, getCompanyLogoObjectUrl } from '../../services/brandingApi';
 import { compressImage } from '../../utils/imageCompression';
+import { loadBlueprintFile, type LoadedBlueprint } from '../../utils/blueprintLoader';
 import './sitePlanCenter.css';
 
 type Props = {
@@ -53,6 +54,10 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<SitePlanRecord | 'new' | null>(null);
   const [filterLocationKey, setFilterLocationKey] = useState('');
+  const [loadingBlueprint, setLoadingBlueprint] = useState(false);
+  const [editorInitialCanvas, setEditorInitialCanvas] = useState<SitePlanCanvas | null>(null);
+  const [editorSuggestedTitle, setEditorSuggestedTitle] = useState<string | undefined>();
+  const mainBlueprintInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -106,6 +111,40 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
     }
   };
 
+  const handleMainBlueprintUpload = async (file: File) => {
+    try {
+      setLoadingBlueprint(true);
+      setError(null);
+      const bp = await loadBlueprintFile(file);
+      const canvasW = 1200;
+      const canvasH = 720;
+      let w = canvasW;
+      let h = (bp.height / bp.width) * canvasW;
+      if (h > canvasH) {
+        h = canvasH;
+        w = (bp.width / bp.height) * canvasH;
+      }
+      const x = Math.round((canvasW - w) / 2);
+      const y = Math.round((canvasH - h) / 2);
+
+      const canvas: SitePlanCanvas = {
+        ...emptyCanvas(),
+        backgroundImage: bp.dataUrl,
+        backgroundWidth: Math.round(w),
+        backgroundHeight: Math.round(h),
+        backgroundX: x,
+        backgroundY: y,
+      };
+      setEditorInitialCanvas(canvas);
+      setEditorSuggestedTitle(bp.suggestedTitle);
+      setEditing('new');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kroki belgesi işlenemedi.');
+    } finally {
+      setLoadingBlueprint(false);
+    }
+  };
+
   const save = async (input: SaveSitePlanInput) => {
     try {
       const saved = editing === 'new' ? await createSitePlan(accessToken, input) : await updateSitePlan(accessToken, editing!.id, input);
@@ -113,6 +152,8 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
       onCount?.(editing === 'new' ? plans.length + 1 : plans.length);
       void onSaved?.();
       setEditing(null);
+      setEditorInitialCanvas(null);
+      setEditorSuggestedTitle(undefined);
     } catch (saveError) {
       if (saveError instanceof SitePlanSessionExpiredError) onSessionExpired();
       throw saveError;
@@ -126,7 +167,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
         <h2>Ekipman yerleşim planları</h2>
         <p>Numaralı izleme noktalarını A4 yatay planda çizin veya kendi mimari planınızı yükleyip üstüne istasyon yerleştirin.</p>
       </div>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
         {locations.length > 0 && (
           <select
             value={filterLocationKey}
@@ -140,17 +181,79 @@ export default function SitePlanCenter({ accessToken, mode, locations, onSession
             })}
           </select>
         )}
-        {mode === 'staff' && <button className="primary-button" onClick={() => setEditing('new')}><Plus size={17} /> Yeni Kroki Oluştur</button>}
+        {mode === 'staff' && (
+          <>
+            <button
+              type="button"
+              className="secondary-button site-plan-upload-trigger-btn"
+              onClick={() => mainBlueprintInputRef.current?.click()}
+              disabled={loadingBlueprint}
+              title="PDF, Word veya Görsel Mimari Planı Yükleyip Kroki Düzenleyiciyi Aç"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
+            >
+              <UploadCloud size={17} color="#2563eb" />
+              <span>{loadingBlueprint ? 'Kroki İşleniyor…' : 'Kroki Yükle (PDF / Word / Görsel)'}</span>
+            </button>
+            <button
+              className="primary-button"
+              onClick={() => {
+                setEditorInitialCanvas(null);
+                setEditorSuggestedTitle(undefined);
+                setEditing('new');
+              }}
+            >
+              <Plus size={17} /> Yeni Kroki Oluştur
+            </button>
+            <input
+              ref={mainBlueprintInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.svg,.bmp"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleMainBlueprintUpload(file);
+                e.target.value = '';
+              }}
+            />
+          </>
+        )}
       </div>
     </div>
     {error && <div className="site-plan-error">{error}<button onClick={() => setError(null)}>Kapat</button></div>}
-    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : visiblePlans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>{plans.length > 0 ? 'Seçili müşteriye ait yerleşim planı bulunamadı' : 'Henüz yerleşim planı yok'}</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturun veya mimari plan görseli yükleyerek istasyonları yerleştirin.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{visiblePlans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><MiniPlan canvas={plan.canvas} /></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{stationCount(plan.canvas)} ekipman noktası</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div className="site-plan-card-actions"><button title="QR Etiketlerini Yazdır (A4 PDF)" className="site-plan-qr-btn" onClick={() => void downloadQrLabels(plan)}><QrCode size={15} /><span>QR Etiketleri</span></button><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button><button title="Paylaş" onClick={() => void share(plan)}><Share2 size={16} /></button>{mode === 'staff' && <button title="Planı düzenle" onClick={() => setEditing(plan)}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
-    {editing && <SitePlanEditor locations={locations} plan={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSave={save} />}
+    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : visiblePlans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>{plans.length > 0 ? 'Seçili müşteriye ait yerleşim planı bulunamadı' : 'Henüz yerleşim planı yok'}</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturun veya mimari plan görseli yükleyerek istasyonları yerleştirin.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{visiblePlans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><MiniPlan canvas={plan.canvas} /></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{stationCount(plan.canvas)} ekipman noktası</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div className="site-plan-card-actions"><button title="QR Etiketlerini Yazdır (A4 PDF)" className="site-plan-qr-btn" onClick={() => void downloadQrLabels(plan)}><QrCode size={15} /><span>QR Etiketleri</span></button><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button><button title="Paylaş" onClick={() => void share(plan)}><Share2 size={16} /></button>{mode === 'staff' && <button title="Planı düzenle" onClick={() => { setEditorInitialCanvas(null); setEditorSuggestedTitle(undefined); setEditing(plan); }}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
+    {editing && (
+      <SitePlanEditor
+        locations={locations}
+        plan={editing === 'new' ? undefined : editing}
+        initialCanvas={editing === 'new' && editorInitialCanvas ? editorInitialCanvas : undefined}
+        suggestedTitle={editing === 'new' && editorSuggestedTitle ? editorSuggestedTitle : undefined}
+        onClose={() => {
+          setEditing(null);
+          setEditorInitialCanvas(null);
+          setEditorSuggestedTitle(undefined);
+        }}
+        onSave={save}
+      />
+    )}
   </div>;
 }
 
-function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: QualityLocation[]; plan?: SitePlanRecord; onClose: () => void; onSave: (input: SaveSitePlanInput) => Promise<void> }) {
-  const initialCanvas = plan ? structuredClone(plan.canvas) : emptyCanvas();
+function SitePlanEditor({
+  locations,
+  plan,
+  initialCanvas: customInitialCanvas,
+  suggestedTitle,
+  onClose,
+  onSave,
+}: {
+  locations: QualityLocation[];
+  plan?: SitePlanRecord;
+  initialCanvas?: SitePlanCanvas;
+  suggestedTitle?: string;
+  onClose: () => void;
+  onSave: (input: SaveSitePlanInput) => Promise<void>;
+}) {
+  const initialCanvas = plan ? structuredClone(plan.canvas) : (customInitialCanvas ?? emptyCanvas());
   const [elements, setElements] = useState<SitePlanElement[]>(initialCanvas.elements);
   const [equipmentTypes, setEquipmentTypes] = useState<SitePlanEquipmentType[]>(initialCanvas.equipmentTypes);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(initialCanvas.backgroundImage ?? null);
@@ -162,13 +265,14 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeEquipmentId, setActiveEquipmentId] = useState(initialCanvas.equipmentTypes[0]?.id ?? '');
   const [locationKey, setLocationKey] = useState(plan ? `${plan.customerId}|${plan.branchId ?? ''}` : locationValue(locations[0]));
-  const [title, setTitle] = useState(plan?.title ?? 'Zararlı Mücadelesi Ekipman Yerleşim Planı');
+  const [title, setTitle] = useState(plan?.title ?? suggestedTitle ?? 'Zararlı Mücadelesi Ekipman Yerleşim Planı');
   const [areaName, setAreaName] = useState(plan?.areaName ?? 'İç ve Dış Alan');
   const [fieldGuide, setFieldGuide] = useState(plan?.fieldGuide ?? 'BRCGS / Saha Kılavuzu');
   const [revisionNote, setRevisionNote] = useState('');
   const [zoom, setZoom] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 0.28 : 0.72);
   const [snap, setSnap] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadingBlueprint, setLoadingBlueprint] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
   const [customType, setCustomType] = useState({ code: '', name: '', color: '#0EA5E9', shape: 'square' as SitePlanEquipmentShape });
@@ -193,34 +297,31 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
   const handleBlueprintUpload = async (file?: File) => {
     if (!file) return;
     try {
-      const compressed = await compressImage(file, { maxDimension: 1600, quality: 0.85 });
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const img = new Image();
-        img.onload = () => {
-          const canvasW = 1200;
-          const canvasH = 720;
-          let w = canvasW;
-          let h = (img.height / img.width) * canvasW;
-          if (h > canvasH) {
-            h = canvasH;
-            w = (img.width / img.height) * canvasH;
-          }
-          const x = Math.round((canvasW - w) / 2);
-          const y = Math.round((canvasH - h) / 2);
-          setBackgroundImage(dataUrl);
-          setBackgroundX(x);
-          setBackgroundY(y);
-          setBackgroundWidth(Math.round(w));
-          setBackgroundHeight(Math.round(h));
-          setError(null);
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(compressed);
+      setLoadingBlueprint(true);
+      setError(null);
+      const bp = await loadBlueprintFile(file);
+      const canvasW = 1200;
+      const canvasH = 720;
+      let w = canvasW;
+      let h = (bp.height / bp.width) * canvasW;
+      if (h > canvasH) {
+        h = canvasH;
+        w = (bp.width / bp.height) * canvasH;
+      }
+      const x = Math.round((canvasW - w) / 2);
+      const y = Math.round((canvasH - h) / 2);
+      setBackgroundImage(bp.dataUrl);
+      setBackgroundX(x);
+      setBackgroundY(y);
+      setBackgroundWidth(Math.round(w));
+      setBackgroundHeight(Math.round(h));
+      if (!title || title === 'Zararlı Mücadelesi Ekipman Yerleşim Planı') {
+        setTitle(bp.suggestedTitle);
+      }
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Kroki görseli yüklenemedi.');
+      setError(uploadError instanceof Error ? uploadError.message : 'Kroki belgesi yüklenemedi.');
+    } finally {
+      setLoadingBlueprint(false);
     }
   };
 
@@ -435,14 +536,30 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
             <FileImage size={18} />
             <div>
               <strong>Mimari Plan / Kroki</strong>
-              <small>Kendi kroki görselinizi yükleyip üstüne istasyon çizin</small>
+              <small>PDF, Word veya Görsel mimari planınızı yükleyip üstüne istasyon çizin</small>
             </div>
           </div>
           <div className="blueprint-upload-actions">
-            <button type="button" className="btn-blueprint-upload" onClick={() => blueprintInputRef.current?.click()}>
-              <UploadCloud size={15} /> {backgroundImage ? 'Krokiyi Değiştir' : 'Kendi Krokini Yükle'}
+            <button
+              type="button"
+              className="btn-blueprint-upload"
+              onClick={() => blueprintInputRef.current?.click()}
+              disabled={loadingBlueprint}
+              title="PDF, Word (.docx) veya Görsel dosya seçin"
+            >
+              <UploadCloud size={15} />
+              <span>{loadingBlueprint ? 'Kroki İşleniyor…' : backgroundImage ? 'Krokiyi Değiştir (PDF / Word / Görsel)' : 'Kroki Yükle (PDF / Word / Görsel)'}</span>
             </button>
-            <input ref={blueprintInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/jpg" style={{ display: 'none' }} onChange={(e) => { void handleBlueprintUpload(e.target.files?.[0]); e.target.value = ''; }} />
+            <input
+              ref={blueprintInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.svg,.bmp"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                void handleBlueprintUpload(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
             {backgroundImage && (
               <div className="blueprint-active-controls">
                 <div className="blueprint-slider-row">
@@ -482,6 +599,17 @@ function SitePlanEditor({ locations, plan, onClose, onSave }: { locations: Quali
             <button disabled={!redoStack.current.length} onClick={redo} title="Yinele"><Redo2 /></button>
             <button disabled={!selected} onClick={duplicateSelected} title="Çoğalt"><Copy /></button>
             <button disabled={!selected} onClick={removeSelected} title="Sil"><Trash2 /></button>
+            <button
+              type="button"
+              className="toolbar-blueprint-btn"
+              onClick={() => blueprintInputRef.current?.click()}
+              disabled={loadingBlueprint}
+              title="PDF, Word veya Görsel Mimari Planı Yükle / Değiştir"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, padding: '0 8px', height: '32px' }}
+            >
+              <UploadCloud size={14} color="#2563eb" />
+              <span>{loadingBlueprint ? 'İşleniyor…' : backgroundImage ? 'Krokiyi Değiştir' : 'Kroki Yükle'}</span>
+            </button>
           </div>
           <div className="site-plan-toolbar-right">
             <button className={snap ? 'active' : ''} onClick={() => setSnap((current) => !current)}><Grid3X3 /> Izgaraya yapış</button>

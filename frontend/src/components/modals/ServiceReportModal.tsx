@@ -69,8 +69,7 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
 
         // Auto aggregate products & consumables applied in station activations
         if (stationActivation?.stations?.length) {
-          const productMap = new Map<string, { productName: string; unit: string; totalAmount: number; isConsumable?: boolean }>();
-          const consumableList: { name: string; quantity: number }[] = [];
+          const productMap = new Map<string, { vehicleStockItemId?: string; productName: string; unit: string; totalAmount: number; isConsumable?: boolean }>();
           let appliedStationCount = 0;
 
           for (const s of stationActivation.stations) {
@@ -84,8 +83,10 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
               const cur = productMap.get(key);
               if (cur) {
                 cur.totalAmount += Number(s.appliedAmount);
+                if (!cur.vehicleStockItemId && s.appliedVehicleStockItemId) cur.vehicleStockItemId = s.appliedVehicleStockItemId;
               } else {
                 productMap.set(key, {
+                  vehicleStockItemId: s.appliedVehicleStockItemId,
                   productName: s.appliedProductName.trim(),
                   unit,
                   totalAmount: Number(s.appliedAmount),
@@ -102,8 +103,10 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
               const cur = productMap.get(key);
               if (cur) {
                 cur.totalAmount += Number(s.replacementQuantity);
+                if (!cur.vehicleStockItemId && s.replacementVehicleStockItemId) cur.vehicleStockItemId = s.replacementVehicleStockItemId;
               } else {
                 productMap.set(key, {
+                  vehicleStockItemId: s.replacementVehicleStockItemId,
                   productName: s.replacementProductName.trim(),
                   unit,
                   totalAmount: Number(s.replacementQuantity),
@@ -146,10 +149,12 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
           if (productMap.size > 0) {
             const aggregated: ReportProductInput[] = Array.from(productMap.values()).map((p) => {
               const stockMatch = vehicleStockItems.find(
-                (item) => item.productName.toLocaleUpperCase('tr-TR') === p.productName.toLocaleUpperCase('tr-TR')
+                (item) =>
+                  (p.vehicleStockItemId && (item.vehicleStockItemId === p.vehicleStockItemId || item.id === p.vehicleStockItemId)) ||
+                  item.productName.toLocaleUpperCase('tr-TR') === p.productName.toLocaleUpperCase('tr-TR')
               );
               return {
-                vehicleStockItemId: stockMatch?.vehicleStockItemId,
+                vehicleStockItemId: stockMatch?.vehicleStockItemId || stockMatch?.id || p.vehicleStockItemId,
                 productName: p.productName,
                 amountUsed: p.totalAmount,
                 unit: p.unit,
@@ -186,7 +191,7 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
               const biocideCount = Array.from(productMap.values()).filter((p) => !p.isConsumable).length;
               const consumableCount = consumableItems.length;
               setAutoAggregatedNotice(
-                `✨ İstasyon kontrollerinden ${biocideCount > 0 ? `${biocideCount} çeşit Biyosidal İlaç` : ''}${biocideCount > 0 && consumableCount > 0 ? ' ve ' : ''}${consumableCount > 0 ? `${consumableCount} çeşit Sarf Malzemesi` : ''} (${appliedStationCount} istasyondan) otomatik toplandı. Tekrar ürün/sarf girmenize gerek yoktur.`
+                `✨ İstasyon kontrollerinden ${biocideCount > 0 ? `${biocideCount} çeşit Biyosidal İlaç` : ''}${biocideCount > 0 && consumableCount > 0 ? ' ve ' : ''}${consumableCount > 0 ? `${consumableCount} çeşit Sarf Malzemesi` : ''} (${appliedStationCount} istasyondan) otomatik toplandı ve araç stoğunuza bağlandı.`
               );
             }
           }

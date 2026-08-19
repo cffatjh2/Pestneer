@@ -1440,6 +1440,75 @@
 .activation-quick-chips button { min-height: 30px; padding: 0 11px; border: 1px solid #dbe5f0; border-radius: 8px; background: #f8fafc; color: #334155; font-size: 11.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; }
 .activation-quick-chips button:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; transform: translateY(-1px); }
 
+/* ── Araç Stoğu Durum Barı ve Rozetleri ── */
+.activation-vehicle-stock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 9px 14px;
+  margin: 12px 24px 0;
+}
+@media (max-width: 720px) {
+  .activation-vehicle-stock-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 10px 14px 0;
+  }
+}
+.activation-vehicle-stock-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #166534;
+}
+.activation-vehicle-stock-info strong {
+  font-weight: 800;
+}
+.activation-vehicle-stock-hint {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #15803d;
+}
+.activation-stock-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+.activation-stock-status-pill.in-stock {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+.activation-stock-status-pill.catalog-notice {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+.activation-stock-status-pill .stock-after {
+  font-weight: 600;
+  color: #059669;
+  margin-left: 4px;
+}
+.activation-stock-status-pill .stock-alert {
+  font-weight: 800;
+  color: #dc2626;
+  margin-left: 4px;
+  background: #fef2f2;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
 /* Legacy compatibility aliases */
 .activation-biocide-panel { margin-top: 16px; padding: 16px; border: 1px solid #dbe5f0; border-radius: 14px; background: #fff; }
 .activation-biocide-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
