@@ -187,7 +187,15 @@ public static class EmployeeEndpoints
 
         if (!string.IsNullOrWhiteSpace(request.NewPassword))
         {
-            membership.Account.PasswordHash = passwordHasher.HashPassword(membership.Account, request.NewPassword);
+            var newHash = passwordHasher.HashPassword(membership.Account, request.NewPassword.Trim());
+            var matchingAccounts = await dbContext.Accounts.IgnoreQueryFilters()
+                .Where(item => item.Id == membership.AccountId || item.NormalizedEmail == membership.Account.NormalizedEmail || EF.Functions.ILike(item.Email, membership.Account.Email))
+                .ToListAsync(cancellationToken);
+            foreach (var acc in matchingAccounts)
+            {
+                acc.PasswordHash = newHash;
+                acc.IsActive = true;
+            }
         }
 
         try

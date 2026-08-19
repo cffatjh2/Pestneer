@@ -71,7 +71,15 @@ public static class AccountSecurityEndpoints
         if (passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.NewPassword) != PasswordVerificationResult.Failed)
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["newPassword"] = ["Yeni şifre mevcut şifreden farklı olmalıdır."] });
 
-        account.PasswordHash = passwordHasher.HashPassword(account, request.NewPassword);
+        var matchingAccounts = await dbContext.Accounts.IgnoreQueryFilters()
+            .Where(item => item.Id == account.Id || item.NormalizedEmail == account.NormalizedEmail || EF.Functions.ILike(item.Email, account.Email))
+            .ToListAsync(cancellationToken);
+
+        var newHash = passwordHasher.HashPassword(account, request.NewPassword.Trim());
+        foreach (var acc in matchingAccounts)
+        {
+            acc.PasswordHash = newHash;
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { message = "Şifreniz güncellendi. Yeni şifrenizle tekrar giriş yapın." });
     }
@@ -110,16 +118,27 @@ public static class AccountSecurityEndpoints
 
         var companyId = companyContext.CompanyId.Value;
         var belongsToCompany = await dbContext.CompanyMemberships.IgnoreQueryFilters().AnyAsync(
-            item => item.CompanyId == companyId && item.AccountId == accountId && item.IsActive && item.Account.Portal == PortalType.Employee, cancellationToken)
+            item => item.CompanyId == companyId && item.AccountId == accountId, cancellationToken)
             || await dbContext.CustomerMemberships.IgnoreQueryFilters().AnyAsync(
-                item => item.CompanyId == companyId && item.AccountId == accountId && item.IsActive, cancellationToken);
+                item => item.CompanyId == companyId && item.AccountId == accountId, cancellationToken);
         if (!belongsToCompany) return Results.NotFound(new { message = "Hesap bu firmaya bağlı değil." });
 
-        var account = await dbContext.Accounts.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == accountId && item.IsActive, cancellationToken);
+        var account = await dbContext.Accounts.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == accountId, cancellationToken);
         if (account is null) return Results.NotFound(new { message = "Hesap bulunamadı." });
-        account.PasswordHash = passwordHasher.HashPassword(account, request.NewPassword);
+
+        var matchingAccounts = await dbContext.Accounts.IgnoreQueryFilters()
+            .Where(item => item.Id == accountId || item.NormalizedEmail == account.NormalizedEmail || EF.Functions.ILike(item.Email, account.Email))
+            .ToListAsync(cancellationToken);
+
+        var newHash = passwordHasher.HashPassword(account, request.NewPassword.Trim());
+        foreach (var acc in matchingAccounts)
+        {
+            acc.PasswordHash = newHash;
+            acc.IsActive = true;
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Results.Ok(new { message = $"{account.DisplayName} için geçici şifre atandı." });
+        return Results.Ok(new { message = $"{account.DisplayName} ({account.Email}) için geçici şifre atandı." });
     }
 
     internal static IResult? ValidateNewPassword(string password, string confirmation)

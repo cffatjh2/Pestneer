@@ -40,13 +40,47 @@ public sealed class LoginService(
             return new LoginResult(null, $"'{companyCode}' koduna sahip aktif bir firma bulunamadı. Lütfen firma kodunu kontrol edin.");
         }
 
-        // Fetch candidate accounts by email with multiple matching strategies (Invariant, Turkish, ILike)
-        var candidateAccounts = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
-            .Where(item => item.NormalizedEmail == normalizedEmail
-                        || item.NormalizedEmail == rawEmail.ToUpper()
-                        || item.Email.ToLower() == rawEmail.ToLower()
-                        || EF.Functions.ILike(item.Email, rawEmail))
+        // 1. Fetch candidate accounts directly tied to this company first
+        var staffMembers = await dbContext.CompanyMemberships.IgnoreQueryFilters().AsNoTracking()
+            .Include(m => m.Account)
+            .Where(m => m.CompanyId == company.Id && (
+                m.Account.NormalizedEmail == normalizedEmail ||
+                m.Account.NormalizedEmail == rawEmail.ToUpper() ||
+                m.Account.Email.ToLower() == rawEmail.ToLower() ||
+                EF.Functions.ILike(m.Account.Email, rawEmail)
+            ))
             .ToListAsync(cancellationToken);
+
+        var customerMembers = await dbContext.CustomerMemberships.IgnoreQueryFilters().AsNoTracking()
+            .Include(m => m.Account)
+            .Where(m => m.CompanyId == company.Id && (
+                m.Account.NormalizedEmail == normalizedEmail ||
+                m.Account.NormalizedEmail == rawEmail.ToUpper() ||
+                m.Account.Email.ToLower() == rawEmail.ToLower() ||
+                EF.Functions.ILike(m.Account.Email, rawEmail)
+            ))
+            .ToListAsync(cancellationToken);
+
+        var companyAccounts = staffMembers.Select(m => m.Account)
+            .Concat(customerMembers.Select(m => m.Account))
+            .DistinctBy(a => a.Id)
+            .ToList();
+
+        // 2. If no direct membership accounts, fallback to global accounts matching email
+        List<Account> candidateAccounts;
+        if (companyAccounts.Count > 0)
+        {
+            candidateAccounts = companyAccounts;
+        }
+        else
+        {
+            candidateAccounts = await dbContext.Accounts.IgnoreQueryFilters().AsNoTracking()
+                .Where(item => item.NormalizedEmail == normalizedEmail
+                            || item.NormalizedEmail == rawEmail.ToUpper()
+                            || item.Email.ToLower() == rawEmail.ToLower()
+                            || EF.Functions.ILike(item.Email, rawEmail))
+                .ToListAsync(cancellationToken);
+        }
 
         if (candidateAccounts.Count == 0)
         {

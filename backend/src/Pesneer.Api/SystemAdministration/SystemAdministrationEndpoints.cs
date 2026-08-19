@@ -107,11 +107,22 @@ public static class SystemAdministrationEndpoints
     {
         var validation = AccountSecurityEndpoints.ValidateNewPassword(request.NewPassword, request.NewPasswordConfirmation);
         if (validation is not null) return validation;
-        var account = await dbContext.Accounts.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == accountId && item.IsActive, cancellationToken);
+        var account = await dbContext.Accounts.IgnoreQueryFilters().SingleOrDefaultAsync(item => item.Id == accountId, cancellationToken);
         if (account is null) return Results.NotFound(new { message = "Hesap bulunamadı." });
-        account.PasswordHash = passwordHasher.HashPassword(account, request.NewPassword);
+
+        var matchingAccounts = await dbContext.Accounts.IgnoreQueryFilters()
+            .Where(item => item.Id == accountId || item.NormalizedEmail == account.NormalizedEmail || EF.Functions.ILike(item.Email, account.Email))
+            .ToListAsync(cancellationToken);
+
+        var newHash = passwordHasher.HashPassword(account, request.NewPassword.Trim());
+        foreach (var acc in matchingAccounts)
+        {
+            acc.PasswordHash = newHash;
+            acc.IsActive = true;
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Results.Ok(new { message = $"{account.DisplayName} için geçici şifre atandı." });
+        return Results.Ok(new { message = $"{account.DisplayName} ({account.Email}) için geçici şifre atandı." });
     }
 
     private static async Task<IResult> GetSystemAdminsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
