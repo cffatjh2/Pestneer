@@ -204,8 +204,8 @@ export default function SystemAdminPage() {
     const form = new FormData(formElement);
     const value = Object.fromEntries(form.entries()) as Record<string, string>;
     try {
-      if (mode === 'company' && value.password !== value.passwordConfirmation) {
-        throw new Error('Geçici şifreler eşleşmiyor.');
+      if ((mode === 'company' || mode === 'reset') && value.password !== value.passwordConfirmation) {
+        throw new Error('Geçici şifreler birbiriyle eşleşmiyor.');
       }
       if (mode === 'company') {
         const isTrial = form.get('isTrial') === 'on';
@@ -252,6 +252,12 @@ export default function SystemAdminPage() {
         });
       }
       if (mode === 'reset') {
+        if (!value.accountId) {
+          throw new Error('Lütfen şifresi atanacak bir hesap seçin.');
+        }
+        if (!value.password || value.password.length < 8 || !/[A-Za-z]/.test(value.password) || !/[0-9]/.test(value.password)) {
+          throw new Error('Şifre en az 8 karakter olmalı, en az bir harf ve bir rakam içermelidir.');
+        }
         await resetSystemAccountPassword(session.accessToken, value.accountId, value.password, value.passwordConfirmation);
       }
       formElement.reset();
@@ -761,12 +767,15 @@ function FormFields({ mode, accounts }: { mode: Mode; accounts: SystemAccount[] 
         </label>
         <label>
           Yeni geçici şifre
-          <input name="password" type="password" minLength={8} required />
+          <input name="password" type="password" minLength={8} placeholder="En az 8 karakter (harf + rakam)" required />
         </label>
         <label>
           Geçici şifre tekrarı
-          <input name="passwordConfirmation" type="password" minLength={8} required />
+          <input name="passwordConfirmation" type="password" minLength={8} placeholder="Şifreyi tekrar girin" required />
         </label>
+        <p className="wide" style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>ℹ️</span> <span>Şifre en az 8 karakter olmalı, <strong>en az bir harf</strong> ve <strong>bir rakam</strong> içermelidir.</span>
+        </p>
       </div>
     );
   }

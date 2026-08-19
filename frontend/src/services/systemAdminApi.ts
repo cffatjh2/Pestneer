@@ -51,27 +51,33 @@ async function request<T = unknown>(path: string, token?: string, init?: Request
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/json',
+      Accept: 'application/json, application/problem+json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
 
+  if (response.status === 204) return undefined as T;
+
   const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
-  if (!contentType.includes('application/json') && response.status !== 204) {
+  const isJson = contentType.includes('json');
+
+  if (!response.ok) {
+    const body = isJson ? ((await response.json().catch(() => ({}))) as {
+      message?: string;
+      title?: string;
+      detail?: string;
+      errors?: Record<string, string[]>;
+    }) : {};
+    const validationError = Object.values(body.errors ?? {}).flat()[0];
+    throw new Error(
+      body.message ?? validationError ?? body.detail ?? body.title ?? (response.status === 401 ? 'Oturum süreniz dolmuş veya yetkisiz erişim.' : response.status === 400 ? 'Geçersiz parametre veya şifre kurallarına uyulmadı.' : 'İşlem tamamlanamadı.')
+    );
+  }
+
+  if (!isJson) {
     throw new Error('API servisi yanıt vermedi veya sunucu geçersiz yanıt döndürdü.');
   }
 
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as {
-      message?: string;
-      title?: string;
-      errors?: Record<string, string[]>;
-    };
-    throw new Error(
-      body.message ?? Object.values(body.errors ?? {}).flat()[0] ?? body.title ?? 'Giriş bilgileri hatalı veya yetkisiz erişim.'
-    );
-  }
-  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }

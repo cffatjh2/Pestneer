@@ -19,8 +19,23 @@ export function PasswordChangeCard({ accessToken, onSessionExpired, onNotify }: 
     event.preventDefault();
     setBusy(true); setError(undefined); setNotice(undefined);
     const form = new FormData(event.currentTarget);
+    const currentPassword = String(form.get('currentPassword') || '');
+    const newPassword = String(form.get('newPassword') || '');
+    const confirmation = String(form.get('confirmation') || '');
+
+    if (newPassword !== confirmation) {
+      setBusy(false);
+      setError('Yeni şifre tekrarı eşleşmiyor.');
+      return;
+    }
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setBusy(false);
+      setError('Yeni şifre en az 8 karakter olmalı, en az bir harf ve bir rakam içermelidir.');
+      return;
+    }
+
     try {
-      const result = await changeOwnPassword(accessToken, String(form.get('currentPassword')), String(form.get('newPassword')), String(form.get('confirmation')));
+      const result = await changeOwnPassword(accessToken, currentPassword, newPassword, confirmation);
       event.currentTarget.reset();
       setNotice(result.message);
       onNotify?.(result.message);
@@ -35,8 +50,8 @@ export function PasswordChangeCard({ accessToken, onSessionExpired, onNotify }: 
     <header><span><KeyRound size={21} /></span><div><strong>Giriş şifrem</strong><small>Mevcut şifrenizi doğrulayarak yeni şifrenizi belirleyin.</small></div></header>
     <form onSubmit={submit}>
       <label>Mevcut şifre<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
-      <label>Yeni şifre<input name="newPassword" type="password" minLength={8} autoComplete="new-password" required /></label>
-      <label>Yeni şifre tekrarı<input name="confirmation" type="password" minLength={8} autoComplete="new-password" required /></label>
+      <label>Yeni şifre<input name="newPassword" type="password" minLength={8} placeholder="En az 8 karakter (harf + rakam)" autoComplete="new-password" required /></label>
+      <label>Yeni şifre tekrarı<input name="confirmation" type="password" minLength={8} placeholder="Şifreyi tekrar girin" autoComplete="new-password" required /></label>
       {error && <div className="account-security-error">{error}</div>}
       {notice && <div className="account-security-success">{notice}</div>}
       <button className="primary-button" disabled={busy}>{busy ? <RefreshCw className="spin-icon" size={16} /> : <ShieldCheck size={16} />}Şifremi değiştir</button>
@@ -60,8 +75,22 @@ export function CompanyAccountResetCard({ accessToken, onSessionExpired, onNotif
     event.preventDefault(); if (!selectedId) return;
     setBusy(true); setError(undefined);
     const form = new FormData(event.currentTarget);
+    const newPassword = String(form.get('newPassword') || '');
+    const confirmation = String(form.get('confirmation') || '');
+
+    if (newPassword !== confirmation) {
+      setBusy(false);
+      setError('Geçici şifre tekrarı eşleşmiyor.');
+      return;
+    }
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setBusy(false);
+      setError('Geçici şifre en az 8 karakter olmalı, en az bir harf ve bir rakam içermelidir.');
+      return;
+    }
+
     try {
-      const result = await resetCompanyAccountPassword(accessToken, selectedId, String(form.get('newPassword')), String(form.get('confirmation')));
+      const result = await resetCompanyAccountPassword(accessToken, selectedId, newPassword, confirmation);
       event.currentTarget.reset(); onNotify?.(result.message);
     } catch (submitError) {
       if (submitError instanceof AccountSecuritySessionExpiredError) return onSessionExpired();
