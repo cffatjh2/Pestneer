@@ -21,13 +21,21 @@ public sealed record SitePlanElementInput(
     decimal StrokeWidth,
     string? EquipmentTypeId,
     string? StationNumber,
-    string? QrCode);
+    string? QrCode,
+    string? ImageUrl = null,
+    decimal? Opacity = null);
 
 public sealed record SitePlanCanvasInput(
     int Width,
     int Height,
     IReadOnlyList<SitePlanEquipmentTypeInput> EquipmentTypes,
-    IReadOnlyList<SitePlanElementInput> Elements);
+    IReadOnlyList<SitePlanElementInput> Elements,
+    string? BackgroundImage = null,
+    decimal? BackgroundOpacity = null,
+    decimal? BackgroundX = null,
+    decimal? BackgroundY = null,
+    decimal? BackgroundWidth = null,
+    decimal? BackgroundHeight = null);
 
 public sealed record SaveSitePlanRequest(
     Guid CustomerId,

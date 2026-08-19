@@ -143,8 +143,17 @@ internal static class SitePlanPdfRenderer
     private static string BuildSvg(SitePlanCanvasInput canvas)
     {
         var builder = new StringBuilder();
-        builder.Append($"<svg xmlns='http://www.w3.org/2000/svg' width='{canvas.Width}' height='{canvas.Height}' viewBox='0 0 {canvas.Width} {canvas.Height}'>");
+        builder.Append($"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='{canvas.Width}' height='{canvas.Height}' viewBox='0 0 {canvas.Width} {canvas.Height}'>");
         builder.Append("<rect width='100%' height='100%' fill='#FFFFFF'/>");
+        if (!string.IsNullOrWhiteSpace(canvas.BackgroundImage))
+        {
+            var bgX = canvas.BackgroundX ?? 0;
+            var bgY = canvas.BackgroundY ?? 0;
+            var bgW = canvas.BackgroundWidth ?? canvas.Width;
+            var bgH = canvas.BackgroundHeight ?? canvas.Height;
+            var bgOpacity = canvas.BackgroundOpacity ?? 1m;
+            builder.Append($"<image href='{canvas.BackgroundImage}' xlink:href='{canvas.BackgroundImage}' x='{N(bgX)}' y='{N(bgY)}' width='{N(bgW)}' height='{N(bgH)}' opacity='{N(bgOpacity)}' preserveAspectRatio='xMidYMid meet'/>");
+        }
         builder.Append("<defs><filter id='shadow' x='-30%' y='-30%' width='160%' height='160%'><feDropShadow dx='0' dy='2' stdDeviation='2' flood-color='#0F172A' flood-opacity='.18'/></filter></defs>");
         var types = canvas.EquipmentTypes.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
         foreach (var item in canvas.Elements)
@@ -157,6 +166,10 @@ internal static class SitePlanPdfRenderer
                 case "rect":
                     builder.Append($"<rect x='{N(item.X)}' y='{N(item.Y)}' width='{N(item.Width)}' height='{N(item.Height)}' rx='2' fill='{Color(item.Fill, "#FFFFFF")}' stroke='{Color(item.Stroke, Navy)}' stroke-width='{N(item.StrokeWidth)}'/>");
                     if (!string.IsNullOrWhiteSpace(item.Text)) CenteredText(builder, item, item.Text!);
+                    break;
+                case "image" when !string.IsNullOrWhiteSpace(item.ImageUrl):
+                    var imgOpacity = item.Opacity ?? 1m;
+                    builder.Append($"<image href='{item.ImageUrl}' xlink:href='{item.ImageUrl}' x='{N(item.X)}' y='{N(item.Y)}' width='{N(item.Width)}' height='{N(item.Height)}' opacity='{N(imgOpacity)}' preserveAspectRatio='none'/>");
                     break;
                 case "line":
                     builder.Append($"<line x1='{N(item.X)}' y1='{N(item.Y)}' x2='{N(item.X + item.Width)}' y2='{N(item.Y + item.Height)}' stroke='{Color(item.Stroke, Navy)}' stroke-width='{N(item.StrokeWidth)}' stroke-linecap='round'/>");

@@ -1,6 +1,6 @@
 import { apiFetch } from './apiBase';
 
-export type SitePlanElementType = 'rect' | 'line' | 'door' | 'text' | 'station';
+export type SitePlanElementType = 'rect' | 'line' | 'door' | 'text' | 'station' | 'image';
 import { cacheSitePlans, getCachedSitePlans, offlineScopeFromToken } from './offlineFieldStore';
 export type SitePlanEquipmentShape = 'square' | 'circle' | 'diamond' | 'star' | 'hexagon';
 
@@ -27,6 +27,8 @@ export type SitePlanElement = {
   equipmentTypeId?: string;
   stationNumber?: string;
   qrCode?: string;
+  imageUrl?: string;
+  opacity?: number;
 };
 
 export type SitePlanCanvas = {
@@ -34,6 +36,12 @@ export type SitePlanCanvas = {
   height: 720;
   equipmentTypes: SitePlanEquipmentType[];
   elements: SitePlanElement[];
+  backgroundImage?: string | null;
+  backgroundOpacity?: number;
+  backgroundX?: number;
+  backgroundY?: number;
+  backgroundWidth?: number;
+  backgroundHeight?: number;
 };
 
 export type SitePlanRecord = {
