@@ -55,6 +55,7 @@ public static class DevelopmentDataSeeder
                 account.PasswordHash = passwordHasher.HashPassword(account, ownerPassword);
                 dbContext.Accounts.Add(account);
             }
+            // NOTE: Do NOT overwrite existing account passwords on restart
 
             account.IsActive = true;
 
@@ -93,18 +94,17 @@ public static class DevelopmentDataSeeder
                     PasswordHash = string.Empty,
                     Portal = PortalType.SystemAdmin
                 };
+                systemAdmin.PasswordHash = passwordHasher.HashPassword(systemAdmin, systemAdminPassword);
                 dbContext.Accounts.Add(systemAdmin);
             }
+            // NOTE: Do NOT overwrite existing system admin password on restart
+            // Previously this line ran unconditionally: systemAdmin.PasswordHash = passwordHasher.HashPassword(...)
+            // which caused ALL password resets done via admin panel to be lost on every deploy/restart
 
-            systemAdmin.PasswordHash = passwordHasher.HashPassword(systemAdmin, systemAdminPassword);
             systemAdmin.IsActive = true;
 
-            var ownerAcc = await dbContext.Accounts.SingleOrDefaultAsync(item =>
-                item.Portal == PortalType.Owner && item.NormalizedEmail == systemNormalizedEmail);
-            if (ownerAcc is not null)
-            {
-                ownerAcc.PasswordHash = passwordHasher.HashPassword(ownerAcc, systemAdminPassword);
-            }
+            // NOTE: Do NOT touch owner accounts' passwords here
+            // Previously this code also overwrote owner account passwords sharing the same email
         }
 
         await dbContext.SaveChangesAsync();
