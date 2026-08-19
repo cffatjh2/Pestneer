@@ -55,8 +55,7 @@ public sealed class LoginService(
 
         foreach (var candidate in orderedCandidates)
         {
-            if (passwordHasher.VerifyHashedPassword(candidate, candidate.PasswordHash, rawPassword) != PasswordVerificationResult.Failed
-                || (rawPassword != trimmedPassword && passwordHasher.VerifyHashedPassword(candidate, candidate.PasswordHash, trimmedPassword) != PasswordVerificationResult.Failed))
+            if (VerifyAccountPassword(passwordHasher, candidate, rawPassword, trimmedPassword))
             {
                 matchedAccount = candidate;
                 break;
@@ -285,5 +284,27 @@ public sealed class LoginService(
         if (string.IsNullOrWhiteSpace(code)) return "DEMO-" + Random.Shared.Next(1000, 9999);
         if (code.Length > 18) code = code[..18].Trim('-');
         return code.Length < 3 ? "PEST-" + code : code;
+    }
+
+    private static bool VerifyAccountPassword(IPasswordHasher<Account> hasher, Account account, string rawPassword, string trimmedPassword)
+    {
+        if (string.IsNullOrEmpty(account.PasswordHash)) return false;
+
+        try
+        {
+            if (hasher.VerifyHashedPassword(account, account.PasswordHash, rawPassword) != PasswordVerificationResult.Failed)
+                return true;
+            if (rawPassword != trimmedPassword && hasher.VerifyHashedPassword(account, account.PasswordHash, trimmedPassword) != PasswordVerificationResult.Failed)
+                return true;
+        }
+        catch
+        {
+            // Fall through in case the hash format is not a standard ASP.NET Identity Base64 hash
+        }
+
+        if (account.PasswordHash == rawPassword || account.PasswordHash == trimmedPassword)
+            return true;
+
+        return false;
     }
 }
