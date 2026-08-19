@@ -263,7 +263,7 @@ function applyDocumentFilter(
   ctx.restore();
 
   if (filter === 'original') {
-    return canvas.toDataURL('image/jpeg', 0.94);
+    return canvas.toDataURL('image/jpeg', 0.82);
   }
 
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -330,7 +330,7 @@ function applyDocumentFilter(
   }
 
   ctx.putImageData(imgData, 0, 0);
-  return canvas.toDataURL('image/jpeg', 0.94);
+  return canvas.toDataURL('image/jpeg', 0.82);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

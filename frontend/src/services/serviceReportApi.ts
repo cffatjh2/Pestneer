@@ -111,11 +111,19 @@ export const getServiceReportCatalog = (token: string) => request<ServiceReportC
 export const getServiceReportByWorkOrder = (token: string, workOrderId: string) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token);
 export const getPreviousServiceReport = (token: string, workOrderId: string) => request<ServiceReportRecord | null>(`/api/service-reports/work-orders/${workOrderId}/previous`, token);
 export const saveServiceReport = (token: string, workOrderId: string, input: UpsertServiceReportInput) => request<ServiceReportRecord>(`/api/service-reports/work-orders/${workOrderId}`, token, { method: 'PUT', body: JSON.stringify(input) });
+import { compressImage } from '../utils/imageCompression';
+
 export async function uploadServiceReportPhotos(token: string, workOrderId: string, photos: ReportPhotoUpload[]) {
   if (photos.length === 0) return [];
+  const compressedPhotos = await Promise.all(
+    photos.map(async (photo) => ({
+      ...photo,
+      file: await compressImage(photo.file, { maxDimension: 1600, quality: 0.82 }),
+    }))
+  );
   const body = new FormData();
-  photos.forEach((photo) => body.append('photos', photo.file));
-  body.append('metadata', JSON.stringify(photos.map(({ location, status, description }) => ({ location, status, description }))));
+  compressedPhotos.forEach((photo) => body.append('photos', photo.file));
+  body.append('metadata', JSON.stringify(compressedPhotos.map(({ location, status, description }) => ({ location, status, description }))));
   return request<ReportPhoto[]>(`/api/service-reports/work-orders/${workOrderId}/photos`, token, { method: 'POST', body }, false);
 }
 export const getServiceReportAnalytics = (token: string, query = '') => request<ServiceReportAnalytics>(`/api/company/service-reports/analytics${query ? `?${query}` : ''}`, token);

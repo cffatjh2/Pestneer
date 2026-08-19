@@ -10,6 +10,7 @@ import { getStoredCompanyEk1Defaults } from '../../services/companySettingsStora
 import SignaturePad from './SignaturePad';
 import QrScannerModal from './QrScannerModal';
 import PestneerVisionAnalyzer from '../vision/PestneerVisionAnalyzer';
+import { compressImages } from '../../utils/imageCompression';
 
 type Props = {
   accessToken: string; order: WorkOrder; existing?: ServiceReportRecord; companyName: string; operatorName: string;
@@ -607,7 +608,69 @@ function CatalogSelectField({ label, options, value, disabled, onChange }: { lab
 
 function PhotoCapture({ photos, existingPhotos, readOnly, onChange }: { photos: ReportPhotoUpload[]; existingPhotos: ServiceReportRecord['photos']; readOnly: boolean; onChange: Dispatch<SetStateAction<ReportPhotoUpload[]>> }) {
   const update = (index: number, patch: Partial<Omit<ReportPhotoUpload, 'file'>>) => onChange((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
-  return <section className="field-photo-capture"><div><span><Camera size={18} /></span><div><strong>Saha fotoğrafları</strong><small>Her fotoğrafa yer, durum ve açıklama ekleyin. Kayıtlar çevrimdışı da korunur.</small></div></div>{!readOnly && <label><ImagePlus size={16} /> Fotoğraf ekle<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple onChange={(event) => { const files = Array.from(event.target.files ?? []).slice(0, Math.max(0, 8 - photos.length)); onChange((current) => [...current, ...files.map((file) => ({ file, location: '', status: 'Genel saha görünümü', description: '' }))]); event.currentTarget.value = ''; }} /></label>}<div className="field-photo-details">{photos.map((photo, index) => <article key={`${photo.file.name}-${photo.file.lastModified}-${index}`}><header><span><ImagePlus size={15} />{photo.file.name}</span><button type="button" aria-label="Fotoğrafı kaldır" onClick={() => onChange((current) => current.filter((_, itemIndex) => itemIndex !== index))}><X size={15} /></button></header><div><label>Yer / bölüm<input maxLength={240} value={photo.location} onChange={(event) => update(index, { location: event.target.value })} placeholder="Yer veya bölümü yazın" /></label><label>Durum<select value={photo.status} onChange={(event) => update(index, { status: event.target.value })}>{photoStatusOptions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="photo-description">Açıklama<textarea maxLength={1000} value={photo.description} onChange={(event) => update(index, { description: event.target.value })} placeholder="Görülen durum, yapılan işlem veya öneriyi yazın…" /></label></div></article>)}{existingPhotos.map((photo) => <article className="uploaded" key={photo.id}><header><span><CheckCircle2 size={15} />{photo.fileName}</span><em>Gönderildi</em></header><div><p><b>Yer:</b> {photo.location || 'Belirtilmedi'}</p><p><b>Durum:</b> {photo.status || 'Genel saha görünümü'}</p><p><b>Açıklama:</b> {photo.description || '—'}</p></div></article>)}{photos.length === 0 && existingPhotos.length === 0 && <em>Yeni fotoğraf seçilmedi.</em>}</div></section>;
+  return (
+    <section className="field-photo-capture">
+      <div>
+        <span><Camera size={18} /></span>
+        <div>
+          <strong>Saha fotoğrafları</strong>
+          <small>Her fotoğrafa yer, durum ve açıklama ekleyin. Kayıtlar otomatik optimize edilir ve çevrimdışı da korunur.</small>
+        </div>
+      </div>
+      {!readOnly && (
+        <label>
+          <ImagePlus size={16} /> Fotoğraf ekle
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            multiple
+            onChange={async (event) => {
+              const rawFiles = Array.from(event.target.files ?? []).slice(0, Math.max(0, 8 - photos.length));
+              event.currentTarget.value = '';
+              if (rawFiles.length === 0) return;
+              const compressed = await compressImages(rawFiles, { maxDimension: 1600, quality: 0.82 });
+              onChange((current) => [
+                ...current,
+                ...compressed.map((file) => ({ file, location: '', status: 'Genel saha görünümü', description: '' })),
+              ]);
+            }}
+          />
+        </label>
+      )}
+      <div className="field-photo-details">
+        {photos.map((photo, index) => (
+          <article key={`${photo.file.name}-${photo.file.lastModified}-${index}`}>
+            <header>
+              <span><ImagePlus size={15} />{photo.file.name}</span>
+              <button type="button" aria-label="Fotoğrafı kaldır" onClick={() => onChange((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                <X size={15} />
+              </button>
+            </header>
+            <div>
+              <label>Yer / bölüm<input maxLength={240} value={photo.location} onChange={(event) => update(index, { location: event.target.value })} placeholder="Yer veya bölümü yazın" /></label>
+              <label>Durum<select value={photo.status} onChange={(event) => update(index, { status: event.target.value })}>{photoStatusOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label className="photo-description">Açıklama<textarea maxLength={1000} value={photo.description} onChange={(event) => update(index, { description: event.target.value })} placeholder="Görülen durum, yapılan işlem veya öneriyi yazın…" /></label>
+            </div>
+          </article>
+        ))}
+        {existingPhotos.map((photo) => (
+          <article className="uploaded" key={photo.id}>
+            <header>
+              <span><CheckCircle2 size={15} />{photo.fileName}</span>
+              <em>Gönderildi</em>
+            </header>
+            <div>
+              <p><b>Yer:</b> {photo.location || 'Belirtilmedi'}</p>
+              <p><b>Durum:</b> {photo.status || 'Genel saha görünümü'}</p>
+              <p><b>Açıklama:</b> {photo.description || '—'}</p>
+            </div>
+          </article>
+        ))}
+        {photos.length === 0 && existingPhotos.length === 0 && <em>Yeni fotoğraf seçilmedi.</em>}
+      </div>
+    </section>
+  );
 }
 
 function ManualStockModal({ onClose, onSave }: { onClose: () => void; onSave: (input: { productName: string; quantity: number; unit: string }) => Promise<void> }) {

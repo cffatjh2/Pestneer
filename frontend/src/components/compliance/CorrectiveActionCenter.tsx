@@ -3,6 +3,7 @@ import { AlertTriangle, Camera, ChevronDown, ChevronUp, ClipboardCheck, Clock3, 
 import type { EmployeeRecord } from '../../services/employeeApi';
 import { getQualityLocations, type QualityLocation } from '../../services/qualityApi';
 import { approveCorrectiveAction, createCorrectiveAction, downloadCorrectiveActionEvidence, getCorrectiveActions, shareCorrectiveActionEvidence, updateCorrectiveAction, uploadCorrectiveActionEvidence, CorrectiveActionSessionExpiredError, type CorrectiveAction, type CreateCorrectiveActionInput, type UpdateCorrectiveActionInput } from '../../services/correctiveActionApi';
+import { compressImage } from '../../utils/imageCompression';
 
 type Props = { accessToken: string; mode: 'staff' | 'customer'; employees?: EmployeeRecord[]; onSessionExpired: () => void; standalone?: boolean };
 type StatusFilter = 'All' | CorrectiveAction['status'];
@@ -73,7 +74,26 @@ export default function CorrectiveActionCenter({ accessToken, mode, employees = 
   </section>;
 }
 
-function EvidenceInput({ icon, label, onFile }: { icon: React.ReactNode; label: string; onFile: (file: File) => void }) { return <label>{icon}{label}<input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.currentTarget.value = ''; }} /></label>; }
+function EvidenceInput({ icon, label, onFile }: { icon: React.ReactNode; label: string; onFile: (file: File) => void }) {
+  return (
+    <label>
+      {icon}
+      {label}
+      <input
+        type="file"
+        accept="image/*"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.currentTarget.value = '';
+          if (file) {
+            const compressed = await compressImage(file, { maxDimension: 1600, quality: 0.82 });
+            onFile(compressed);
+          }
+        }}
+      />
+    </label>
+  );
+}
 
 function CorrectiveActionModal({ item, locations, employees, onClose, onSave }: { item?: CorrectiveAction; locations: QualityLocation[]; employees: EmployeeRecord[]; onClose: () => void; onSave: (input: CreateCorrectiveActionInput | UpdateCorrectiveActionInput) => Promise<void> }) {
   const currentLocation = item ? locations.find((location) => location.customerId === item.customerId && location.branchId === item.branchId) : locations[0];

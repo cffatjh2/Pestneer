@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AlertTriangle, Archive, CheckCircle2, ChevronDown, Download, FileUp, Gauge, History, Leaf, Plus, Share2, ShieldCheck, Trash2, X } from 'lucide-react';
 import { createWasteDisposal, downloadWasteEvidence, getCompanyHealthScores, getCustomerHealthScores, getWasteDisposals, HealthWasteSessionExpiredError, shareWasteEvidence, updateWasteDisposal, uploadWasteEvidence, type HealthScoreLocation, type HealthScoreOverview, type WasteDisposalInput, type WasteDisposalRecord } from '../../services/healthWasteApi';
+import { compressImage } from '../../utils/imageCompression';
 
 type Mode = 'staff' | 'customer';
 
@@ -34,7 +35,20 @@ function HealthLocationCard({ item }: { item: HealthScoreLocation }) {
 function WasteCard({ item, token, onChanged, onSessionExpired }: { item: WasteDisposalRecord; token: string; onChanged: (item: WasteDisposalRecord) => void; onSessionExpired: () => void }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
   const markDisposed = async () => { setBusy(true); setError(null); try { onChanged(await updateWasteDisposal(token, item.id, { wasteType: item.wasteType, quantity: item.quantity, unit: item.unit, status: 'Disposed', generatedAt: item.generatedAt, temporaryStorage: item.temporaryStorage, recipientName: item.recipientName, carrierOrFacility: item.carrierOrFacility, disposalMethod: item.disposalMethod ?? 'Firma prosedürüne göre bertaraf', documentNumber: item.documentNumber, notes: item.notes })); } catch (updateError) { if (updateError instanceof HealthWasteSessionExpiredError) return onSessionExpired(); setError(updateError instanceof Error ? updateError.message : 'Kayıt güncellenemedi.'); } finally { setBusy(false); } };
-  const upload = async (file?: File) => { if (!file) return; setBusy(true); setError(null); try { onChanged(await uploadWasteEvidence(token, item.id, file)); } catch (uploadError) { if (uploadError instanceof HealthWasteSessionExpiredError) return onSessionExpired(); setError(uploadError instanceof Error ? uploadError.message : 'Kanıt yüklenemedi.'); } finally { setBusy(false); } };
+  const upload = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const compressed = await compressImage(file, { maxDimension: 1600, quality: 0.82 });
+      onChanged(await uploadWasteEvidence(token, item.id, compressed));
+    } catch (uploadError) {
+      if (uploadError instanceof HealthWasteSessionExpiredError) return onSessionExpired();
+      setError(uploadError instanceof Error ? uploadError.message : 'Kanıt yüklenemedi.');
+    } finally {
+      setBusy(false);
+    }
+  };
   return <article className="waste-card"><header><div><span>{item.number}</span><strong>{wasteTypeLabel(item.wasteType)}</strong><small>{item.customerName} · {item.branchName}</small></div><b className={`waste-status status-${item.status.toLowerCase()}`}>{wasteStatusLabel(item.status)}</b></header><div className="waste-amount"><strong>{item.quantity} {item.unit}</strong><span>{formatDate(item.generatedAt)}</span></div>{(item.disposalMethod || item.carrierOrFacility) && <p>{item.disposalMethod ?? 'Yöntem belirtilmedi'}{item.carrierOrFacility ? ` · ${item.carrierOrFacility}` : ''}</p>}<footer>{item.status !== 'Disposed' && <button disabled={busy} onClick={() => void markDisposed()}><CheckCircle2 />Bertaraf edildi</button>}<label><FileUp />Kanıt ekle<input type="file" onChange={(event) => void upload(event.target.files?.[0])} /></label>{item.evidence.map((evidence) => <div key={evidence.id} style={{ display: 'inline-flex', gap: '3px' }}><button onClick={() => void downloadWasteEvidence(token, evidence)} title="İndir"><Download size={14} />{evidence.fileName}</button><button onClick={() => void shareWasteEvidence(token, evidence)} title="Paylaş"><Share2 size={14} /></button></div>)}</footer>{error && <small className="waste-error">{error}</small>}</article>;
 }
 

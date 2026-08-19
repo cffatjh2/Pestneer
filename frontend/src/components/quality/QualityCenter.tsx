@@ -10,6 +10,7 @@ import {
   QualitySessionExpiredError, uploadQualityDocument, type CreateRiskAnalysisInput, type CreateTrendAnalysisInput,
   type QualityAnalysis, type QualityDocument, type QualityLocation, type RiskAnswer, type RiskMatrixRow,
 } from '../../services/qualityApi';
+import { compressImage } from '../../utils/imageCompression';
 
 type CenterTab = 'trend' | 'risk' | 'plans' | 'audit' | 'licenses' | 'safety' | 'documents';
 type Props = { accessToken: string; mode: 'staff' | 'customer'; onSessionExpired: () => void; standalone?: boolean; initialTab?: CenterTab; canManageLicenses?: boolean };
@@ -116,7 +117,38 @@ function DocumentUploadModal({ locations, inventoryItems, defaultCategory, onClo
   const [locationKey, setLocationKey] = useState(''); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
   const isLicense = defaultCategory === 'Licenses';
   const isSafetyDataSheet = defaultCategory === 'SafetyDataSheets'; const isProductDocument = isLicense || isSafetyDataSheet;
-  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const file = data.get('file'); if (!(file instanceof File) || !file.size) return setError('Yüklenecek dosyayı seçin.'); const location = findLocation(locations, locationKey); const inventoryItemId = optional(data, 'inventoryItemId'); const licenseNumber = optional(data, 'licenseNumber'); if (isProductDocument && !inventoryItemId) return setError('Belgenin bağlı olduğu stok ürününü seçin.'); if (isLicense && !licenseNumber) return setError('Ruhsat numarasını girin.'); setSaving(true); setError(null); try { await onSubmit({ file, category: isProductDocument ? defaultCategory : String(data.get('category')), title: optional(data, 'title'), description: optional(data, 'description'), customerId: isProductDocument ? undefined : location?.customerId, branchId: isProductDocument ? undefined : location?.branchId, inventoryItemId, licenseNumber }); } catch (submitError) { setError(messageOf(submitError)); } finally { setSaving(false); } };
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    let file = data.get('file');
+    if (!(file instanceof File) || !file.size) return setError('Yüklenecek dosyayı seçin.');
+    const location = findLocation(locations, locationKey);
+    const inventoryItemId = optional(data, 'inventoryItemId');
+    const licenseNumber = optional(data, 'licenseNumber');
+    if (isProductDocument && !inventoryItemId) return setError('Belgenin bağlı olduğu stok ürününü seçin.');
+    if (isLicense && !licenseNumber) return setError('Ruhsat numarasını girin.');
+    setSaving(true);
+    setError(null);
+    try {
+      if (file.type.startsWith('image/')) {
+        file = await compressImage(file, { maxDimension: 1600, quality: 0.82 });
+      }
+      await onSubmit({
+        file,
+        category: isProductDocument ? defaultCategory : String(data.get('category')),
+        title: optional(data, 'title'),
+        description: optional(data, 'description'),
+        customerId: isProductDocument ? undefined : location?.customerId,
+        branchId: isProductDocument ? undefined : location?.branchId,
+        inventoryItemId,
+        licenseNumber,
+      });
+    } catch (submitError) {
+      setError(messageOf(submitError));
+    } finally {
+      setSaving(false);
+    }
+  };
   return <div className="modal-layer"><div className="modal document-upload-modal"><ModalTitle icon={<Upload />} eyebrow="BELGE ARŞİVİ" title={isLicense ? 'Yeni ürün ruhsatı yükle' : isSafetyDataSheet ? 'Yeni MSDS / GBF yükle' : 'Yeni belge yükle'} description={isLicense ? 'Ruhsatı stok ürününe bağlayın; EK-1 seçimi sırasında otomatik kullanılsın.' : isSafetyDataSheet ? 'Güvenlik bilgi formunu stok ürünüyle eşleştirin; ilgili müşteri ve denetim dosyasında otomatik gösterilsin.' : 'Belgeyi müşteri ve şube bazında arşivleyin.'} onClose={onClose} /><form onSubmit={submit}><div className="form-grid"><label>Kategori<select name="category" defaultValue={defaultCategory} disabled={isProductDocument}>{documentCategories.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>{isProductDocument ? <><label>Bağlı stok ürünü<select name="inventoryItemId" required><option value="">Ürün seçin</option>{inventoryItems.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.quantity} {item.unit}</option>)}</select></label>{isLicense && <label className="form-field-wide">Ruhsat numarası<input name="licenseNumber" required placeholder="Bakanlık ruhsat / izin numarası" /></label>}</> : <label>Müşteri / Şube<select value={locationKey} onChange={(event) => setLocationKey(event.target.value)}><option value="">Firma içi belge</option>{locationOptions(locations)}</select></label>}<label className="form-field-wide">Belge başlığı<input name="title" placeholder="Dosya adı boş bırakılırsa başlık olarak kullanılır" /></label><label className="form-field-wide quality-file-input"><span>Dosya</span><input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp" required /><small>En fazla 15 MB</small></label><label className="form-field-wide">Açıklama<textarea name="description" rows={3} placeholder={isSafetyDataSheet ? 'Revizyon tarihi, üretici, dil veya geçerlilik notu…' : 'Belgenin kapsamı, geçerlilik dönemi veya ilgili notlar…'} /></label></div>{error && <div className="modal-form-error">{error}</div>}<ModalActions saving={saving} onClose={onClose} label={isLicense ? 'Ruhsatı Ürüne Bağla' : isSafetyDataSheet ? 'MSDS / GBF Belgesini Bağla' : 'Belgeyi Arşivle'} /></form></div></div>;
 }
 

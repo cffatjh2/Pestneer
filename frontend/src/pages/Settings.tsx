@@ -4,6 +4,7 @@ import { CompanyBrandingSessionExpiredError, deleteCompanyLogo, disconnectGoogle
 import { getVisionSettings, updateVisionSettings, type VisionSettings } from '../services/pestneerVisionApi';
 import { getStoredCompanyEk1Defaults, saveStoredCompanyEk1Defaults, type CompanyEk1Defaults } from '../services/companySettingsStorage';
 import { CompanyAccountResetCard, PasswordChangeCard } from '../components/security/PasswordSecurityCards';
+import { compressImage } from '../utils/imageCompression';
 
 export default function Settings({ accessToken, companyName, onSessionExpired, onNotify }: { accessToken: string; companyName: string; onSessionExpired: () => void; onNotify: (message: string) => void }) {
   const [branding, setBranding] = useState<CompanyBranding | null>(null);
@@ -66,9 +67,14 @@ export default function Settings({ accessToken, companyName, onSessionExpired, o
   const upload = async (file?: File) => {
     if (!file) return;
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return setError('PNG, JPG veya WEBP biçiminde bir logo seçin.');
-    if (file.size > 4 * 1024 * 1024) return setError('Logo en fazla 4 MB olabilir.');
+    if (file.size > 10 * 1024 * 1024) return setError('Logo en fazla 10 MB olabilir.');
     setSaving(true); setError(null);
-    try { await uploadCompanyLogo(accessToken, file); await load(); onNotify('Firma logosu belgelere uygulanmak üzere kaydedildi.'); }
+    try {
+      const compressed = await compressImage(file, { maxDimension: 800, quality: 0.9, preserveTransparency: true });
+      await uploadCompanyLogo(accessToken, compressed);
+      await load();
+      onNotify('Firma logosu optimize edilerek kaydedildi.');
+    }
     catch (uploadError) { if (uploadError instanceof CompanyBrandingSessionExpiredError) return onSessionExpired(); setError(uploadError instanceof Error ? uploadError.message : 'Logo yüklenemedi.'); }
     finally { setSaving(false); if (inputRef.current) inputRef.current.value = ''; }
   };
