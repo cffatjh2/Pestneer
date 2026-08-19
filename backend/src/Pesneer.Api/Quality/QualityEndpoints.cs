@@ -5,6 +5,7 @@ using Pesneer.Api.Domain;
 using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.Compliance;
 using Pesneer.Api.StationActivations;
+using Pesneer.Api.SitePlans;
 
 namespace Pesneer.Api.Quality;
 
@@ -240,7 +241,72 @@ public static class QualityEndpoints
         var recommendationText = JoinText(request.Recommendations, generatedRecommendations);
         var frequency = RecommendedFrequency(overallScore, request.SectorType);
         var summary = $"Yapısal ve operasyonel risk {structuralScore}/100, lokasyon matrisi {matrixScore}/100, konuma bağlı hava riski {(weatherLocation?.Risk is null ? "hesaplanamadı" : $"{weatherScore}/100")}. Birleşik risk puanı {overallScore}/100 ({RiskLabel(level)}). Önerilen kontrol sıklığı: {frequency}.";
-        var payload = new RiskAnalysisPayload(structuralScore, matrixScore, weatherScore, overallScore, level, Clean(request.SectorType, 40), Clean(request.CurrentFrequency, 120), frequency, request.Answers, request.RiskMatrix, weatherLocation, generatedRecommendations, "Bu analiz açıklanabilir karar destek amaçlıdır; saha keşfi, mesul müdür değerlendirmesi ve mevzuata uygun uygulama sorumluluğunun yerini almaz.");
+
+        var sitePlanQuery = dbContext.SitePlans.AsNoTracking().Where(p => p.CustomerId == request.CustomerId);
+        if (request.SitePlanId.HasValue)
+        {
+            sitePlanQuery = sitePlanQuery.Where(p => p.Id == request.SitePlanId.Value);
+        }
+        else if (request.BranchId.HasValue)
+        {
+            sitePlanQuery = sitePlanQuery.Where(p => p.CustomerBranchId == request.BranchId.Value);
+        }
+        var sitePlan = await sitePlanQuery.OrderByDescending(p => p.UpdatedAt).FirstOrDefaultAsync(cancellationToken);
+
+        SitePlanRiskMapPayload? sitePlanRiskMap = null;
+        if (sitePlan is not null)
+        {
+            try
+            {
+                var canvas = JsonSerializer.Deserialize<SitePlanCanvasInput>(sitePlan.CanvasJson, PayloadOptions);
+                if (canvas is not null)
+                {
+                    var hotspots = new List<RiskHotspotPayload>();
+                    foreach (var item in request.RiskMatrix)
+                    {
+                        var loc = item.Location.Trim();
+                        var score = item.Severity * item.Likelihood;
+                        var hotLevel = score >= 6 ? "High" : score >= 3 ? "Medium" : "Low";
+
+                        var matched = canvas.Elements.FirstOrDefault(e =>
+                            (!string.IsNullOrWhiteSpace(e.StationNumber) && (loc.Contains(e.StationNumber, StringComparison.OrdinalIgnoreCase) || e.StationNumber.Contains(loc, StringComparison.OrdinalIgnoreCase))) ||
+                            (!string.IsNullOrWhiteSpace(e.Text) && (loc.Contains(e.Text, StringComparison.OrdinalIgnoreCase) || e.Text.Contains(loc, StringComparison.OrdinalIgnoreCase)))
+                        );
+
+                        hotspots.Add(new RiskHotspotPayload(
+                            loc,
+                            item.PestCategory,
+                            item.Severity,
+                            item.Likelihood,
+                            score,
+                            hotLevel,
+                            item.Note,
+                            matched?.Id,
+                            matched?.X,
+                            matched?.Y,
+                            matched?.Width,
+                            matched?.Height
+                        ));
+                    }
+
+                    sitePlanRiskMap = new SitePlanRiskMapPayload(
+                        sitePlan.Id,
+                        sitePlan.Number,
+                        sitePlan.Title,
+                        sitePlan.AreaName,
+                        sitePlan.Revision,
+                        canvas,
+                        hotspots
+                    );
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        var payload = new RiskAnalysisPayload(structuralScore, matrixScore, weatherScore, overallScore, level, Clean(request.SectorType, 40), Clean(request.CurrentFrequency, 120), frequency, request.Answers, request.RiskMatrix, weatherLocation, generatedRecommendations, "Bu analiz açıklanabilir karar destek amaçlıdır; saha keşfi, mesul müdür değerlendirmesi ve mevzuata uygun uygulama sorumluluğunun yerini almaz.", sitePlanRiskMap);
         var analysis = NewAnalysis(context, request.CustomerId, request.BranchId, "Risk", "PEST-RISK-TR-v2", request.Title, $"{customer.LegalName} - {branch?.Name ?? "Genel"} Detaylı Risk Analizi", request.AssessmentDate, request.AssessmentDate, overallScore, level, summary, JoinText(request.Findings, [request.CorrectiveActions ?? string.Empty]), recommendationText, payload);
         dbContext.QualityAnalyses.Add(analysis);
         var document = NewGeneratedDocument(analysis, "RiskAnalyses");
@@ -414,5 +480,7 @@ public static class QualityEndpoints
     private sealed record TrendPeriodPayload(string Period, int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate);
     private sealed record PestTotalPayload(string Pest, int TotalCaught);
     private sealed record TrendAnalysisPayload(int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate, string TrendDirection, IReadOnlyList<TrendPeriodPayload> Periods, IReadOnlyList<PestTotalPayload> PestTotals);
-    private sealed record RiskAnalysisPayload(int StructuralRiskScore, int MatrixRiskScore, int WeatherRiskScore, int OverallRiskScore, string RiskLevel, string? SectorType, string? CurrentFrequency, string RecommendedFrequency, IReadOnlyList<RiskAnswerInput> Answers, IReadOnlyList<RiskMatrixInput> RiskMatrix, LocationWeatherRiskResponse? Weather, IReadOnlyList<string> GeneratedRecommendations, string Disclaimer);
+    public sealed record RiskHotspotPayload(string Location, string PestCategory, int Severity, int Likelihood, int Score, string Level, string? Note, string? MatchedElementId, decimal? X, decimal? Y, decimal? Width, decimal? Height);
+    public sealed record SitePlanRiskMapPayload(Guid Id, string Number, string Title, string AreaName, int Revision, SitePlanCanvasInput Canvas, IReadOnlyList<RiskHotspotPayload> Hotspots);
+    private sealed record RiskAnalysisPayload(int StructuralRiskScore, int MatrixRiskScore, int WeatherRiskScore, int OverallRiskScore, string RiskLevel, string? SectorType, string? CurrentFrequency, string RecommendedFrequency, IReadOnlyList<RiskAnswerInput> Answers, IReadOnlyList<RiskMatrixInput> RiskMatrix, LocationWeatherRiskResponse? Weather, IReadOnlyList<string> GeneratedRecommendations, string Disclaimer, SitePlanRiskMapPayload? SitePlan = null);
 }

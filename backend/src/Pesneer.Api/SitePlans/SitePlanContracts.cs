@@ -70,3 +70,15 @@ public sealed record SitePlanResponse(
     DateTimeOffset UpdatedAt,
     SitePlanCanvasInput Canvas,
     SitePlanDocumentResponse Document);
+
+public sealed record SitePlanRiskHotspot(
+    string Location,
+    string PestCategory,
+    int Score,
+    string Level,
+    string? Note,
+    string? MatchedElementId = null,
+    decimal? X = null,
+    decimal? Y = null,
+    decimal? Width = null,
+    decimal? Height = null);

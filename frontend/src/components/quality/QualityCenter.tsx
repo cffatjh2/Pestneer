@@ -4,6 +4,7 @@ import SitePlanCenter from '../sitePlans/SitePlanCenter';
 import AuditPackageCenter from './AuditPackageCenter';
 import DocumentScannerModal from '../scanner/DocumentScannerModal';
 import { getInventory, type InventoryItem } from '../../services/inventoryApi';
+import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
 import { shareProtectedDocument } from '../../utils/shareUtils';
 import {
   createRiskAnalysis, createTrendAnalysis, downloadQualityDocument, getQualityAnalyses, getQualityDocuments, getQualityLocations,
@@ -21,6 +22,7 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
   const [trendOpen, setTrendOpen] = useState(false); const [riskOpen, setRiskOpen] = useState(false); const [uploadOpen, setUploadOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [riskSitePlanItem, setRiskSitePlanItem] = useState<QualityAnalysis | null>(null);
   const [uploadCategory, setUploadCategory] = useState('Other');
   const [scannerCategory, setScannerCategory] = useState('Licenses');
   const [category, setCategory] = useState('');
@@ -60,7 +62,7 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
     {error && <div className="quality-error"><ShieldAlert size={17} />{error}<button onClick={() => setError(null)}>Kapat</button></div>}
     {loading ? <div className="surface quality-loading"><RefreshCw className="spin-icon" /><strong>Kalite kayıtları hazırlanıyor…</strong></div> : <>
       {tab === 'trend' && <AnalysisList type="Trend" items={trends} staff={mode === 'staff'} onScan={() => { setScannerCategory('TrendAnalyses'); setScannerOpen(true); }} onCreate={() => setTrendOpen(true)} documents={documentByAnalysis} onDownload={download} onShare={share} />}
-      {tab === 'risk' && <AnalysisList type="Risk" items={risks} staff={mode === 'staff'} onScan={() => { setScannerCategory('RiskAnalyses'); setScannerOpen(true); }} onCreate={() => setRiskOpen(true)} documents={documentByAnalysis} onDownload={download} onShare={share} />}
+      {tab === 'risk' && <AnalysisList type="Risk" items={risks} staff={mode === 'staff'} onScan={() => { setScannerCategory('RiskAnalyses'); setScannerOpen(true); }} onCreate={() => setRiskOpen(true)} documents={documentByAnalysis} onDownload={download} onShare={share} onOpenRiskMap={setRiskSitePlanItem} />}
       {tab === 'plans' && <SitePlanCenter accessToken={accessToken} mode={mode} locations={locations} onSessionExpired={onSessionExpired} onCount={setSitePlanCount} onSaved={() => refreshDocuments(accessToken, setDocuments)} />}
       {tab === 'audit' && <AuditPackageCenter accessToken={accessToken} mode={mode} locations={locations} onSessionExpired={onSessionExpired} onCount={setAuditPackageCount} />}
       {tab === 'licenses' && <DocumentLibrary items={licenseDocuments} category="Licenses" onCategory={() => undefined} staff={canManageLicenses} onScan={() => { setScannerCategory('Licenses'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('Licenses'); setUploadOpen(true); }} onDownload={download} onShare={share} fixed title="Ürün ruhsatları" description="Her ruhsatı stoktaki ürüne bağlayın; araç stoğu ve EK-1 formu ruhsat numarasını otomatik kullansın." uploadLabel="Ruhsat Yükle" />}
@@ -68,16 +70,17 @@ export default function QualityCenter({ accessToken, mode, onSessionExpired, sta
       {tab === 'documents' && <DocumentLibrary items={filteredDocuments} category={category} onCategory={setCategory} staff={mode === 'staff'} onScan={() => { setScannerCategory(category || 'General'); setScannerOpen(true); }} onUpload={() => { setUploadCategory('Other'); setUploadOpen(true); }} onDownload={download} onShare={share} />}
     </>}
     {trendOpen && <TrendAnalysisModal locations={locations} onClose={() => setTrendOpen(false)} onSubmit={handleTrend} />}
-    {riskOpen && <RiskAnalysisModal locations={locations} onClose={() => setRiskOpen(false)} onSubmit={handleRisk} />}
+    {riskOpen && <RiskAnalysisModal accessToken={accessToken} locations={locations} onClose={() => setRiskOpen(false)} onSubmit={handleRisk} />}
     {uploadOpen && <DocumentUploadModal locations={locations} inventoryItems={inventoryItems} defaultCategory={uploadCategory} onClose={() => setUploadOpen(false)} onSubmit={handleUpload} />}
     {scannerOpen && <DocumentScannerModal locations={locations} inventoryItems={inventoryItems} defaultCategory={scannerCategory} onClose={() => setScannerOpen(false)} onSubmit={handleUpload} />}
+    {riskSitePlanItem && <RiskSitePlanModal analysis={riskSitePlanItem} document={documentByAnalysis.get(riskSitePlanItem.id)} onClose={() => setRiskSitePlanItem(null)} onDownload={download} onShare={share} />}
   </section>;
 }
 
-function AnalysisList({ type, items, staff, onScan, onCreate, documents, onDownload, onShare }: { type: 'Trend' | 'Risk'; items: QualityAnalysis[]; staff: boolean; onScan?: () => void; onCreate: () => void; documents: Map<string, QualityDocument>; onDownload: (document: QualityDocument, open?: boolean) => void; onShare: (document: QualityDocument) => void }) {
+function AnalysisList({ type, items, staff, onScan, onCreate, documents, onDownload, onShare, onOpenRiskMap }: { type: 'Trend' | 'Risk'; items: QualityAnalysis[]; staff: boolean; onScan?: () => void; onCreate: () => void; documents: Map<string, QualityDocument>; onDownload: (document: QualityDocument, open?: boolean) => void; onShare: (document: QualityDocument) => void; onOpenRiskMap?: (item: QualityAnalysis) => void }) {
   const trend = type === 'Trend';
   return <div className="quality-module"><div className="quality-module-heading"><div><p className="eyebrow">{trend ? 'SAHA VERİSİNDEN OTOMATİK' : 'KONUM + SAHA DEĞERLENDİRMESİ'}</p><h2>{trend ? 'Canlı yakalama ve aktivite trendleri' : 'AI destekli risk değerlendirmeleri'}</h2><p>{trend ? 'Personelin saha raporlarına girdiği istasyon, aktivite ve zararlı gözlemleri seçilen dönemde karşılaştırılır.' : 'Yapısal kontrol formu, lokasyon ve güncel hava verisi birlikte değerlendirilerek açıklanabilir öneriler üretilir.'}</p></div>{staff && <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>{onScan && <button type="button" className="secondary-button" onClick={onScan} title="Kamera ile A4 Belge Tara"><Camera size={16} /> Belge Tara (A4)</button>}<button className="primary-button" onClick={onCreate}><Plus size={17} /> {trend ? 'Trend Analizi Oluştur' : 'Risk Analizi Oluştur'}</button></div>}</div>
-    {items.length === 0 ? <div className="surface quality-empty">{trend ? <BarChart3 /> : <BrainCircuit />}<strong>Henüz {trend ? 'trend' : 'risk'} analizi oluşturulmadı</strong><span>{staff ? 'Dijital formu doldurduğunuzda kayıt müşteriye ve belge arşivine otomatik düşer.' : 'Yayınlanan analizler burada görüntülenir.'}</span></div> : <div className="quality-analysis-grid">{items.map((item) => { const document = documents.get(item.id); return <article className="surface quality-analysis-card" key={item.id}><div className="quality-card-top"><span className={`quality-kind ${trend ? 'trend' : 'risk'}`}>{trend ? <BarChart3 /> : <ShieldAlert />}</span><div><small>{item.number}</small><strong>{item.title}</strong><p>{item.customerName} · {item.branchName}</p></div><span className={`quality-score quality-${riskTone(item)}`}><b>{item.score ?? '—'}</b><small>{trend ? item.payload.trendDirection ?? 'Aktivite' : riskLabel(item.level)}</small></span></div><div className="quality-card-metrics">{trend ? <><Metric label="Rapor" value={item.payload.reportCount ?? 0} /><Metric label="İstasyon" value={item.payload.totalStations ?? 0} /><Metric label="Aktif" value={item.payload.activeStations ?? 0} /><Metric label="Yakalama" value={item.payload.totalCaught ?? 0} /></> : <><Metric label="Yapısal" value={`${item.payload.structuralRiskScore ?? 0}/100`} /><Metric label="Matris" value={`${item.payload.matrixRiskScore ?? 0}/100`} /><Metric label="Hava" value={`${item.payload.weatherRiskScore ?? 0}/100`} /><Metric label="Seviye" value={riskLabel(item.level)} /></>}</div><p className="quality-summary">{item.summary}</p><div className="quality-card-footer"><span>{formatDateRange(item.periodStart, item.periodEnd)} · {item.createdBy}</span>{document && <div><button onClick={() => onDownload(document, true)} title="Görüntüle"><Eye size={15} /> Görüntüle</button><button onClick={() => onDownload(document)} title="İndir"><Download size={15} /> İndir</button><button onClick={() => onShare(document)} title="Paylaş"><Share2 size={15} /> Paylaş</button></div>}</div></article>; })}</div>}
+    {items.length === 0 ? <div className="surface quality-empty">{trend ? <BarChart3 /> : <BrainCircuit />}<strong>Henüz {trend ? 'trend' : 'risk'} analizi oluşturulmadı</strong><span>{staff ? 'Dijital formu doldurduğunuzda kayıt müşteriye ve belge arşivine otomatik düşer.' : 'Yayınlanan analizler burada görüntülenir.'}</span></div> : <div className="quality-analysis-grid">{items.map((item) => { const document = documents.get(item.id); return <article className="surface quality-analysis-card" key={item.id}><div className="quality-card-top"><span className={`quality-kind ${trend ? 'trend' : 'risk'}`}>{trend ? <BarChart3 /> : <ShieldAlert />}</span><div><small>{item.number}</small><strong>{item.title}</strong><p>{item.customerName} · {item.branchName}</p></div><span className={`quality-score quality-${riskTone(item)}`}><b>{item.score ?? '—'}</b><small>{trend ? item.payload.trendDirection ?? 'Aktivite' : riskLabel(item.level)}</small></span></div><div className="quality-card-metrics">{trend ? <><Metric label="Rapor" value={item.payload.reportCount ?? 0} /><Metric label="İstasyon" value={item.payload.totalStations ?? 0} /><Metric label="Aktif" value={item.payload.activeStations ?? 0} /><Metric label="Yakalama" value={item.payload.totalCaught ?? 0} /></> : <><Metric label="Yapısal" value={`${item.payload.structuralRiskScore ?? 0}/100`} /><Metric label="Matris" value={`${item.payload.matrixRiskScore ?? 0}/100`} /><Metric label="Hava" value={`${item.payload.weatherRiskScore ?? 0}/100`} /><Metric label="Seviye" value={riskLabel(item.level)} /></>}</div><p className="quality-summary">{item.summary}</p><div className="quality-card-footer"><span>{formatDateRange(item.periodStart, item.periodEnd)} · {item.createdBy}</span><div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>{item.analysisType === 'Risk' && item.payload.sitePlan && <button type="button" className="quality-risk-map-btn" onClick={() => onOpenRiskMap?.(item)} title="Kroki Bazlı Risk Haritasını Görüntüle"><MapIcon size={14} /> Kroki Risk Haritası</button>}{document && <><button onClick={() => onDownload(document, true)} title="Görüntüle"><Eye size={15} /> Görüntüle</button><button onClick={() => onDownload(document)} title="İndir"><Download size={15} /> İndir</button><button onClick={() => onShare(document)} title="Paylaş"><Share2 size={15} /> Paylaş</button></>}</div></div></article>; })}</div>}
   </div>;
 }
 
@@ -104,13 +107,224 @@ function TrendAnalysisModal({ locations, onClose, onSubmit }: { locations: Quali
   return <div className="modal-layer"><div className="modal quality-form-modal"><ModalTitle icon={<BarChart3 />} eyebrow="TREND ANALİZİ" title="Canlı yakalama & aktivite trendi" description="Onaylı saha raporlarındaki istasyon hareketleri seçilen tarih aralığında otomatik karşılaştırılır." onClose={onClose} /><form onSubmit={submit}><div className="quality-form-note"><FileSpreadsheet /><div><strong>Otomatik veri kaynağı</strong><span>Toplam istasyon, aktivite görülen istasyon, plaka değişimi, yakalama sayısı ve zararlı türleri saha formlarından alınır.</span></div></div><div className="form-grid"><LocationSelect locations={locations} value={locationKey} onChange={setLocationKey} /><label>Analiz başlığı<input name="title" /></label><label>Başlangıç<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} required /></label><label>Bitiş<input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} required /></label><div className="form-field-wide period-presets"><span>Hızlı dönem</span><button type="button" onClick={() => setMonths(1)}>1 aylık</button><button type="button" onClick={() => setMonths(2)}>2 aylık</button><button type="button" onClick={() => setMonths(3)}>3 aylık</button></div><label className="form-field-wide">Saha bulguları<textarea name="findings" rows={3} placeholder="Dönemi etkileyen operasyonel değişiklikler, tadilat, mevsimsel koşullar…" /></label><label className="form-field-wide">Sonuç ve öneriler<textarea name="recommendations" rows={3} placeholder="İstasyon yerleşimi, takip sıklığı veya düzeltici faaliyet önerileri…" /></label></div>{error && <div className="modal-form-error">{error}</div>}<ModalActions saving={saving} onClose={onClose} label="Trend Analizini Yayınla" /></form></div></div>;
 }
 
-function RiskAnalysisModal({ locations, onClose, onSubmit }: { locations: QualityLocation[]; onClose: () => void; onSubmit: (input: CreateRiskAnalysisInput) => Promise<void> }) {
+function RiskAnalysisModal({ accessToken, locations, onClose, onSubmit }: { accessToken: string; locations: QualityLocation[]; onClose: () => void; onSubmit: (input: CreateRiskAnalysisInput) => Promise<void> }) {
   const [locationKey, setLocationKey] = useState(locationValue(locations[0])); const [scores, setScores] = useState<Record<string, number>>(Object.fromEntries(riskQuestions.map((item) => [item.code, 0]))); const [notes, setNotes] = useState<Record<string, string>>({}); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
   const [matrix, setMatrix] = useState<RiskMatrixRow[]>([{ location: '', pestCategory: 'Kemirgen', severity: 1, likelihood: 1, note: '' }]);
+  const [sitePlans, setSitePlans] = useState<SitePlanRecord[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+
+  useEffect(() => {
+    const location = findLocation(locations, locationKey);
+    if (location) {
+      getSitePlans(accessToken).then((allPlans) => {
+        const filtered = allPlans.filter((p) => p.customerId === location.customerId && (!location.branchId || !p.branchId || p.branchId === location.branchId));
+        setSitePlans(filtered);
+        setSelectedPlanId('');
+      }).catch(() => setSitePlans([]));
+    } else {
+      setSitePlans([]);
+    }
+  }, [accessToken, locations, locationKey]);
+
+  const activePlan = sitePlans.find((p) => p.id === selectedPlanId) || sitePlans[0];
+  const locationSuggestions = useMemo(() => {
+    if (!activePlan?.canvas?.elements) return [];
+    const list: string[] = [];
+    for (const el of activePlan.canvas.elements) {
+      if (el.stationNumber) list.push(el.stationNumber);
+      if (el.text) list.push(el.text);
+    }
+    return Array.from(new Set(list)).filter(Boolean);
+  }, [activePlan]);
+
   const estimated = Math.round(Object.values(scores).reduce((sum, value) => sum + value, 0) / (riskQuestions.length * 4) * 100);
   const updateMatrix = (index: number, patch: Partial<RiskMatrixRow>) => setMatrix((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
-  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const location = findLocation(locations, locationKey); if (!location) return setError('Müşteri veya şube seçin.'); const data = new FormData(event.currentTarget); const riskMatrix = matrix.filter((item) => item.location.trim()); if (riskMatrix.some((item) => !item.pestCategory.trim())) return setError('Risk matrisindeki zararlı kategorisini seçin.'); const answers: RiskAnswer[] = riskQuestions.map((item) => ({ ...item, score: scores[item.code], note: notes[item.code] || undefined })); setSaving(true); setError(null); try { await onSubmit({ customerId: location.customerId, branchId: location.branchId, assessmentDate: String(data.get('assessmentDate')), title: optional(data, 'title'), findings: optional(data, 'findings'), correctiveActions: optional(data, 'correctiveActions'), recommendations: optional(data, 'recommendations'), sectorType: optional(data, 'sectorType'), currentFrequency: optional(data, 'currentFrequency'), riskMatrix, answers }); } catch (submitError) { setError(messageOf(submitError)); } finally { setSaving(false); } };
-  return <div className="modal-layer"><div className="modal quality-form-modal risk-form-modal"><ModalTitle icon={<BrainCircuit />} eyebrow="DETAYLI RİSK ANALİZİ" title="Haşere yönetimi risk değerlendirmesi" description="Dört bölümlü saha formu, lokasyon risk matrisi ve güncel hava verisi tek bir açıklanabilir raporda birleştirilir." onClose={onClose} /><form onSubmit={submit}><div className="risk-score-guide"><div><strong>{estimated}/100</strong><span>Form ön değerlendirmesi</span></div><p><b>0:</b> Uygun / risk yok <b>1:</b> Düşük <b>2:</b> Orta <b>3:</b> Yüksek <b>4:</b> Kritik uygunsuzluk</p></div><div className="risk-form-section-title"><span>1</span><div><strong>Tesis ve değerlendirme bilgileri</strong><small>Referans dosyadaki sektör ve uygulama sıklığı bölümü</small></div></div><div className="form-grid risk-header-fields"><LocationSelect locations={locations} value={locationKey} onChange={setLocationKey} /><label>Değerlendirme tarihi<input name="assessmentDate" type="date" defaultValue={dateKey(new Date())} required /></label><label>Sektör<select name="sectorType" defaultValue="Food"><option value="Food">Gıda üretimi / hizmeti</option><option value="NonFood">Gıda dışı işletme</option></select></label><label>Mevcut kontrol sıklığı<input name="currentFrequency" /></label><label className="form-field-wide">Belge başlığı<input name="title" /></label></div><div className="risk-form-section-title"><span>2</span><div><strong>Yapısal ve operasyonel kontrol formu</strong><small>Dış çevre, yalıtım, hijyen, depolama ve izlenebilirlik</small></div></div><div className="risk-question-list">{riskCategories.map((category) => <section key={category}><h3>{category}</h3>{riskQuestions.filter((item) => item.category === category).map((item) => <article key={item.code}><span className="risk-question-code">{item.code}</span><div><strong>{item.question}</strong><small>{item.recommendation}</small><input value={notes[item.code] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [item.code]: event.target.value }))} placeholder="Saha notu / uygunsuzluk açıklaması" /></div><select value={scores[item.code]} onChange={(event) => setScores((current) => ({ ...current, [item.code]: Number(event.target.value) }))}>{[0,1,2,3,4].map((score) => <option value={score} key={score}>{score}</option>)}</select></article>)}</section>)}</div><div className="risk-form-section-title"><span>3</span><div><strong>Lokasyon bazlı zararlı risk matrisi</strong><small>Şiddet × olasılık; 1 düşük, 2 orta, 3 yüksek</small></div><button type="button" onClick={() => setMatrix((rows) => [...rows, { location: '', pestCategory: 'Kemirgen', severity: 1, likelihood: 1, note: '' }])}><Plus /> Satır ekle</button></div><div className="risk-matrix-editor"><div className="risk-matrix-head"><span>Lokasyon</span><span>Zararlı grubu</span><span>Şiddet</span><span>Olasılık</span><span>Boyut</span><span>Açıklama</span><span /></div>{matrix.map((row, index) => <div className="risk-matrix-row" key={index}><input value={row.location} onChange={(event) => updateMatrix(index, { location: event.target.value })} /><select value={row.pestCategory} onChange={(event) => updateMatrix(index, { pestCategory: event.target.value })}>{riskPestCategories.map((item) => <option key={item}>{item}</option>)}</select><select value={row.severity} onChange={(event) => updateMatrix(index, { severity: Number(event.target.value) })}>{[1,2,3].map((value) => <option key={value}>{value}</option>)}</select><select value={row.likelihood} onChange={(event) => updateMatrix(index, { likelihood: Number(event.target.value) })}>{[1,2,3].map((value) => <option key={value}>{value}</option>)}</select><strong className={`matrix-score matrix-${matrixTone(row.severity * row.likelihood)}`}>{row.severity * row.likelihood}</strong><input value={row.note ?? ''} onChange={(event) => updateMatrix(index, { note: event.target.value })} placeholder="Risk kaynağı / bulgu" /><button type="button" disabled={matrix.length === 1} onClick={() => setMatrix((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 /></button></div>)}</div><div className="risk-form-section-title"><span>4</span><div><strong>Sonuç, faaliyet ve uzman görüşü</strong><small>PDF raporunun yönetim özeti</small></div></div><div className="form-grid risk-footer-fields"><label className="form-field-wide">Genel bulgular<textarea name="findings" rows={3} placeholder="Gözlenen zararlı izleri, giriş noktaları ve çevresel koşullar…" /></label><label className="form-field-wide">Düzeltici faaliyetler<textarea name="correctiveActions" rows={3} placeholder="Kapatılacak açıklıklar, temizlik, drenaj, atık veya istasyon aksiyonları…" /></label><label className="form-field-wide">Uzman önerisi<textarea name="recommendations" rows={3} placeholder="Mesul müdür veya saha sorumlusunun ek önerileri…" /></label></div>{error && <div className="modal-form-error">{error}</div>}<ModalActions saving={saving} onClose={onClose} label="Risk Analizini Yayınla" /></form></div></div>;
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const location = findLocation(locations, locationKey);
+    if (!location) return setError('Müşteri veya şube seçin.');
+    const data = new FormData(event.currentTarget);
+    const riskMatrix = matrix.filter((item) => item.location.trim());
+    if (riskMatrix.some((item) => !item.pestCategory.trim())) return setError('Risk matrisindeki zararlı kategorisini seçin.');
+    const answers: RiskAnswer[] = riskQuestions.map((item) => ({ ...item, score: scores[item.code], note: notes[item.code] || undefined }));
+    setSaving(true);
+    setError(null);
+    try {
+      await onSubmit({
+        customerId: location.customerId,
+        branchId: location.branchId,
+        assessmentDate: String(data.get('assessmentDate')),
+        title: optional(data, 'title'),
+        findings: optional(data, 'findings'),
+        correctiveActions: optional(data, 'correctiveActions'),
+        recommendations: optional(data, 'recommendations'),
+        sectorType: optional(data, 'sectorType'),
+        currentFrequency: optional(data, 'currentFrequency'),
+        riskMatrix,
+        answers,
+        sitePlanId: selectedPlanId || undefined,
+      });
+    } catch (submitError) {
+      setError(messageOf(submitError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <div className="modal-layer"><div className="modal quality-form-modal risk-form-modal"><ModalTitle icon={<BrainCircuit />} eyebrow="DETAYLI RİSK ANALİZİ" title="Haşere yönetimi risk değerlendirmesi" description="Dört bölümlü saha formu, yerleşim krokisi, risk matrisi ve güncel hava verisi tek bir raporda birleştirilir." onClose={onClose} /><form onSubmit={submit}><div className="risk-score-guide"><div><strong>{estimated}/100</strong><span>Form ön değerlendirmesi</span></div><p><b>0:</b> Uygun / risk yok <b>1:</b> Düşük <b>2:</b> Orta <b>3:</b> Yüksek <b>4:</b> Kritik uygunsuzluk</p></div><div className="risk-form-section-title"><span>1</span><div><strong>Tesis ve değerlendirme bilgileri</strong><small>Referans dosyadaki sektör, kroki ve uygulama sıklığı bölümü</small></div></div><div className="form-grid risk-header-fields"><LocationSelect locations={locations} value={locationKey} onChange={setLocationKey} /><label>Değerlendirme tarihi<input name="assessmentDate" type="date" defaultValue={dateKey(new Date())} required /></label><label>Sektör<select name="sectorType" defaultValue="Food"><option value="Food">Gıda üretimi / hizmeti</option><option value="NonFood">Gıda dışı işletme</option></select></label><label>Mevcut kontrol sıklığı<input name="currentFrequency" /></label>{sitePlans.length > 0 && <label>Kroki / Yerleşim Planı (Mekânsal Harita)<select value={selectedPlanId} onChange={(event) => setSelectedPlanId(event.target.value)}><option value="">En Son Güncel Kroki (Otomatik)</option>{sitePlans.map((p) => <option key={p.id} value={p.id}>{p.title} ({p.number} R{p.revision})</option>)}</select></label>}<label className="form-field-wide">Belge başlığı<input name="title" /></label></div><div className="risk-form-section-title"><span>2</span><div><strong>Yapısal ve operasyonel kontrol formu</strong><small>Dış çevre, yalıtım, hijyen, depolama ve izlenebilirlik</small></div></div><div className="risk-question-list">{riskCategories.map((category) => <section key={category}><h3>{category}</h3>{riskQuestions.filter((item) => item.category === category).map((item) => <article key={item.code}><span className="risk-question-code">{item.code}</span><div><strong>{item.question}</strong><small>{item.recommendation}</small><input value={notes[item.code] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [item.code]: event.target.value }))} placeholder="Saha notu / uygunsuzluk açıklaması" /></div><select value={scores[item.code]} onChange={(event) => setScores((current) => ({ ...current, [item.code]: Number(event.target.value) }))}>{[0,1,2,3,4].map((score) => <option value={score} key={score}>{score}</option>)}</select></article>)}</section>)}</div><div className="risk-form-section-title"><span>3</span><div><strong>Lokasyon bazlı zararlı risk matrisi</strong><small>Şiddet × olasılık; kroki istasyon numaralarıyla eşleşir</small></div><button type="button" onClick={() => setMatrix((rows) => [...rows, { location: '', pestCategory: 'Kemirgen', severity: 1, likelihood: 1, note: '' }])}><Plus /> Satır ekle</button></div><div className="risk-matrix-editor"><div className="risk-matrix-head"><span>Lokasyon / İstasyon</span><span>Zararlı grubu</span><span>Şiddet</span><span>Olasılık</span><span>Boyut</span><span>Açıklama</span><span /></div>{matrix.map((row, index) => <div className="risk-matrix-row" key={index}><input list="risk-location-suggestions" value={row.location} onChange={(event) => updateMatrix(index, { location: event.target.value })} placeholder="İstasyon no veya alan…" /><select value={row.pestCategory} onChange={(event) => updateMatrix(index, { pestCategory: event.target.value })}>{riskPestCategories.map((item) => <option key={item}>{item}</option>)}</select><select value={row.severity} onChange={(event) => updateMatrix(index, { severity: Number(event.target.value) })}>{[1,2,3].map((value) => <option key={value}>{value}</option>)}</select><select value={row.likelihood} onChange={(event) => updateMatrix(index, { likelihood: Number(event.target.value) })}>{[1,2,3].map((value) => <option key={value}>{value}</option>)}</select><strong className={`matrix-score matrix-${matrixTone(row.severity * row.likelihood)}`}>{row.severity * row.likelihood}</strong><input value={row.note ?? ''} onChange={(event) => updateMatrix(index, { note: event.target.value })} placeholder="Risk kaynağı / bulgu" /><button type="button" disabled={matrix.length === 1} onClick={() => setMatrix((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 /></button></div>)}</div><datalist id="risk-location-suggestions">{locationSuggestions.map((s) => <option key={s} value={s} />)}</datalist><div className="risk-form-section-title"><span>4</span><div><strong>Sonuç, faaliyet ve uzman görüşü</strong><small>PDF raporunun yönetim özeti</small></div></div><div className="form-grid risk-footer-fields"><label className="form-field-wide">Genel bulgular<textarea name="findings" rows={3} placeholder="Gözlenen zararlı izleri, giriş noktaları ve çevresel koşullar…" /></label><label className="form-field-wide">Düzeltici faaliyetler<textarea name="correctiveActions" rows={3} placeholder="Kapatılacak açıklıklar, temizlik, drenaj, atık veya istasyon aksiyonları…" /></label><label className="form-field-wide">Uzman önerisi<textarea name="recommendations" rows={3} placeholder="Mesul müdür veya saha sorumlusunun ek önerileri…" /></label></div>{error && <div className="modal-form-error">{error}</div>}<ModalActions saving={saving} onClose={onClose} label="Risk Analizini Yayınla" /></form></div></div>;
+}
+
+function RiskSitePlanModal({ analysis, document, onClose, onDownload, onShare }: { analysis: QualityAnalysis; document?: QualityDocument; onClose: () => void; onDownload: (doc: QualityDocument, open?: boolean) => void; onShare: (doc: QualityDocument) => void }) {
+  const sitePlan = analysis.payload.sitePlan;
+  if (!sitePlan) return null;
+  const hotspots = sitePlan.hotspots ?? [];
+  const canvas = sitePlan.canvas;
+
+  return (
+    <div className="modal-layer">
+      <div className="modal risk-plan-modal">
+        <header className="risk-plan-modal-header">
+          <div>
+            <p className="eyebrow">MEKÂNSAL RİSK &amp; ALAN YOĞUNLUK PLANI</p>
+            <h2>{analysis.title}</h2>
+            <p>{analysis.customerName} · {analysis.branchName} · {sitePlan.title} ({sitePlan.number} R{sitePlan.revision})</p>
+          </div>
+          <button className="icon-button" onClick={onClose}><X size={19} /></button>
+        </header>
+
+        <div className="risk-plan-modal-body">
+          <div className="risk-plan-canvas-wrap">
+            <svg viewBox={`0 0 ${canvas.width} ${canvas.height}`}>
+              <rect width="100%" height="100%" fill="#FFFFFF" />
+              {canvas.backgroundImage && (
+                <image
+                  href={canvas.backgroundImage}
+                  x={canvas.backgroundX ?? 0}
+                  y={canvas.backgroundY ?? 0}
+                  width={canvas.backgroundWidth ?? canvas.width}
+                  height={canvas.backgroundHeight ?? canvas.height}
+                  opacity={canvas.backgroundOpacity ?? 1}
+                  preserveAspectRatio="xMidYMid meet"
+                />
+              )}
+              <defs>
+                <filter id="viewer-glow-red" x="-50%" y="-50%" width="200%" height="200%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#DC2626" floodOpacity=".85" />
+                </filter>
+                <filter id="viewer-glow-yellow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#F59E0B" floodOpacity=".85" />
+                </filter>
+              </defs>
+
+              {canvas.elements.map((el) => {
+                const eq = canvas.equipmentTypes.find((t) => t.id === el.equipmentTypeId);
+                return (
+                  <g key={el.id} transform={el.rotation ? `rotate(${el.rotation} ${el.x + el.width / 2} ${el.y + el.height / 2})` : undefined}>
+                    {el.type === 'rect' && (
+                      <>
+                        <rect x={el.x} y={el.y} width={el.width} height={el.height} rx="2" fill={el.fill ?? '#FFFFFF'} stroke={el.stroke ?? '#102A43'} strokeWidth={el.strokeWidth} />
+                        {el.text && <text x={el.x + el.width / 2} y={el.y + el.height / 2 + 5} textAnchor="middle" fill="#102A43" fontSize="14" fontWeight="700">{el.text}</text>}
+                      </>
+                    )}
+                    {el.type === 'image' && el.imageUrl && (
+                      <image href={el.imageUrl} x={el.x} y={el.y} width={el.width} height={el.height} opacity={el.opacity ?? 1} preserveAspectRatio="none" />
+                    )}
+                    {el.type === 'line' && (
+                      <line x1={el.x} y1={el.y} x2={el.x + el.width} y2={el.y + el.height} stroke={el.stroke ?? '#102A43'} strokeWidth={el.strokeWidth} strokeLinecap="round" />
+                    )}
+                    {el.type === 'door' && (
+                      <>
+                        <line x1={el.x} y1={el.y} x2={el.x + el.width} y2={el.y} stroke={el.stroke ?? '#102A43'} strokeWidth={el.strokeWidth} />
+                        <path d={`M ${el.x} ${el.y} A ${Math.abs(el.width)} ${Math.abs(el.height)} 0 0 1 ${el.x + el.width} ${el.y + el.height}`} fill="none" stroke="#94A3B8" strokeWidth="2" strokeDasharray="5 4" />
+                      </>
+                    )}
+                    {el.type === 'text' && (
+                      <text x={el.x} y={el.y + 20} fill="#102A43" fontSize={Math.max(12, el.height)} fontWeight="700">{el.text ?? 'Alan etiketi'}</text>
+                    )}
+                    {el.type === 'station' && eq && (
+                      <>
+                        <g transform={`translate(${el.x} ${el.y})`}>
+                          <rect width={el.width} height={el.height} rx="4" fill={eq.color} stroke="#FFFFFF" strokeWidth="2" />
+                          <text x={el.width / 2} y={el.height / 2 + 4} textAnchor="middle" fill="#FFFFFF" fontSize="12" fontWeight="800">{eq.code}</text>
+                        </g>
+                        <text x={el.x + el.width + 4} y={el.y + el.height / 2 + 4} fill="#102A43" fontSize="12" fontWeight="700">{el.stationNumber}</text>
+                      </>
+                    )}
+                  </g>
+                );
+              })}
+
+              {hotspots.map((spot, idx) => {
+                if (spot.x == null || spot.y == null) return null;
+                const color = spot.score >= 6 ? '#DC2626' : spot.score >= 3 ? '#F59E0B' : '#10B981';
+                const filter = spot.score >= 6 ? 'url(#viewer-glow-red)' : spot.score >= 3 ? 'url(#viewer-glow-yellow)' : undefined;
+                const sw = spot.width ?? 36;
+                const sh = spot.height ?? 36;
+                return (
+                  <g key={idx}>
+                    <rect x={spot.x - 8} y={spot.y - 8} width={sw + 16} height={sh + 16} rx="10" fill={color} fillOpacity="0.25" stroke={color} strokeWidth="2.5" strokeDasharray="4 3" filter={filter} />
+                    <g transform={`translate(${spot.x + sw - 6} ${spot.y - 12})`}>
+                      <rect width="44" height="17" rx="8.5" fill={color} stroke="#FFFFFF" strokeWidth="1.5" />
+                      <text x="22" y="12" textAnchor="middle" fill="#FFFFFF" fontSize="9" fontWeight="800">R:{spot.score}</text>
+                    </g>
+                  </g>
+                );
+              })}
+
+              <g transform="translate(930, 18)">
+                <rect width="252" height="66" rx="8" fill="#FFFFFF" fillOpacity="0.94" stroke="#CBD5E1" strokeWidth="1.2" />
+                <text x="12" y="18" fill="#0F172A" fontSize="10" fontWeight="800">RİSK &amp; AKTİVİTE LEJANTI</text>
+                <circle cx="20" cy="35" r="5" fill="#DC2626" />
+                <text x="32" y="38" fill="#1E293B" fontSize="8.5" fontWeight="700">Kritik / Yüksek (6-9)</text>
+                <circle cx="20" cy="51" r="5" fill="#F59E0B" />
+                <text x="32" y="54" fill="#1E293B" fontSize="8.5" fontWeight="700">Orta Risk (3-4)</text>
+                <circle cx="148" cy="51" r="5" fill="#10B981" />
+                <text x="160" y="54" fill="#1E293B" fontSize="8.5" fontWeight="700">Düşük (1-2)</text>
+              </g>
+            </svg>
+          </div>
+
+          {hotspots.length > 0 && (
+            <div className="risk-plan-hotspot-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lokasyon / İstasyon</th>
+                    <th>Zararlı Grubu</th>
+                    <th>Risk Skoru</th>
+                    <th>Risk Seviyesi</th>
+                    <th>Saha Notu &amp; Aksiyon</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hotspots.map((spot, i) => (
+                    <tr key={i} className={spot.score >= 6 ? 'risk-row-high' : spot.score >= 3 ? 'risk-row-medium' : ''}>
+                      <td><strong>{spot.location}</strong></td>
+                      <td>{spot.pestCategory}</td>
+                      <td><span className={`risk-plan-badge ${spot.score >= 6 ? 'high' : spot.score >= 3 ? 'medium' : 'low'}`}>{spot.score}/9</span></td>
+                      <td>{spot.score >= 6 ? 'Kritik / Yüksek' : spot.score >= 3 ? 'Orta' : 'Düşük'}</td>
+                      <td>{spot.note || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <footer className="risk-plan-modal-footer">
+          {document && (
+            <>
+              <button type="button" className="secondary-button" onClick={() => onDownload(document, true)}><Eye size={15} /> PDF Görüntüle</button>
+              <button type="button" className="secondary-button" onClick={() => onDownload(document)}><Download size={15} /> PDF İndir</button>
+              <button type="button" className="secondary-button" onClick={() => onShare(document)}><Share2 size={15} /> Paylaş</button>
+            </>
+          )}
+          <button type="button" className="primary-button" onClick={onClose}>Kapat</button>
+        </footer>
+      </div>
+    </div>
+  );
 }
 
 function DocumentUploadModal({ locations, inventoryItems, defaultCategory, onClose, onSubmit }: { locations: QualityLocation[]; inventoryItems: InventoryItem[]; defaultCategory: string; onClose: () => void; onSubmit: (input: Parameters<typeof uploadQualityDocument>[1]) => Promise<void> }) {

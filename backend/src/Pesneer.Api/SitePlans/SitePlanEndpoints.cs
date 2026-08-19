@@ -9,7 +9,7 @@ namespace Pesneer.Api.SitePlans;
 public static partial class SitePlanEndpoints
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly HashSet<string> ElementTypes = new(StringComparer.OrdinalIgnoreCase) { "rect", "line", "door", "text", "station" };
+    private static readonly HashSet<string> ElementTypes = new(StringComparer.OrdinalIgnoreCase) { "rect", "line", "door", "text", "station", "image" };
     private static readonly HashSet<string> EquipmentShapes = new(StringComparer.OrdinalIgnoreCase) { "square", "circle", "diamond", "star", "hexagon" };
 
     public static IEndpointRouteBuilder MapSitePlanEndpoints(this IEndpointRouteBuilder app)

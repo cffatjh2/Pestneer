@@ -2354,3 +2354,142 @@
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
+.quality-risk-map-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #1d4ed8;
+  background: #eff6ff;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.quality-risk-map-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.risk-plan-modal {
+  width: min(1280px, calc(100vw - 32px));
+  max-height: min(940px, calc(100vh - 28px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 18px;
+}
+.risk-plan-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 22px;
+  background: #fff;
+  border-bottom: 1px solid #dce6ee;
+}
+.risk-plan-modal-header h2 {
+  margin: 2px 0;
+  font-size: 18px;
+  color: #102a43;
+}
+.risk-plan-modal-header p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+.risk-plan-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #f8fafc;
+}
+.risk-plan-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+.risk-plan-canvas-wrap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.risk-plan-hotspot-table {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.risk-plan-hotspot-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.risk-plan-hotspot-table th {
+  background: #f1f5f9;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #334155;
+  text-align: left;
+  border-bottom: 1px solid #cbd5e1;
+}
+.risk-plan-hotspot-table td {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+.risk-plan-hotspot-table tr.risk-row-high {
+  background: #fef2f2;
+}
+.risk-plan-hotspot-table tr.risk-row-medium {
+  background: #fffbeb;
+}
+.risk-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.risk-plan-badge.high {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+.risk-plan-badge.medium {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+.risk-plan-badge.low {
+  background: #d1fae5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
+}
+.risk-plan-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 22px;
+  background: #fff;
+  border-top: 1px solid #dce6ee;
+}
+

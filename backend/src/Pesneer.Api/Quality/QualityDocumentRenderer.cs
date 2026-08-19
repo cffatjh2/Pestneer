@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Pesneer.Api.Domain;
+using Pesneer.Api.SitePlans;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -303,6 +304,104 @@ internal static class QualityDocumentRenderer
                 }
             });
         }
+
+        if (root.TryGetProperty("sitePlan", out var sitePlanJson) && sitePlanJson.ValueKind == JsonValueKind.Object)
+        {
+            column.Item().PageBreak();
+            ComposeRiskSitePlanPage(column, sitePlanJson);
+        }
+    }
+
+    private static void ComposeRiskSitePlanPage(ColumnDescriptor column, JsonElement sitePlanJson)
+    {
+        var planTitle = Read(sitePlanJson, "title");
+        var planNumber = Read(sitePlanJson, "number");
+        var areaName = Read(sitePlanJson, "areaName");
+        var revision = Read(sitePlanJson, "revision");
+
+        column.Item().Background(Surface).Padding(12).Row(row =>
+        {
+            row.RelativeItem().Column(titleCol =>
+            {
+                titleCol.Item().Text("PESTNEER SAHA KALİTE · MEKÂNSAL RİSK HARİTASI").FontSize(7).SemiBold().FontColor(Green).LetterSpacing(0.08f);
+                titleCol.Item().Text("KROKİ BAZLI RİSK VE ALAN YOĞUNLUK PLANI").FontSize(14).ExtraBold().FontColor(Navy);
+                titleCol.Item().Text($"{planTitle} · {areaName}").FontSize(8.5f).FontColor(Muted);
+            });
+            row.ConstantItem(150).AlignRight().Column(metaCol =>
+            {
+                metaCol.Item().Text("PLAN / REVİZYON").FontSize(6.5f).SemiBold().FontColor(Muted);
+                metaCol.Item().Text($"{planNumber} (R{revision})").FontSize(9.5f).Bold().FontColor(Navy);
+            });
+        });
+
+        SitePlanCanvasInput? canvas = null;
+        var hotspots = new List<SitePlanRiskHotspot>();
+        if (sitePlanJson.TryGetProperty("canvas", out var canvasElement))
+        {
+            try
+            {
+                canvas = JsonSerializer.Deserialize<SitePlanCanvasInput>(canvasElement.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
+            catch { }
+        }
+
+        if (sitePlanJson.TryGetProperty("hotspots", out var hotspotsElement) && hotspotsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var spot in hotspotsElement.EnumerateArray())
+            {
+                decimal? x = spot.TryGetProperty("x", out var xVal) && xVal.ValueKind == JsonValueKind.Number ? xVal.GetDecimal() : null;
+                decimal? y = spot.TryGetProperty("y", out var yVal) && yVal.ValueKind == JsonValueKind.Number ? yVal.GetDecimal() : null;
+                decimal? w = spot.TryGetProperty("width", out var wVal) && wVal.ValueKind == JsonValueKind.Number ? wVal.GetDecimal() : null;
+                decimal? h = spot.TryGetProperty("height", out var hVal) && hVal.ValueKind == JsonValueKind.Number ? hVal.GetDecimal() : null;
+
+                hotspots.Add(new SitePlanRiskHotspot(
+                    Read(spot, "location"),
+                    Read(spot, "pestCategory"),
+                    ReadInt(spot, "score"),
+                    Read(spot, "level"),
+                    Read(spot, "note"),
+                    Read(spot, "matchedElementId"),
+                    x, y, w, h
+                ));
+            }
+        }
+
+        if (canvas is not null)
+        {
+            var svg = SitePlanPdfRenderer.BuildRiskSvg(canvas, hotspots);
+            column.Item().Height(330).Border(1).BorderColor(Border).Background(Colors.White).Padding(4)
+                .Svg(svg).FitArea();
+        }
+
+        if (hotspots.Count > 0)
+        {
+            column.Item().Column(section =>
+            {
+                SectionTitle(section, "Öncelikli Riskli Alanlar ve Müdahale Tablosu");
+                section.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(1.8f);
+                        columns.RelativeColumn(1.4f);
+                        columns.ConstantColumn(48);
+                        columns.RelativeColumn(1.2f);
+                        columns.RelativeColumn(2.6f);
+                    });
+                    TableHeader(table, "Lokasyon / İstasyon", "Zararlı Grubu", "Risk Skoru", "Risk Seviyesi", "Saha Notu & Önlem");
+
+                    foreach (var spot in hotspots.OrderByDescending(h => h.Score))
+                    {
+                        var levelLabel = spot.Score >= 6 ? "Kritik / Yüksek" : spot.Score >= 3 ? "Orta" : "Düşük";
+                        TableRow(table, spot.Location, spot.PestCategory, $"{spot.Score}/9", levelLabel, spot.Note ?? "-");
+                    }
+                });
+            });
+        }
+
+        column.Item().BorderLeft(3).BorderColor(Navy).Background("#F0F4F8").Padding(9)
+            .Text("Mesul Müdür & Uzman Notu: Kırmızı halkayla işaretlenen alanlar öncelikli zararlı aktivite ve giriş riski taşıyan odak noktalarıdır. Bu alanlarda yalıtım önlemleri tamamlanmalı ve izleme sıklığı haftalık olarak sürdürülmelidir.")
+            .FontSize(8).FontColor(Navy);
     }
 
     private static void AddPanel(ColumnDescriptor column, string title, string? value)

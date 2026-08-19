@@ -140,7 +140,9 @@ internal static class SitePlanPdfRenderer
         });
     }
 
-    private static string BuildSvg(SitePlanCanvasInput canvas)
+    public static string BuildSvg(SitePlanCanvasInput canvas) => BuildRiskSvg(canvas, null);
+
+    public static string BuildRiskSvg(SitePlanCanvasInput canvas, IReadOnlyList<SitePlanRiskHotspot>? hotspots)
     {
         var builder = new StringBuilder();
         builder.Append($"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='{canvas.Width}' height='{canvas.Height}' viewBox='0 0 {canvas.Width} {canvas.Height}'>");
@@ -154,7 +156,12 @@ internal static class SitePlanPdfRenderer
             var bgOpacity = canvas.BackgroundOpacity ?? 1m;
             builder.Append($"<image href='{canvas.BackgroundImage}' xlink:href='{canvas.BackgroundImage}' x='{N(bgX)}' y='{N(bgY)}' width='{N(bgW)}' height='{N(bgH)}' opacity='{N(bgOpacity)}' preserveAspectRatio='xMidYMid meet'/>");
         }
-        builder.Append("<defs><filter id='shadow' x='-30%' y='-30%' width='160%' height='160%'><feDropShadow dx='0' dy='2' stdDeviation='2' flood-color='#0F172A' flood-opacity='.18'/></filter></defs>");
+        builder.Append("<defs>");
+        builder.Append("<filter id='shadow' x='-30%' y='-30%' width='160%' height='160%'><feDropShadow dx='0' dy='2' stdDeviation='2' flood-color='#0F172A' flood-opacity='.18'/></filter>");
+        builder.Append("<filter id='glow-red' x='-50%' y='-50%' width='200%' height='200%'><feDropShadow dx='0' dy='0' stdDeviation='6' flood-color='#DC2626' flood-opacity='.85'/></filter>");
+        builder.Append("<filter id='glow-yellow' x='-50%' y='-50%' width='200%' height='200%'><feDropShadow dx='0' dy='0' stdDeviation='6' flood-color='#F59E0B' flood-opacity='.85'/></filter>");
+        builder.Append("</defs>");
+
         var types = canvas.EquipmentTypes.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
         foreach (var item in canvas.Elements)
         {
@@ -190,6 +197,37 @@ internal static class SitePlanPdfRenderer
             }
             builder.Append("</g>");
         }
+
+        if (hotspots is { Count: > 0 })
+        {
+            foreach (var spot in hotspots)
+            {
+                if (spot.X.HasValue && spot.Y.HasValue)
+                {
+                    var sx = spot.X.Value;
+                    var sy = spot.Y.Value;
+                    var sw = spot.Width ?? 36;
+                    var sh = spot.Height ?? 36;
+                    var color = spot.Score >= 6 ? "#DC2626" : spot.Score >= 3 ? "#F59E0B" : "#10B981";
+                    var filter = spot.Score >= 6 ? "filter='url(#glow-red)'" : spot.Score >= 3 ? "filter='url(#glow-yellow)'" : "";
+
+                    builder.Append($"<rect x='{N(sx - 8)}' y='{N(sy - 8)}' width='{N(sw + 16)}' height='{N(sh + 16)}' rx='10' fill='{color}' fill-opacity='0.22' stroke='{color}' stroke-width='2.5' stroke-dasharray='4 3' {filter}/>");
+                    builder.Append($"<g transform='translate({N(sx + sw - 6)} {N(sy - 12)})'>");
+                    builder.Append($"<rect width='44' height='17' rx='8.5' fill='{color}' stroke='#FFFFFF' stroke-width='1.5'/>");
+                    builder.Append($"<text x='22' y='12' text-anchor='middle' fill='#FFFFFF' font-family='Lato' font-size='9' font-weight='800'>R:{spot.Score}</text>");
+                    builder.Append("</g>");
+                }
+            }
+
+            builder.Append("<g transform='translate(930 18)' filter='url(#shadow)'>");
+            builder.Append("<rect width='252' height='66' rx='8' fill='#FFFFFF' fill-opacity='0.94' stroke='#CBD5E1' stroke-width='1.2'/>");
+            builder.Append("<text x='12' y='18' fill='#0F172A' font-family='Lato' font-size='10' font-weight='800'>RİSK &amp; AKTİVİTE LEJANTI</text>");
+            builder.Append("<circle cx='20' cy='35' r='5' fill='#DC2626'/><text x='32' y='38' fill='#1E293B' font-family='Lato' font-size='8.5' font-weight='700'>Kritik / Yüksek (6-9)</text>");
+            builder.Append("<circle cx='20' cy='51' r='5' fill='#F59E0B'/><text x='32' y='54' fill='#1E293B' font-family='Lato' font-size='8.5' font-weight='700'>Orta Risk (3-4)</text>");
+            builder.Append("<circle cx='148' cy='51' r='5' fill='#10B981'/><text x='160' y='54' fill='#1E293B' font-family='Lato' font-size='8.5' font-weight='700'>Düşük (1-2)</text>");
+            builder.Append("</g>");
+        }
+
         builder.Append("</svg>");
         return builder.ToString();
     }

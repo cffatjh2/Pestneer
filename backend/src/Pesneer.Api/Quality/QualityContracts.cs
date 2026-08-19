@@ -44,7 +44,8 @@ public sealed record CreateRiskAnalysisRequest(
     string? SectorType,
     string? CurrentFrequency,
     IReadOnlyList<RiskMatrixInput> RiskMatrix,
-    IReadOnlyList<RiskAnswerInput> Answers);
+    IReadOnlyList<RiskAnswerInput> Answers,
+    Guid? SitePlanId = null);
 
 public sealed record QualityAnalysisResponse(
     Guid Id,
