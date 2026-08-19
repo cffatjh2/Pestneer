@@ -194,6 +194,19 @@ async function fetchImageAsDataUrl(url?: string | null): Promise<string | null> 
   }
 }
 
+async function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number; aspect: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || img.width || 1;
+      const h = img.naturalHeight || img.height || 1;
+      resolve({ width: w, height: h, aspect: w / h });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
 export async function downloadStationLabelPdf(plan: StationLabelPlanInfo, stations: ReportStationInput[], branding?: StationLabelBranding | string) {
   const labeled = stations.filter((station) => station.deviceNumber && station.deviceNumber.trim());
   if (labeled.length === 0) throw new Error('Etiket oluşturulacak istasyon bulunamadı.');
@@ -201,6 +214,7 @@ export async function downloadStationLabelPdf(plan: StationLabelPlanInfo, statio
   const brandingObj: StationLabelBranding = typeof branding === 'string' ? { companyName: branding } : (branding ?? {});
   const resolvedCompanyName = brandingObj.companyName?.trim() || 'Pestneer';
   const logoDataUrl = await fetchImageAsDataUrl(brandingObj.logoUrl);
+  const logoDims = logoDataUrl ? await getImageDimensions(logoDataUrl) : null;
 
   const document = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const marginX = 10;
@@ -278,15 +292,31 @@ export async function downloadStationLabelPdf(plan: StationLabelPlanInfo, statio
 
     // Şirket Adı & Logo
     const displayCompanyName = toCleanPdfText(resolvedCompanyName);
-    const companyY = qrY + badgeHeight + 3;
+    const companyY = qrY + badgeHeight + 2.8;
 
-    if (logoDataUrl) {
+    if (logoDataUrl && logoDims) {
       try {
-        document.addImage(logoDataUrl, 'PNG', contentX, companyY - 1.5, 16, 5);
+        const maxLogoW = 16;
+        const maxLogoH = 6;
+        let renderedLogoW = maxLogoW;
+        let renderedLogoH = maxLogoH;
+
+        if (logoDims.aspect >= maxLogoW / maxLogoH) {
+          renderedLogoW = maxLogoW;
+          renderedLogoH = Math.max(2, Math.min(maxLogoH, maxLogoW / logoDims.aspect));
+        } else {
+          renderedLogoH = maxLogoH;
+          renderedLogoW = Math.max(2, Math.min(maxLogoW, maxLogoH * logoDims.aspect));
+        }
+
+        const logoOffsetY = (maxLogoH - renderedLogoH) / 2;
+        document.addImage(logoDataUrl, 'PNG', contentX, companyY - 1.2 + logoOffsetY, renderedLogoW, renderedLogoH);
+
         document.setFont('helvetica', 'bold');
         document.setFontSize(6.8);
         document.setTextColor(15, 23, 42);
-        document.text(displayCompanyName, contentX + 17.5, companyY + 2.2, { maxWidth: contentW - 18 });
+        const textOffsetX = renderedLogoW + 2;
+        document.text(displayCompanyName, contentX + textOffsetX, companyY + 2.4, { maxWidth: contentW - textOffsetX });
       } catch {
         document.setFont('helvetica', 'bold');
         document.setFontSize(7.2);

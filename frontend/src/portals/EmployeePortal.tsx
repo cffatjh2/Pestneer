@@ -424,6 +424,11 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
           accessToken={session.accessToken}
           order={taskActivationOrder}
           onClose={() => setTaskActivationOrder(null)}
+          onOpenReport={() => {
+            const target = taskActivationOrder;
+            setTaskActivationOrder(null);
+            setTaskReportingOrder(target);
+          }}
         />
       )}
 

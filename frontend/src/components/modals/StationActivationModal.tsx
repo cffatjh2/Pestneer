@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Ban, Barcode, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, Barcode, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, FilePlus2, Filter, Hash, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getServiceReportCatalog, type ReportPestObservationInput, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
 import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
@@ -20,6 +20,7 @@ type Props = {
   order: WorkOrder;
   onClose: () => void;
   onSaved?: (record: StationActivationRecord) => void;
+  onOpenReport?: () => void;
 };
 
 /* ── Türkiye Sağlık Bakanlığı Onaylı Gerçek Biyosidal Kataloğu (Kimyasallar / İlaçlar) ── */
@@ -38,14 +39,13 @@ export const defaultBiocideOptions = [
 
 /* ── Standart Sarf Malzemeleri ve Ekipman Değişim Kataloğu ── */
 export const defaultConsumableOptions = [
-  { name: 'Fare & Sıçan Yapışkanlı Levha (Plaka)', unit: 'Adet', defaultAmount: 1, category: 'Yapışkan Levha' },
-  { name: 'EFK Sinek Cihazı UV Yapışkan Levhası', unit: 'Adet', defaultAmount: 1, category: 'Sinek Yapışkanı' },
-  { name: 'Hamamböceği Monitör Yapışkan Kapanı', unit: 'Adet', defaultAmount: 1, category: 'Böcek Monitörü' },
-  { name: 'Feromonlu Güve & Böcek Monitör Yapışkanı', unit: 'Adet', defaultAmount: 1, category: 'Feromon Kapanı' },
-  { name: '15W UV-A Floresan Sinek Lambası', unit: 'Adet', defaultAmount: 1, category: 'UV Lamba' },
-  { name: '36W UV-A Shatterproof Sinek Lambası', unit: 'Adet', defaultAmount: 1, category: 'UV Lamba' },
-  { name: 'Kemirgen Yemleme İstasyonu Gövdesi', unit: 'Adet', defaultAmount: 1, category: 'İstasyon Ekipmanı' },
-  { name: 'Canlı Yakalama Kapanı (Mekanik)', unit: 'Adet', defaultAmount: 1, category: 'Mekanik Kapan' },
+  { name: 'Fare & Sıçan Yapışkanlı Levha (Plaka)', unit: 'Adet', category: 'Yapışkan Levha' },
+  { name: 'EFK Sinek Cihazı UV Yapışkan Levhası', unit: 'Adet', category: 'Yapışkan Levha' },
+  { name: 'Hamamböceği Monitör Yapışkan Kapanı', unit: 'Adet', category: 'Monitör Kapan' },
+  { name: '15W UV-A Floresan Sinek Lambası', unit: 'Adet', category: 'UV Lamba' },
+  { name: '36W UV-A Parçalanmaz Sinek Lambası', unit: 'Adet', category: 'UV Lamba' },
+  { name: 'Kemirgen Yemleme İstasyonu Gövdesi', unit: 'Adet', category: 'İstasyon Gövdesi' },
+  { name: 'Mekanik Canlı Yakalama Kapanı', unit: 'Adet', category: 'Kapan Ekipman' },
 ];
 
 /* ── checklist tanımı ── */
@@ -82,7 +82,7 @@ const activityLabels: Record<string, string> = {
 
 type StatusFilter = 'all' | 'Unchecked' | 'NoActivity' | 'Activity' | 'Damaged' | 'Inaccessible';
 
-export default function StationActivationModal({ accessToken, order, onClose, onSaved }: Props) {
+export default function StationActivationModal({ accessToken, order, onClose, onSaved, onOpenReport }: Props) {
   const [record, setRecord] = useState<StationActivationRecord | null>(null);
   const [stations, setStations] = useState<ReportStationInput[]>([]);
   const [notes, setNotes] = useState('');
@@ -281,12 +281,22 @@ export default function StationActivationModal({ accessToken, order, onClose, on
     }
     return null;
   };
-  const save = async (finalize: boolean) => {
+  const save = async (finalize: boolean, openReportAfter = false) => {
     const message = validate(finalize); if (message) return setError(message);
     setSaving(true); setError(null);
     try {
       const saved = await saveStationActivation(accessToken, order.recordId, { notes, finalize, stations });
-      setRecord(saved); onSaved?.(saved); if (finalize) onClose();
+      setRecord(saved);
+      onSaved?.(saved);
+      if (openReportAfter && onOpenReport) {
+        onOpenReport();
+      } else if (finalize) {
+        if (onOpenReport) {
+          onOpenReport();
+        } else {
+          onClose();
+        }
+      }
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : 'Aktivasyon listesi kaydedilemedi.'); }
     finally { setSaving(false); }
   };
@@ -773,7 +783,9 @@ export default function StationActivationModal({ accessToken, order, onClose, on
         {(!record || record.status !== 'Finalized' || isEditing) && (
           <>
             <button type="button" className="secondary-button" disabled={saving} onClick={() => void save(false)}><Save /> Taslak Kaydet</button>
-            <button type="button" className="primary-button" disabled={saving} onClick={() => void save(true)}><Check /> {isEditing ? 'Güncellemeleri Onayla' : 'Aktivasyonu Onayla'}</button>
+            <button type="button" className="primary-button" disabled={saving} onClick={() => void save(true, true)}>
+              <FilePlus2 size={16} /> {isEditing ? 'Güncellemeleri Kaydet & EK-1 Formuna Geç' : 'Aktivasyonu Onayla & EK-1 Formuna Geç'}
+            </button>
           </>
         )}
       </div>

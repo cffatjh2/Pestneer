@@ -87,7 +87,6 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
     try {
       const updated = await startEmployeeWorkOrder(accessToken, order.recordId);
       replace(updated);
-      setActivationOrder(updated);
     } catch (actionError) {
       if (actionError instanceof WorkOrderSessionExpiredError) return onSessionExpired();
       if (!navigator.onLine || actionError instanceof TypeError) {
@@ -96,7 +95,6 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
         replace(local);
         setOfflineMode(true);
         await refreshQueue();
-        setActivationOrder(local);
         return;
       }
       setError(actionError instanceof Error ? actionError.message : 'İş başlatılamadı.');
@@ -289,7 +287,18 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
       </div></article>; })}</div>}
     {selfModal && <WorkOrderModal customers={options.customers} selfSchedule onClose={() => setSelfModal(false)} onCreate={selfSchedule} />}{completing && <WorkOrderCompletionModal order={completing} onClose={() => setCompleting(null)} onSubmit={complete} />}
     {reporting && <ServiceReportModal accessToken={accessToken} order={reporting} existing={reportByOrder.get(reporting.recordId)} previousReport={previousReport} companyName={companyName} operatorName={operatorName} vehicleStockItems={vehicleStock?.items} readOnly={reportByOrder.get(reporting.recordId)?.status === 'Finalized'} onClose={() => setReporting(null)} onSave={saveReport} onAddManualStock={addManualStock} />}
-    {activationOrder && <StationActivationModal accessToken={accessToken} order={activationOrder} onClose={() => setActivationOrder(null)} />}
+    {activationOrder && (
+      <StationActivationModal
+        accessToken={accessToken}
+        order={activationOrder}
+        onClose={() => setActivationOrder(null)}
+        onOpenReport={() => {
+          const target = activationOrder;
+          setActivationOrder(null);
+          setReporting(target);
+        }}
+      />
+    )}
     {visitActionOrder && <VisitActionModal onClose={() => setVisitActionOrder(null)} onSubmit={changeVisit} />}
     {routeOpen && <RouteOptimizer orders={orders} onClose={() => setRouteOpen(false)} />}
   </section>;
