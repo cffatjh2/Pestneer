@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Ban, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, Barcode, BrainCircuit, Check, CheckCircle2, ChevronDown, FileDown, Filter, Hash, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getServiceReportCatalog, type ReportPestObservationInput, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
 import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
@@ -12,7 +12,7 @@ import {
 } from '../../services/stationActivationApi';
 import QrScannerModal from './QrScannerModal';
 import PestneerVisionAnalyzer from '../vision/PestneerVisionAnalyzer';
-import { downloadStationLabelPdf, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
+import { downloadStationLabelPdf, matchStationByCode, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
 import { getCompanyBranding, getCompanyLogoObjectUrl } from '../../services/brandingApi';
 
 type Props = {
@@ -135,49 +135,45 @@ export default function StationActivationModal({ accessToken, order, onClose, on
     return () => { active = false; };
   }, [accessToken, order.branchId, order.customerId, order.recordId]);
 
+  const [pairingStationIndex, setPairingStationIndex] = useState<number | null>(null);
+  const [unassignedCodeModal, setUnassignedCodeModal] = useState<{ scannedCode: string; targetIndex: number } | null>(null);
+
   const handleQrScan = (value: string) => {
-    const normalized = normalizeStationQrValue(value);
-    const pairedIndex = stations.findIndex((station) => station.qrCode && normalizeStationQrValue(station.qrCode) === normalized);
-    if (pairedIndex >= 0) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    // Explicit pairing of a specific station
+    if (pairingStationIndex !== null && pairingStationIndex >= 0 && pairingStationIndex < stations.length) {
+      const targetStation = stations[pairingStationIndex];
+      const updated = [...stations];
+      updated[pairingStationIndex] = { ...targetStation, qrCode: trimmed };
+      setStations(updated);
+      setSelected(pairingStationIndex);
       setScannerOpen(false);
-      setSelected(pairedIndex);
-      setFilter('all');
-      setSearchQuery('');
-      setQrNotice(`İstasyon ${stations[pairedIndex].deviceNumber} QR ile seçildi.`);
+      setPairingStationIndex(null);
+      setQrNotice(`✅ ${targetStation.deviceNumber || `İstasyon ${pairingStationIndex + 1}`} barkod/QR ile başarıyla eşleştirildi! (Kod: ${trimmed})`);
       setError(null);
       return;
     }
-    const payload = parseStationQrValue(value);
-    if (payload) {
-      if (payload.customerId !== order.customerId || (payload.branchId ?? '') !== (order.branchId ?? '')) {
-        setError('Okutulan QR kod farklı bir müşteriye veya şubeye ait.');
-        return;
-      }
-      const index = stations.findIndex((station) =>
-        (station.sitePlanId === payload.sitePlanId && station.sitePlanElementId === payload.elementId) ||
-        station.deviceNumber.toUpperCase() === payload.deviceNumber.toUpperCase()
-      );
-      if (index >= 0) {
-        setScannerOpen(false);
-        setSelected(index);
-        setFilter('all');
-        setSearchQuery('');
-        setQrNotice(`İstasyon ${stations[index].deviceNumber} QR ile seçildi.`);
-        setError(null);
-        return;
-      }
-    }
-    const directNumIndex = stations.findIndex((s) => s.deviceNumber && value.toUpperCase().includes(s.deviceNumber.toUpperCase()));
-    if (directNumIndex >= 0) {
+
+    // Try universal matching
+    const match = matchStationByCode(stations, trimmed, { customerId: order.customerId, branchId: order.branchId });
+    if (match) {
       setScannerOpen(false);
-      setSelected(directNumIndex);
+      setSelected(match.matchIndex);
       setFilter('all');
       setSearchQuery('');
-      setQrNotice(`İstasyon ${stations[directNumIndex].deviceNumber} seçildi.`);
+      setQrNotice(`🎯 ${stations[match.matchIndex].deviceNumber} okutuldu ve açıldı.`);
       setError(null);
       return;
     }
-    setError('QR kodu bu listedeki hiçbir istasyonla eşleştirilemedi.');
+
+    // Unassigned barcode / QR: open pairing confirmation dialog
+    setScannerOpen(false);
+    setUnassignedCodeModal({
+      scannedCode: trimmed,
+      targetIndex: selected >= 0 && selected < stations.length ? selected : 0,
+    });
   };
 
   const handleDownloadQrLabels = async () => {
@@ -359,6 +355,59 @@ export default function StationActivationModal({ accessToken, order, onClose, on
             >
               <BrainCircuit size={16} /> 📷 Pestneer Vision ile Say (AI)
             </button>
+          </div>
+
+          {/* ── Barkod & QR Kod Tanımlama Şeridi ── */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px',
+            flexWrap: 'wrap',
+            padding: '7px 12px',
+            background: current.qrCode ? '#f0fdf4' : '#f8fafc',
+            border: current.qrCode ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
+            borderRadius: '8px',
+            marginBottom: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Barcode size={17} color={current.qrCode ? '#16a34a' : '#64748b'} />
+              <span style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>Tanımlı Barkod / QR:</span>
+              {current.qrCode ? (
+                <code style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>
+                  {current.qrCode}
+                </code>
+              ) : (
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Henüz kod tanımlanmadı</span>
+              )}
+            </div>
+            {!readOnly && (
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ padding: '4px 10px', fontSize: '11.5px', height: '28px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  onClick={() => {
+                    setPairingStationIndex(selected);
+                    setScannerOpen(true);
+                  }}
+                  title="Fiziksel istasyon kutusundaki barkod veya QR kodu kamerayla okutarak bu istasyonla eşleştir"
+                >
+                  <ScanLine size={14} /> {current.qrCode ? 'Kodu Değiştir' : 'Barkod / QR Eşle'}
+                </button>
+                {current.qrCode && (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    style={{ width: '28px', height: '28px', padding: 0 }}
+                    onClick={() => update({ qrCode: undefined })}
+                    title="Tanımlı barkodu kaldır"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="inspection-status-grid">
@@ -554,8 +603,68 @@ export default function StationActivationModal({ accessToken, order, onClose, on
     {/* ── Toplu Durum Atama ── */}
     {bulkStatusOpen && <BulkStatusModal count={multiSelect.size} onClose={() => setBulkStatusOpen(false)} onApply={applyBulkStatus} />}
 
-    {/* ── Canlı QR Tarayıcı Modal ── */}
+    {/* ── Canlı QR & Barkod Tarayıcı Modal ── */}
     {scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onScan={handleQrScan} />}
+
+    {/* ── İlk Kez Tanımlanan Barkod / QR Eşleştirme Modalı ── */}
+    {unassignedCodeModal && (
+      <div className="nested-modal-layer" role="dialog" aria-modal="true" style={{ zIndex: 1200 }}>
+        <div className="surface" style={{ width: '440px', maxWidth: '95vw', padding: '24px', borderRadius: '16px', background: '#fff', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)', border: '1px solid #cbd5e1' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+            <div style={{ background: '#ecfdf5', color: '#059669', padding: '10px', borderRadius: '12px', display: 'flex' }}>
+              <Barcode size={26} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a' }}>Yeni Barkod / QR Algılandı</h3>
+              <small style={{ color: '#64748b' }}>Bu kod henüz bir istasyonla eşleştirilmemiş.</small>
+            </div>
+          </div>
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Okutulan Kod</span>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0284c7', fontFamily: 'monospace', wordBreak: 'break-all', marginTop: '3px' }}>
+              {unassignedCodeModal.scannedCode}
+            </div>
+          </div>
+
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '18px' }}>
+            Bu barkodu hangi istasyona tanımlamak istiyorsunuz?
+            <select
+              value={unassignedCodeModal.targetIndex}
+              onChange={(e) => setUnassignedCodeModal({ ...unassignedCodeModal, targetIndex: Number(e.target.value) })}
+              style={{ width: '100%', marginTop: '6px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#fff' }}
+            >
+              {stations.map((st, idx) => (
+                <option key={idx} value={idx}>
+                  {st.deviceNumber || `İstasyon ${idx + 1}`} ({st.area || 'Genel Alan'}) {st.qrCode ? `[Mevcut: ${st.qrCode.slice(0, 10)}...]` : '[Henüz Kodsuz]'}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button type="button" className="secondary-button" onClick={() => setUnassignedCodeModal(null)}>
+              İptal
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                const idx = unassignedCodeModal.targetIndex;
+                const updated = [...stations];
+                updated[idx] = { ...updated[idx], qrCode: unassignedCodeModal.scannedCode };
+                setStations(updated);
+                setSelected(idx);
+                setQrNotice(`✅ ${updated[idx].deviceNumber || `İstasyon ${idx + 1}`} ile ${unassignedCodeModal.scannedCode} başarıyla eşleştirildi! Artık her okutulduğunda bu istasyon açılacaktır.`);
+                setUnassignedCodeModal(null);
+              }}
+            >
+              İstasyonla Eşleştir & Aç
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ── Pestneer Vision Yapay Zeka Sayım Modal ── */}
     {visionOpen && (

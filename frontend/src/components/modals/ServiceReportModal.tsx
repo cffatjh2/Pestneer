@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
-import { AlertTriangle, Ban, Bug, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Cloud, FileCheck2, ImagePlus, MapPinned, PackageCheck, Plus, QrCode, Save, Search, Sparkles, Trash2, Undo2, WandSparkles, Wrench, X, Zap } from 'lucide-react';
+import { AlertTriangle, Ban, Barcode, Bug, Camera, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Cloud, FileCheck2, ImagePlus, MapPinned, PackageCheck, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Undo2, WandSparkles, Wrench, X, Zap } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getPreviousServiceReport, getServiceReportCatalog, ReportConflictError, type ReportPhotoUpload, type ReportProductInput, type ReportStationInput, type ServiceReportCatalog, type ServiceReportRecord, type UpsertServiceReportInput } from '../../services/serviceReportApi';
 import { getStationActivationByWorkOrder } from '../../services/stationActivationApi';
 import { getSitePlans, type SitePlanElement, type SitePlanRecord } from '../../services/sitePlanApi';
 import type { VehicleStockCheck } from '../../services/fieldOperationsApi';
 import { getLocalReportDraft, removeLocalReportDraft, saveLocalReportDraft, toOfflinePhotos } from '../../services/offlineFieldStore';
-import { downloadStationLabelPdf, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
+import { downloadStationLabelPdf, matchStationByCode, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
 import { getStoredCompanyEk1Defaults } from '../../services/companySettingsStorage';
 import SignaturePad from './SignaturePad';
 import QrScannerModal from './QrScannerModal';
@@ -49,6 +49,8 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   const [conflict, setConflict] = useState<ServiceReportRecord | null>(null);
   const [conflictFinalize, setConflictFinalize] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [pairingStationIndex, setPairingStationIndex] = useState<number | null>(null);
+  const [unassignedCodeModal, setUnassignedCodeModal] = useState<{ scannedCode: string; targetIndex: number } | null>(null);
   const [undoState, setUndoState] = useState<{ stations: ReportStationInput[]; message: string } | null>(null);
   const [referenceReport, setReferenceReport] = useState<ServiceReportRecord | undefined>(previousReport);
   const [catalog, setCatalog] = useState<ServiceReportCatalog>(fallbackReportCatalog);
@@ -230,22 +232,34 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   };
 
   const handleQrScan = (value: string) => {
-    const normalized = normalizeStationQrValue(value);
-    const pairedIndex = stations.findIndex((station) => station.qrCode && normalizeStationQrValue(station.qrCode) === normalized);
-    if (pairedIndex >= 0) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    if (pairingStationIndex !== null && pairingStationIndex >= 0 && pairingStationIndex < stations.length) {
+      const targetStation = stations[pairingStationIndex];
+      const updated = [...stations];
+      updated[pairingStationIndex] = { ...targetStation, qrCode: trimmed };
+      setStations(updated);
+      setStationIndex(pairingStationIndex);
       setScannerOpen(false);
-      setStationIndex(pairedIndex);
-      setError(stations[pairedIndex].deviceStatus !== 'Unchecked' ? `${stations[pairedIndex].deviceNumber} daha önce kontrol edildi. Kaydı gözden geçiriyorsunuz.` : null);
+      setPairingStationIndex(null);
+      setError(null);
       return;
     }
-    const payload = parseStationQrValue(value);
-    if (!payload) return setError('QR kodu bu müşteri/şubenin güncel krokisindeki bir istasyonla eşleştirilmemiş.');
-    if (payload.customerId !== order.customerId || (payload.branchId ?? '') !== (order.branchId ?? '')) return setError('Bu QR kod farklı bir müşteri veya şubeye ait.');
-    const index = stations.findIndex((station) => station.sitePlanId === payload.sitePlanId && station.sitePlanElementId === payload.elementId);
-    if (index < 0) return setError('QR kodundaki istasyon güncel kroki listesinde bulunamadı. Kroki revizyonunu kontrol edin.');
+
+    const match = matchStationByCode(stations, trimmed, { customerId: order.customerId, branchId: order.branchId });
+    if (match) {
+      setScannerOpen(false);
+      setStationIndex(match.matchIndex);
+      setError(stations[match.matchIndex].deviceStatus !== 'Unchecked' ? `${stations[match.matchIndex].deviceNumber} daha önce kontrol edildi. Kaydı gözden geçiriyorsunuz.` : null);
+      return;
+    }
+
     setScannerOpen(false);
-    setStationIndex(index);
-    setError(stations[index].deviceStatus !== 'Unchecked' ? `${stations[index].deviceNumber} daha önce kontrol edildi. Kaydı gözden geçiriyorsunuz.` : null);
+    setUnassignedCodeModal({
+      scannedCode: trimmed,
+      targetIndex: stationIndex >= 0 && stationIndex < stations.length ? stationIndex : 0,
+    });
   };
 
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Saha hizmet raporu"><div className="modal service-report-modal station-report-modal">
@@ -256,7 +270,63 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
     <ReportDetails catalog={catalog} form={form} setField={setField} products={products} updateProduct={updateProduct} setProducts={setProducts} stations={existing?.stations.length ? stations : []} vehicleStockItems={vehicleStockItems} readOnly={readOnly} setSignatureTarget={setSignatureTarget} autoAggregatedNotice={autoAggregatedNotice} onAddManualStock={onAddManualStock ? () => { setProducts((current) => [...current, blankProduct()]); setManualStockTarget(products.length); } : undefined} />
 
     {stage === 'report' && <><PhotoCapture photos={photos} existingPhotos={existing?.photos ?? []} readOnly={readOnly} onChange={setPhotos} /><div className="report-form-status"><FileCheck2 size={18} /><div><strong>{existing?.status === 'Finalized' ? 'Onaylanmış EK-1 formu' : 'EK-1 formu onaya hazır'}</strong><span>İstasyon tüketimleri otomatik toplanmıştır; ürün ve sarf düşümleri araç stoğundan kaydedilir.</span></div></div>{error && <div className="modal-form-error">{error}</div>}<div className="modal-actions service-report-actions"><button className="secondary-button" onClick={onClose}>Kapat</button>{!readOnly && <><button className="secondary-button" disabled={saving} onClick={() => void submit(false)}><Save size={16} /> Taslak Kaydet</button><button className="primary-button" disabled={saving} onClick={() => void submit(true)}><Check size={17} /> EK-1 Formunu Onayla</button></>}</div></>}
-  </div>{signatureTarget && <SignaturePad onClose={() => setSignatureTarget(null)} onSave={(image) => { setField(signatureTarget === 'manager' ? 'managerSignatureData' : 'customerSignatureData', image); setSignatureTarget(null); }} />}{manualStockTarget !== null && onAddManualStock && <ManualStockModal onClose={() => setManualStockTarget(null)} onSave={async (input) => { const item = await onAddManualStock(input); updateProduct(manualStockTarget, { vehicleStockItemId: item.vehicleStockItemId, productName: item.productName, unit: usageUnits(item.unit)[0], licenseNumber: item.licenseNumber, licenseDocumentId: item.licenseDocumentId }); setManualStockTarget(null); }} />}{scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onScan={handleQrScan} />}{conflict && <div className="nested-modal-layer"><div className="report-conflict-dialog"><AlertTriangle size={30} /><h3>İki farklı rapor sürümü bulundu</h3><p>Sunucudaki rapor {formatDraftTime(conflict.updatedAt)} tarihinde güncellendi. Bu cihazdaki taslakla üzerine yazabilir veya güncel sunucu sürümünü kullanabilirsiniz.</p><div><button className="secondary-button" onClick={() => { setForm(createInitialForm(order, conflict, companyName)); setStations(conflict.stations.map(stripStationId)); setProducts(conflict.products.map(stripProductId)); setBaseUpdatedAt(conflict.updatedAt); setConflict(null); }}>Sunucudakini kullan</button><button className="primary-button" onClick={() => { setConflict(null); void submit(conflictFinalize, true); }}>Bu cihazdaki sürümü gönder</button></div></div></div>}</div>;
+  </div>{signatureTarget && <SignaturePad onClose={() => setSignatureTarget(null)} onSave={(image) => { setField(signatureTarget === 'manager' ? 'managerSignatureData' : 'customerSignatureData', image); setSignatureTarget(null); }} />}{manualStockTarget !== null && onAddManualStock && <ManualStockModal onClose={() => setManualStockTarget(null)} onSave={async (input) => { const item = await onAddManualStock(input); updateProduct(manualStockTarget, { vehicleStockItemId: item.vehicleStockItemId, productName: item.productName, unit: usageUnits(item.unit)[0], licenseNumber: item.licenseNumber, licenseDocumentId: item.licenseDocumentId }); setManualStockTarget(null); }} />}{scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onScan={handleQrScan} />}{unassignedCodeModal && (
+    <div className="nested-modal-layer" role="dialog" aria-modal="true" style={{ zIndex: 1200 }}>
+      <div className="surface" style={{ width: '440px', maxWidth: '95vw', padding: '24px', borderRadius: '16px', background: '#fff', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)', border: '1px solid #cbd5e1' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+          <div style={{ background: '#ecfdf5', color: '#059669', padding: '10px', borderRadius: '12px', display: 'flex' }}>
+            <Barcode size={26} />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a' }}>Yeni Barkod / QR Algılandı</h3>
+            <small style={{ color: '#64748b' }}>Bu kod henüz bir istasyonla eşleştirilmemiş.</small>
+          </div>
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', marginBottom: '16px' }}>
+          <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Okutulan Kod</span>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#0284c7', fontFamily: 'monospace', wordBreak: 'break-all', marginTop: '3px' }}>
+            {unassignedCodeModal.scannedCode}
+          </div>
+        </div>
+
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '18px' }}>
+          Bu barkodu hangi istasyona tanımlamak istiyorsunuz?
+          <select
+            value={unassignedCodeModal.targetIndex}
+            onChange={(e) => setUnassignedCodeModal({ ...unassignedCodeModal, targetIndex: Number(e.target.value) })}
+            style={{ width: '100%', marginTop: '6px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#fff' }}
+          >
+            {stations.map((st, idx) => (
+              <option key={idx} value={idx}>
+                {st.deviceNumber || `İstasyon ${idx + 1}`} ({st.area || 'Genel Alan'}) {st.qrCode ? `[Mevcut: ${st.qrCode.slice(0, 10)}...]` : '[Henüz Kodsuz]'}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button type="button" className="secondary-button" onClick={() => setUnassignedCodeModal(null)}>
+            İptal
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => {
+              const idx = unassignedCodeModal.targetIndex;
+              const updated = [...stations];
+              updated[idx] = { ...updated[idx], qrCode: unassignedCodeModal.scannedCode };
+              setStations(updated);
+              setStationIndex(idx);
+              setUnassignedCodeModal(null);
+            }}
+          >
+            İstasyonla Eşleştir & Aç
+          </button>
+        </div>
+      </div>
+    </div>
+  )}{conflict && <div className="nested-modal-layer"><div className="report-conflict-dialog"><AlertTriangle size={30} /><h3>İki farklı rapor sürümü bulundu</h3><p>Sunucudaki rapor {formatDraftTime(conflict.updatedAt)} tarihinde güncellendi. Bu cihazdaki taslakla üzerine yazabilir veya güncel sunucu sürümünü kullanabilirsiniz.</p><div><button className="secondary-button" onClick={() => { setForm(createInitialForm(order, conflict, companyName)); setStations(conflict.stations.map(stripStationId)); setProducts(conflict.products.map(stripProductId)); setBaseUpdatedAt(conflict.updatedAt); setConflict(null); }}>Sunucudakini kullan</button><button className="primary-button" onClick={() => { setConflict(null); void submit(conflictFinalize, true); }}>Bu cihazdaki sürümü gönder</button></div></div></div>}</div>;
 }
 
 function ReportDetails({ catalog, form, setField, products, updateProduct, setProducts, stations, vehicleStockItems, readOnly, setSignatureTarget, autoAggregatedNotice, onAddManualStock }: { catalog: ServiceReportCatalog; form: FormState; setField: <K extends keyof FormState>(key: K, value: FormState[K]) => void; products: ReportProductInput[]; updateProduct: (index: number, patch: Partial<ReportProductInput>) => void; setProducts: Dispatch<SetStateAction<ReportProductInput[]>>; stations: ReportStationInput[]; vehicleStockItems: VehicleStockCheck['items']; readOnly: boolean; setSignatureTarget: (value: 'manager' | 'customer') => void; autoAggregatedNotice?: string | null; onAddManualStock?: () => void }) {
