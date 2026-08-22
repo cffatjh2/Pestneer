@@ -152,6 +152,7 @@ public static class DevelopmentDataSeeder
                 InventoryItemId = item.Id,
                 Type = "InitialStock",
                 Quantity = b.Qty,
+                UnitCostSnapshot = b.Cost,
                 Unit = b.Unit,
                 Note = "Başlangıç Biyosidal & Sarf Envanteri",
                 OccurredAt = now

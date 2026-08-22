@@ -11,17 +11,20 @@ import {
   type CalendarEntryRecord,
   type SaveCalendarEntryInput,
 } from '../services/calendarApi';
+import type { WorkOrder } from '../types';
+import DailyOperationsMap from '../components/maps/DailyOperationsMap';
 
 type CalendarProps = {
   accessToken: string;
   employees: EmployeeRecord[];
+  workOrders: WorkOrder[];
   onSessionExpired: () => void;
   onNotify: (message: string) => void;
 };
 
 type CalendarView = 'day' | 'month';
 
-export default function Calendar({ accessToken, employees, onSessionExpired, onNotify }: CalendarProps) {
+export default function Calendar({ accessToken, employees, workOrders, onSessionExpired, onNotify }: CalendarProps) {
   const [focusDate, setFocusDate] = useState(startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState(startOfDay(new Date()));
   const [view, setView] = useState<CalendarView>('month');
@@ -118,6 +121,8 @@ export default function Calendar({ accessToken, employees, onSessionExpired, onN
       </div>
 
       {error && <div className="calendar-error"><span>{error}</span><button onClick={() => void loadEntries()}><RefreshCw size={15} /> Yenile</button></div>}
+
+      <DailyOperationsMap orders={workOrders} date={toDateKey(selectedDate)} onDateChange={(value)=>{const next=startOfDay(new Date(`${value}T12:00:00`));setSelectedDate(next);setFocusDate(next);}} />
 
       <section className="surface calendar-surface">
         <div className="calendar-toolbar">

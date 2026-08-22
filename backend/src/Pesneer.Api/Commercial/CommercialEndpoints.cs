@@ -28,6 +28,7 @@ public static class CommercialEndpoints
         group.MapPost("/receivables/{receivableId:guid}/payment", RecordPaymentAsync);
         group.MapPut("/work-orders/{workOrderId:guid}/economics", SaveEconomicsAsync);
         group.MapGet("/profitability", GetProfitabilityAsync);
+        group.MapGet("/profitability/pdf", GetProfitabilityPdfAsync);
         var v2 = app.MapGroup("/api/v2/company/commercial").RequireAuthorization("OwnerPortal");
         v2.MapGet("/proposals", GetProposalPageAsync);
         v2.MapGet("/proposals/{proposalId:guid}", GetProposalDetailAsync);
@@ -320,32 +321,85 @@ public static class CommercialEndpoints
     }
 
     private static async Task<IResult> GetProfitabilityAsync(DateOnly? start, DateOnly? end, PesneerDbContext dbContext, CancellationToken cancellationToken)
+        => Results.Ok(await BuildProfitabilityAsync(start, end, dbContext, cancellationToken));
+
+    private static async Task<IResult> GetProfitabilityPdfAsync(
+        DateOnly? start,
+        DateOnly? end,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!context.CompanyId.HasValue) return Results.Forbid();
+        var summary = await BuildProfitabilityAsync(start, end, dbContext, cancellationToken);
+        var company = await dbContext.Companies.AsNoTracking()
+            .SingleAsync(item => item.Id == context.CompanyId.Value, cancellationToken);
+        var pdf = CommercialPdfRenderer.Profitability(summary, company);
+        return PdfResult(pdf, $"Karlilik-{summary.PeriodStart:yyyy-MM-dd}-{summary.PeriodEnd:yyyy-MM-dd}.pdf", DateTimeOffset.UtcNow);
+    }
+
+    private static async Task<ProfitabilitySummaryResponse> BuildProfitabilityAsync(
+        DateOnly? start,
+        DateOnly? end,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
     {
         var startDate = start ?? DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-3));
         var endDate = end ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var from = new DateTimeOffset(startDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-        var until = new DateTimeOffset(endDate.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-        var orders = await dbContext.WorkOrders.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch)
-            .Where(item => item.Status == "Completed" && item.ScheduledAt >= from && item.ScheduledAt < until)
+        if (endDate < startDate) (startDate, endDate) = (endDate, startDate);
+        var from = ToIstanbulDateTime(startDate, TimeOnly.MinValue).ToUniversalTime();
+        var until = ToIstanbulDateTime(endDate.AddDays(1), TimeOnly.MinValue).ToUniversalTime();
+        var orderQuery = dbContext.WorkOrders.AsNoTracking().Where(item => item.Status == "Completed");
+        if (!dbContext.Database.IsSqlite())
+            orderQuery = orderQuery.Where(item => item.ScheduledAt >= from && item.ScheduledAt < until);
+        var orderRows = await orderQuery
+            .Select(item => new ProfitabilityOrderSource(
+                item.Id, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId,
+                item.CustomerBranch != null ? item.CustomerBranch.Name : "Merkez / Genel",
+                item.ScheduledAt, item.DurationMinutes,
+                item.ChargeAmount > 0
+                    ? item.ChargeAmount
+                    : item.ContractServicePlan != null
+                        ? item.ContractServicePlan.BranchPrice / Math.Max(item.ContractServicePlan.VisitsPerPeriod, 1)
+                        : 0m))
             .ToListAsync(cancellationToken);
-        var economics = await dbContext.WorkOrderEconomics.AsNoTracking().Where(item => orders.Select(order => order.Id).Contains(item.WorkOrderId)).ToDictionaryAsync(item => item.WorkOrderId, cancellationToken);
-        var reports = await dbContext.ServiceReports.AsNoTracking()
-            .Where(item => orders.Select(order => order.Id).Contains(item.WorkOrderId))
-            .Select(item => new ProductCostSource(item.WorkOrderId, item.Products.Select(product => new ProductCostLine(
-                product.AmountUsed, product.VehicleStockItem != null && product.VehicleStockItem.InventoryItem != null
-                    ? product.VehicleStockItem.InventoryItem.UnitCost : 0m)).ToArray()))
+        var orders = dbContext.Database.IsSqlite()
+            ? orderRows.Where(item => item.ScheduledAt >= from && item.ScheduledAt < until).ToList()
+            : orderRows;
+        var orderIds = orders.Select(order => order.Id).ToArray();
+        var economics = await dbContext.WorkOrderEconomics.AsNoTracking()
+            .Where(item => orderIds.Contains(item.WorkOrderId))
+            .ToDictionaryAsync(item => item.WorkOrderId, cancellationToken);
+        var usageCosts = await dbContext.VehicleStockMovements.AsNoTracking()
+            .Where(item => item.Type == "ApplicationUse" &&
+                ((item.WorkOrderId.HasValue && orderIds.Contains(item.WorkOrderId.Value)) ||
+                 (item.ServiceReportId.HasValue && orderIds.Contains(item.ServiceReport!.WorkOrderId))))
+            .Select(item => new UsageCostSource(
+                item.WorkOrderId ?? item.ServiceReport!.WorkOrderId,
+                item.Quantity,
+                item.UnitCostSnapshot ?? (item.InventoryItem != null && item.InventoryItem.UnitCost > 0 ? item.InventoryItem.UnitCost : null)))
             .ToListAsync(cancellationToken);
-        var productCosts = reports.ToDictionary(report => report.WorkOrderId, report => report.Products.Sum(product => product.AmountUsed * product.UnitCost));
-        var receivables = await dbContext.ReceivableEntries.AsNoTracking().ToListAsync(cancellationToken);
+        var productCosts = usageCosts.GroupBy(item => item.WorkOrderId)
+            .ToDictionary(group => group.Key, group => group.Sum(item => item.Quantity * (item.UnitCost ?? 0m)));
+        var laborMinutes = await dbContext.WorkOrderVisitSessions.AsNoTracking()
+            .Where(item => orderIds.Contains(item.WorkOrderId))
+            .GroupBy(item => item.WorkOrderId)
+            .Select(group => new LaborSource(group.Key, group.Sum(item => item.DurationMinutes)))
+            .ToDictionaryAsync(item => item.WorkOrderId, item => item.Minutes, cancellationToken);
+        var receivables = await dbContext.ReceivableEntries.AsNoTracking()
+            .Where(item => item.IssueDate >= startDate && item.IssueDate <= endDate)
+            .ToListAsync(cancellationToken);
         var contracts = await dbContext.CustomerContracts.AsNoTracking().ToListAsync(cancellationToken);
-        var rows = orders.GroupBy(item => new { item.CustomerId, item.Customer.LegalName, item.CustomerBranchId, BranchName = item.CustomerBranch != null ? item.CustomerBranch.Name : "Merkez / Genel" }).Select(group =>
+        var rows = orders.GroupBy(item => new { item.CustomerId, item.CustomerName, item.CustomerBranchId, item.BranchName }).Select(group =>
         {
             decimal revenue = 0, product = 0, personnel = 0, fuel = 0, repeat = 0, emergency = 0, other = 0;
             foreach (var order in group)
             {
                 economics.TryGetValue(order.Id, out var eco);
-                revenue += eco?.Revenue ?? 0; product += productCosts.GetValueOrDefault(order.Id);
-                personnel += (eco?.PersonnelHourlyCost ?? 0) * order.DurationMinutes / 60m;
+                revenue += eco is { Revenue: > 0 } ? eco.Revenue : order.PlannedRevenue;
+                product += productCosts.GetValueOrDefault(order.Id);
+                var workedMinutes = laborMinutes.GetValueOrDefault(order.Id);
+                personnel += (eco?.PersonnelHourlyCost ?? 0) * (workedMinutes > 0 ? workedMinutes : order.DurationMinutes) / 60m;
                 fuel += eco?.FuelCost ?? 0; repeat += eco?.RepeatVisitCost ?? 0; emergency += eco?.EmergencyCallCost ?? 0; other += eco?.OtherCost ?? 0;
             }
             var customerReceivables = receivables.Where(item => item.CustomerId == group.Key.CustomerId && (!group.Key.CustomerBranchId.HasValue || item.CustomerBranchId == group.Key.CustomerBranchId)).ToArray();
@@ -355,10 +409,14 @@ public static class CommercialEndpoints
             var activeContract = contracts.Where(item => item.CustomerId == group.Key.CustomerId && item.Status == "Active").OrderByDescending(item => item.EndDate).FirstOrDefault();
             var overdue = customerReceivables.Count(item => item.Status != "Paid" && item.DueDate < DateOnly.FromDateTime(DateTime.UtcNow));
             var renewalScore = activeContract is null ? 25 : Math.Clamp(85 - overdue * 12 - (profit < 0 ? 20 : 0), 5, 95);
-            return new ProfitabilityRowResponse(group.Key.CustomerId, group.Key.LegalName, group.Key.CustomerBranchId, group.Key.BranchName, revenue, product, personnel, fuel, repeat, emergency, other, profit, revenue == 0 ? 0 : decimal.Round(profit / revenue * 100, 1), balance, group.Count(), group.Count(item => economics.GetValueOrDefault(item.Id)?.RepeatVisitCost > 0), group.Count(item => economics.GetValueOrDefault(item.Id)?.EmergencyCallCost > 0), renewalScore);
+            return new ProfitabilityRowResponse(group.Key.CustomerId, group.Key.CustomerName, group.Key.CustomerBranchId, group.Key.BranchName, revenue, product, personnel, fuel, repeat, emergency, other, profit, revenue == 0 ? 0 : decimal.Round(profit / revenue * 100, 1), balance, group.Count(), group.Count(item => economics.GetValueOrDefault(item.Id)?.RepeatVisitCost > 0), group.Count(item => economics.GetValueOrDefault(item.Id)?.EmergencyCallCost > 0), renewalScore);
         }).OrderByDescending(item => item.Revenue).ToArray();
         var totalRevenue = rows.Sum(item => item.Revenue); var grossProfit = rows.Sum(item => item.GrossProfit); var totalReceivable = receivables.Sum(item => item.Amount); var paid = receivables.Sum(item => item.PaidAmount);
-        return Results.Ok(new ProfitabilitySummaryResponse(totalRevenue, totalRevenue - grossProfit, grossProfit, totalRevenue == 0 ? 0 : decimal.Round(grossProfit / totalRevenue * 100, 1), totalReceivable - paid, totalReceivable == 0 ? 100 : decimal.Round(paid / totalReceivable * 100, 1), contracts.Count(item => item.Status == "Active" && item.EndDate >= DateOnly.FromDateTime(DateTime.UtcNow) && item.EndDate <= DateOnly.FromDateTime(DateTime.UtcNow.AddDays(90))), rows));
+        return new ProfitabilitySummaryResponse(startDate, endDate, totalRevenue, totalRevenue - grossProfit, grossProfit,
+            totalRevenue == 0 ? 0 : decimal.Round(grossProfit / totalRevenue * 100, 1), totalReceivable - paid,
+            totalReceivable == 0 ? 100 : decimal.Round(paid / totalReceivable * 100, 1),
+            contracts.Count(item => item.Status == "Active" && item.EndDate >= DateOnly.FromDateTime(DateTime.UtcNow) && item.EndDate <= DateOnly.FromDateTime(DateTime.UtcNow.AddDays(90))),
+            usageCosts.Count(item => !item.UnitCost.HasValue || item.UnitCost <= 0), rows);
     }
 
     private static async Task<IResult> GetProposalPdfAsync(Guid proposalId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -434,7 +492,8 @@ public static class CommercialEndpoints
                     CustomerContractId = contract.Id, ContractServicePlanId = plan.Id, Number = $"{prefix}{sequence:000}",
                     ServiceType = plan.ServiceType, VisitType = "Routine", RecurrenceType = plan.RecurrenceType,
                     RecurrenceGroupId = contract.Id, ScheduledAt = ToIstanbulDateTime(serviceDate, plan.PreferredTime),
-                    DurationMinutes = plan.DurationMinutes, Status = "Planned", ContractCoverage = "ContractIncluded", ChargeAmount = 0
+                    DurationMinutes = plan.DurationMinutes, Status = "Planned", ContractCoverage = "ContractIncluded",
+                    ChargeAmount = decimal.Round(plan.BranchPrice / Math.Max(plan.VisitsPerPeriod, 1), 2)
                 };
                 workOrder.History.Add(new WorkOrderStatusHistory
                 {
@@ -480,6 +539,11 @@ public static class CommercialEndpoints
     private static DateTimeOffset ToIstanbulDateTime(DateOnly date, string timeText)
     {
         var time = TimeOnly.ParseExact(timeText, ["HH:mm", "HH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None);
+        return ToIstanbulDateTime(date, time);
+    }
+
+    private static DateTimeOffset ToIstanbulDateTime(DateOnly date, TimeOnly time)
+    {
         TimeZoneInfo timeZone;
         try { timeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul"); }
         catch (TimeZoneNotFoundException) { timeZone = TimeZoneInfo.FindSystemTimeZoneById("Turkey Standard Time"); }
@@ -551,8 +615,9 @@ public static class CommercialEndpoints
             (createdAt == request.Position.Value.Sort && id.CompareTo(request.Position.Value.Id) < 0));
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static IResult Validation(string key, string message) => Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });
-    private sealed record ProductCostSource(Guid WorkOrderId, IReadOnlyList<ProductCostLine> Products);
-    private sealed record ProductCostLine(decimal AmountUsed, decimal UnitCost);
+    private sealed record ProfitabilityOrderSource(Guid Id, Guid CustomerId, string CustomerName, Guid? CustomerBranchId, string BranchName, DateTimeOffset ScheduledAt, int DurationMinutes, decimal PlannedRevenue);
+    private sealed record UsageCostSource(Guid WorkOrderId, decimal Quantity, decimal? UnitCost);
+    private sealed record LaborSource(Guid WorkOrderId, int Minutes);
     private sealed record StoredPdf(byte[] Data, string ContentType, string FileName, DateTimeOffset CreatedAt);
     private sealed record PageRequest(int Limit, DateTimeOffset Snapshot, CursorPosition? Position, IResult? Error);
 }

@@ -27,6 +27,8 @@ public static class WorkOrderEndpoints
         customers.MapGet("/", GetCustomersAsync);
         customers.MapPost("/", CreateCustomerAsync);
         customers.MapPost("/{customerId:guid}/branches/bulk", CreateBranchesAsync);
+        customers.MapPatch("/{customerId:guid}/location", UpdateCustomerLocationAsync);
+        customers.MapPatch("/{customerId:guid}/branches/{branchId:guid}/location", UpdateBranchLocationAsync);
         customers.MapPost("/{customerId:guid}/archive", ArchiveCustomerAsync);
         customers.MapPost("/{customerId:guid}/unarchive", UnarchiveCustomerAsync);
         customers.MapPost("/{customerId:guid}/branches/{branchId:guid}/archive", ArchiveBranchAsync);
@@ -216,6 +218,68 @@ public static class WorkOrderEndpoints
         }
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(branches.Select(ToResponse));
+    }
+
+    private static async Task<IResult> UpdateCustomerLocationAsync(
+        Guid customerId,
+        UpdateCustomerLocationRequest request,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var validation = ValidateLocation(request);
+        if (validation is not null) return validation;
+        var customer = await dbContext.Customers.Include(item => item.Branches)
+            .SingleOrDefaultAsync(item => item.Id == customerId && item.IsActive, cancellationToken);
+        if (customer is null) return Results.NotFound(new { message = "Müşteri bulunamadı." });
+        ApplyLocation(request, (latitude, longitude, mapUrl) =>
+        {
+            customer.Latitude = latitude;
+            customer.Longitude = longitude;
+            customer.MapUrl = mapUrl;
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(customer));
+    }
+
+    private static async Task<IResult> UpdateBranchLocationAsync(
+        Guid customerId,
+        Guid branchId,
+        UpdateCustomerLocationRequest request,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var validation = ValidateLocation(request);
+        if (validation is not null) return validation;
+        var branch = await dbContext.CustomerBranches
+            .SingleOrDefaultAsync(item => item.Id == branchId && item.CustomerId == customerId && item.IsActive, cancellationToken);
+        if (branch is null) return Results.NotFound(new { message = "Şube bulunamadı." });
+        ApplyLocation(request, (latitude, longitude, mapUrl) =>
+        {
+            branch.Latitude = latitude;
+            branch.Longitude = longitude;
+            branch.MapUrl = mapUrl;
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToResponse(branch));
+    }
+
+    private static IResult? ValidateLocation(UpdateCustomerLocationRequest request)
+    {
+        if (!CoordinatesAreValid(request.Latitude, request.Longitude))
+            return Validation("location", "Enlem ve boylam birlikte ve geçerli aralıkta girilmelidir.");
+        if (!UrlIsValid(request.MapUrl))
+            return Validation("mapUrl", "Geçerli bir Google Haritalar bağlantısı girin.");
+        if (!request.Latitude.HasValue && string.IsNullOrWhiteSpace(request.MapUrl))
+            return Validation("location", "Haritadan bir nokta seçin veya Google Haritalar bağlantısı girin.");
+        return null;
+    }
+
+    private static void ApplyLocation(
+        UpdateCustomerLocationRequest request,
+        Action<decimal?, decimal?, string?> apply)
+    {
+        MapLocationResolver.TryParse(request.MapUrl, out var resolved);
+        apply(request.Latitude ?? resolved?.Latitude, request.Longitude ?? resolved?.Longitude, NullIfEmpty(request.MapUrl));
     }
 
     private static async Task<IResult> GetCompanyWorkOrdersAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)

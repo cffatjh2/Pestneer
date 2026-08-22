@@ -970,15 +970,18 @@ public sealed class VehicleStockMovement : ICompanyScoped
     public Guid VehicleStockItemId { get; set; }
     public Guid? InventoryItemId { get; set; }
     public Guid? ServiceReportId { get; set; }
+    public Guid? WorkOrderId { get; set; }
     public Guid? PerformedByAccountId { get; set; }
     public required string Type { get; set; }
     public decimal Quantity { get; set; }
+    public decimal? UnitCostSnapshot { get; set; }
     public required string Unit { get; set; }
     public string? Note { get; set; }
     public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
     public VehicleStockItem VehicleStockItem { get; set; } = null!;
     public InventoryItem? InventoryItem { get; set; }
     public ServiceReport? ServiceReport { get; set; }
+    public WorkOrder? WorkOrder { get; set; }
     public Account? PerformedByAccount { get; set; }
 }
 
@@ -1007,6 +1010,7 @@ public sealed class InventoryMovement : ICompanyScoped
     public Guid InventoryItemId { get; set; }
     public required string Type { get; set; }
     public decimal Quantity { get; set; }
+    public decimal? UnitCostSnapshot { get; set; }
     public required string Unit { get; set; }
     public string? Note { get; set; }
     public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;

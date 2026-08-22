@@ -35,6 +35,11 @@ public sealed record CreateCustomerBranchRequest(
 public sealed record BulkCreateCustomerBranchesRequest(
     IReadOnlyList<CreateCustomerBranchRequest> Branches);
 
+public sealed record UpdateCustomerLocationRequest(
+    decimal? Latitude,
+    decimal? Longitude,
+    string? MapUrl);
+
 public sealed record CustomerBranchResponse(
     Guid Id,
     string Name,

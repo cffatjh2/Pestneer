@@ -24,7 +24,7 @@ export type CreateInventoryEntry = {
   quantity: number;
   unit: string;
   minimumQuantity: number;
-  unitCost: number;
+  unitCost?: number;
   lotNumber?: string;
 };
 

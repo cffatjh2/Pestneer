@@ -750,13 +750,16 @@ public class PesneerDbContext(
         {
             entity.HasIndex(item => new { item.CompanyId, item.VehicleStockItemId, item.OccurredAt });
             entity.HasIndex(item => new { item.CompanyId, item.ServiceReportId });
+            entity.HasIndex(item => new { item.CompanyId, item.WorkOrderId });
             entity.Property(item => item.Type).HasMaxLength(32);
             entity.Property(item => item.Quantity).HasPrecision(14, 3);
+            entity.Property(item => item.UnitCostSnapshot).HasPrecision(14, 4);
             entity.Property(item => item.Unit).HasMaxLength(24);
             entity.Property(item => item.Note).HasMaxLength(500);
             entity.HasOne(item => item.VehicleStockItem).WithMany().HasForeignKey(item => item.VehicleStockItemId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.InventoryItem).WithMany().HasForeignKey(item => item.InventoryItemId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.ServiceReport).WithMany().HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.WorkOrder).WithMany().HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.PerformedByAccount).WithMany().HasForeignKey(item => item.PerformedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
@@ -783,6 +786,7 @@ public class PesneerDbContext(
             entity.Property(item => item.Unit).HasMaxLength(24);
             entity.Property(item => item.Note).HasMaxLength(500);
             entity.Property(item => item.Quantity).HasPrecision(12, 2);
+            entity.Property(item => item.UnitCostSnapshot).HasPrecision(14, 4);
             entity.HasOne(item => item.InventoryItem).WithMany().HasForeignKey(item => item.InventoryItemId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });

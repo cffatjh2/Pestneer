@@ -25,7 +25,7 @@ export default function StockEntryModal({ onClose, onSubmit }: {
         quantity: Number(formData.get('quantity')),
         unit: String(formData.get('unit') ?? ''),
         minimumQuantity: Number(formData.get('minimumQuantity')),
-        unitCost: Number(formData.get('unitCost')),
+        unitCost: String(formData.get('unitCost') ?? '').trim() === '' ? undefined : Number(formData.get('unitCost')),
         lotNumber: String(formData.get('lotNumber') ?? '').trim() || undefined,
       });
     } catch (submitError) {
@@ -38,7 +38,7 @@ export default function StockEntryModal({ onClose, onSubmit }: {
   return (
     <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="stock-entry-title">
       <div className="modal stock-entry-modal">
-        <div className="modal-header"><div><p className="eyebrow">ENVANTER & DEPO</p><h2 id="stock-entry-title">Stok Girişi</h2><p>Depoya eklenecek ürünün miktar ve minimum stok seviyesini girin.</p></div><button className="icon-button" onClick={onClose} type="button" aria-label="Pencereyi kapat"><X size={20} /></button></div>
+        <div className="modal-header"><div><p className="eyebrow">ENVANTER & DEPO</p><h2 id="stock-entry-title">Stok Girişi</h2><p>Ürün miktarını girin; alış maliyeti varsa kullanım ve kârlılık hesabına otomatik yansır.</p></div><button className="icon-button" onClick={onClose} type="button" aria-label="Pencereyi kapat"><X size={20} /></button></div>
         <div className="stock-license-note"><ShieldCheck size={17} /><span>Biyosidal ürünlerde ticari marka, ruhsat numarası ve etiket bilgilerini ambalaj üzerinden doğrulayın.</span></div>
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
@@ -48,7 +48,7 @@ export default function StockEntryModal({ onClose, onSubmit }: {
             <label>Birim<select name="unit" defaultValue="Litre" required><option>Litre</option><option>Mililitre</option><option>Kilogram</option><option>Gram</option><option>Adet</option><option>Tüp</option><option>Kutu</option><option>Paket</option></select></label>
             <label>Giriş miktarı<input name="quantity" type="number" min="0.01" step="0.01" required /></label>
             <label>Minimum stok<input name="minimumQuantity" type="number" min="0" step="0.01" defaultValue="1" required /></label>
-            <label>Birim maliyet (₺)<input name="unitCost" type="number" min="0" step="0.01" defaultValue="0" required /></label>
+            <label>Birim alış maliyeti (₺) <small>Opsiyonel</small><input name="unitCost" type="number" min="0" step="0.01" placeholder="Örn. 425,50" /><span className="field-hint">Yeni parti girilirse ağırlıklı ortalama maliyet hesaplanır.</span></label>
             <label className="form-field-wide">Lot / Parti No<input name="lotNumber" maxLength={80} placeholder="İsteğe bağlı" /></label>
           </div>
           {error && <div className="modal-form-error" role="alert">{error}</div>}

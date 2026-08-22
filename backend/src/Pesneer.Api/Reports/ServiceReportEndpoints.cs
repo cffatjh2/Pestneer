@@ -703,6 +703,7 @@ public static class ServiceReportEndpoints
                         CompanyId = companyContext.CompanyId!.Value,
                         VehicleId = targetVehicle.Id,
                         InventoryItemId = generalInventoryItem.Id,
+                        InventoryItem = generalInventoryItem,
                         ProductName = generalInventoryItem.Name,
                         NormalizedName = generalInventoryItem.NormalizedName,
                         Quantity = generalInventoryItem.Quantity,
@@ -724,6 +725,7 @@ public static class ServiceReportEndpoints
 
         var stockItems = await dbContext.VehicleStockItems
             .Include(item => item.Vehicle)
+            .Include(item => item.InventoryItem)
             .Where(item => itemIds.Contains(item.Id) && item.IsActive)
             .ToDictionaryAsync(item => item.Id, cancellationToken);
 
@@ -746,8 +748,9 @@ public static class ServiceReportEndpoints
             dbContext.VehicleStockMovements.Add(new VehicleStockMovement
             {
                 Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId!.Value, VehicleStockItemId = stockItem.Id,
-                InventoryItemId = stockItem.InventoryItemId, ServiceReportId = report.Id,
+                InventoryItemId = stockItem.InventoryItemId, ServiceReportId = report.Id, WorkOrderId = workOrder.Id,
                 PerformedByAccountId = companyContext.AccountId, Type = "ApplicationUse", Quantity = deduction.Value,
+                UnitCostSnapshot = stockItem.InventoryItem?.UnitCost,
                 Unit = stockItem.Unit, Note = $"{workOrder.Number} numaralı iş emri saha uygulaması ({workOrder.Customer?.LegalName ?? workOrder.Number})", OccurredAt = now
             });
         }

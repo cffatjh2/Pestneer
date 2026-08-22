@@ -1484,6 +1484,10 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
+                    b.Property<decimal?>("UnitCostSnapshot")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InventoryItemId");
@@ -2271,10 +2275,6 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<string>("VisionAnalysisJson")
-                        .HasMaxLength(200000)
-                        .HasColumnType("character varying(200000)");
-
                     b.Property<bool>("PlateChanged")
                         .HasColumnType("boolean");
 
@@ -2306,6 +2306,10 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Property<string>("TargetPest")
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
+
+                    b.Property<string>("VisionAnalysisJson")
+                        .HasMaxLength(200000)
+                        .HasColumnType("character varying(200000)");
 
                     b.HasKey("Id");
 
@@ -2778,7 +2782,14 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
+                    b.Property<decimal?>("UnitCostSnapshot")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)");
+
                     b.Property<Guid>("VehicleStockItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("WorkOrderId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -2791,7 +2802,11 @@ namespace Pesneer.Api.Data.PostgresMigrations
 
                     b.HasIndex("VehicleStockItemId");
 
+                    b.HasIndex("WorkOrderId");
+
                     b.HasIndex("CompanyId", "ServiceReportId");
+
+                    b.HasIndex("CompanyId", "WorkOrderId");
 
                     b.HasIndex("CompanyId", "VehicleStockItemId", "OccurredAt");
 
@@ -4142,6 +4157,11 @@ namespace Pesneer.Api.Data.PostgresMigrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
+                        .WithMany()
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("InventoryItem");
 
                     b.Navigation("PerformedByAccount");
@@ -4149,6 +4169,8 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.Navigation("ServiceReport");
 
                     b.Navigation("VehicleStockItem");
+
+                    b.Navigation("WorkOrder");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.WasteDisposalEvidence", b =>

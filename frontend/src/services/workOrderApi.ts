@@ -5,6 +5,7 @@ export type CustomerBranchRecord = { id: string; name: string; code: string; add
 export type CustomerRecord = { id: string; legalName: string; code: string; contactName?: string; phoneNumber?: string; email?: string; address?: string; city?: string; district?: string; latitude?: number; longitude?: number; mapUrl?: string; isActive: boolean; branches: CustomerBranchRecord[] };
 export type CreateCustomerInput = { legalName: string; code?: string; contactName?: string; phoneNumber?: string; email?: string; address?: string; city?: string; district?: string; latitude?: number; longitude?: number; mapUrl?: string; portalContactName?: string; portalEmail?: string; portalPassword?: string };
 export type CreateBranchInput = { name: string; code?: string; address: string; city?: string; district?: string; contactName?: string; phoneNumber?: string; email?: string; latitude?: number; longitude?: number; mapUrl?: string; portalContactName?: string; portalEmail?: string; portalPassword?: string };
+export type UpdateLocationInput = { latitude?: number; longitude?: number; mapUrl?: string };
 export type BranchEmployeeAssignmentInput = { branchId: string; employeeAccountId?: string };
 
 export type CreateWorkOrdersInput = {
@@ -36,6 +37,8 @@ export class WorkOrderSessionExpiredError extends Error {
 export const getCustomers = (token: string, includeArchived = false) => request<CustomerRecord[]>(`/api/company/customers${includeArchived ? '?includeArchived=true' : ''}`, token);
 export const createCustomer = (token: string, input: CreateCustomerInput) => request<CustomerRecord>('/api/company/customers', token, { method: 'POST', body: JSON.stringify(input) });
 export const addCustomerBranches = (token: string, customerId: string, branches: CreateBranchInput[]) => request<CustomerBranchRecord[]>(`/api/company/customers/${customerId}/branches/bulk`, token, { method: 'POST', body: JSON.stringify({ branches }) });
+export const updateCustomerLocation = (token: string, customerId: string, input: UpdateLocationInput) => request<CustomerRecord>(`/api/company/customers/${customerId}/location`, token, { method: 'PATCH', body: JSON.stringify(input) });
+export const updateCustomerBranchLocation = (token: string, customerId: string, branchId: string, input: UpdateLocationInput) => request<CustomerBranchRecord>(`/api/company/customers/${customerId}/branches/${branchId}/location`, token, { method: 'PATCH', body: JSON.stringify(input) });
 export const archiveCustomer = (token: string, customerId: string) => request<CustomerRecord>(`/api/company/customers/${customerId}/archive`, token, { method: 'POST' });
 export const unarchiveCustomer = (token: string, customerId: string) => request<CustomerRecord>(`/api/company/customers/${customerId}/unarchive`, token, { method: 'POST' });
 export const archiveCustomerBranch = (token: string, customerId: string, branchId: string) => request<CustomerBranchRecord>(`/api/company/customers/${customerId}/branches/${branchId}/archive`, token, { method: 'POST' });

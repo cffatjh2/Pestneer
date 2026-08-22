@@ -6,7 +6,7 @@ export type ContractServicePlan = { id: string; branchId?: string; branchName: s
 export type Contract = { id: string; number: string; customerId: string; customerName: string; branchId?: string; branchName: string; proposalId?: string; title: string; status: string; startDate: string; endDate: string; billingFrequency: string; billingDay: number; paymentTermDays: number; periodAmount: number; currency: string; scope?: string; terms?: string; autoRenew: boolean; renewalNoticeDays: number; annualPriceIncreaseRate: number; freeEmergencyCallsPerYear: number; extraEmergencyCallPrice: number; responseTimeHours: number; daysUntilEnd: number; renewalDue: boolean; invoiceCount: number; remainingBalance: number; generatedWorkOrderCount: number; createdAt: string; servicePlans: ContractServicePlan[] };
 export type Receivable = { id: string; number: string; customerId: string; customerName: string; branchId?: string; branchName: string; contractId?: string; contractNumber: string; description: string; issueDate: string; dueDate: string; amount: number; paidAmount: number; balance: number; currency: string; status: string; paidAt?: string; paymentNote?: string };
 export type ProfitabilityRow = { customerId: string; customerName: string; branchId?: string; branchName: string; revenue: number; productCost: number; personnelCost: number; fuelCost: number; repeatVisitCost: number; emergencyCallCost: number; otherCost: number; grossProfit: number; marginPercent: number; receivableBalance: number; completedVisits: number; repeatVisits: number; emergencyCalls: number; renewalScore: number };
-export type ProfitabilitySummary = { revenue: number; totalCost: number; grossProfit: number; marginPercent: number; receivableBalance: number; collectionRate: number; contractsExpiringIn90Days: number; rows: ProfitabilityRow[] };
+export type ProfitabilitySummary = { periodStart: string; periodEnd: string; revenue: number; totalCost: number; grossProfit: number; marginPercent: number; receivableBalance: number; collectionRate: number; contractsExpiringIn90Days: number; unpricedUsageCount: number; rows: ProfitabilityRow[] };
 export type CreateProposalInput = { customerId: string; branchId?: string; title: string; issueDate: string; validUntil: string; vatRate: number; discountAmount: number; notes?: string; terms?: string; lines: { description: string; quantity: number; unit: string; unitPrice: number }[] };
 export type ContractServicePlanInput = { branchId?: string; employeeAccountId?: string; serviceType: string; recurrenceType: 'Weekly' | 'Monthly' | 'Manual'; visitsPerPeriod: number; preferredDay: number; preferredTime: string; durationMinutes: number; branchPrice: number };
 export type ConvertProposalInput = { startDate: string; endDate: string; billingFrequency: string; billingDay: number; paymentTermDays: number; periodAmount?: number; scope?: string; terms?: string; autoRenew?: boolean; renewalNoticeDays?: number; annualPriceIncreaseRate?: number; freeEmergencyCallsPerYear?: number; extraEmergencyCallPrice?: number; responseTimeHours?: number; servicePlans?: ContractServicePlanInput[] };
@@ -29,6 +29,19 @@ export const getProfitability = (token: string, start?: string, end?: string) =>
   const suffix = query.size ? `?${query.toString()}` : '';
   return request<ProfitabilitySummary>(`/api/company/commercial/profitability${suffix}`, token);
 };
+
+export async function downloadProfitabilityPdf(token: string, start: string, end: string) {
+  const query = new URLSearchParams({ start, end });
+  const response = await apiFetch(`/api/company/commercial/profitability/pdf?${query.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (response.status === 401) throw new CommercialSessionExpiredError();
+  if (!response.ok) throw new Error('Kârlılık raporu PDF olarak oluşturulamadı.');
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Karlilik-${start.slice(0, 7)}.pdf`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export type WorkOrderEconomicsInput = {
   revenue: number;
@@ -58,4 +71,3 @@ export async function shareCommercialPdf(token: string, kind: 'proposals' | 'con
     text: `${title || number} - Pestneer Ticari Belge`,
   });
 }
-

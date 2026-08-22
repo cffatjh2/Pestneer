@@ -27,11 +27,14 @@ import {
   deleteCustomer,
   unarchiveCustomer,
   unarchiveCustomerBranch,
+  updateCustomerBranchLocation,
+  updateCustomerLocation,
   type CreateBranchInput,
   type CreateCustomerInput,
   type CustomerRecord,
 } from '../../services/workOrderApi';
 import { downloadBranchTemplate, parseBranchWorkbook } from '../../utils/branchExcel';
+import LocationPicker, { type LocationValue } from '../maps/LocationPicker';
 
 type CustomerBranchModalProps = {
   accessToken?: string;
@@ -63,6 +66,9 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? '');
   const [importMode, setImportMode] = useState<'manual' | 'excel' | 'text'>('manual');
   const [manualBranch, setManualBranch] = useState<ManualBranchDraft>(emptyManualBranch);
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerLocation, setCustomerLocation] = useState<LocationValue>({});
+  const [editingLocation, setEditingLocation] = useState<{ customerId: string; branchId?: string; name: string; address?: string; value: LocationValue } | null>(null);
   const [branchText, setBranchText] = useState('');
   const [excelBranches, setExcelBranches] = useState<CreateBranchInput[]>([]);
   const [excelFileName, setExcelFileName] = useState('');
@@ -227,12 +233,12 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
       contactName: String(formData.get('contactName') || '') || undefined,
       phoneNumber: String(formData.get('phoneNumber') || '') || undefined,
       email: String(formData.get('email') || '') || undefined,
-      address: String(formData.get('address') || '') || undefined,
+      address: customerAddress.trim() || undefined,
       city: String(formData.get('city') || '') || undefined,
       district: String(formData.get('district') || '') || undefined,
-      latitude: optionalNumber(formData.get('latitude')),
-      longitude: optionalNumber(formData.get('longitude')),
-      mapUrl: String(formData.get('mapUrl') || '') || undefined,
+      latitude: customerLocation.latitude,
+      longitude: customerLocation.longitude,
+      mapUrl: customerLocation.mapUrl,
       portalContactName: String(formData.get('portalContactName') || '') || undefined,
       portalEmail: String(formData.get('portalEmail') || '') || undefined,
       portalPassword: String(formData.get('portalPassword') || '') || undefined,
@@ -265,6 +271,19 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const saveEditedLocation = async () => {
+    if (!editingLocation || !accessToken) return;
+    setActionBusy(true); setError(null);
+    try {
+      if (editingLocation.branchId) await updateCustomerBranchLocation(accessToken, editingLocation.customerId, editingLocation.branchId, editingLocation.value);
+      else await updateCustomerLocation(accessToken, editingLocation.customerId, editingLocation.value);
+      await onRefresh?.();
+      setEditingLocation(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Konum kaydedilemedi.');
+    } finally { setActionBusy(false); }
   };
 
   return (
@@ -400,6 +419,12 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {!isArchived && <button
+                            type="button"
+                            onClick={() => setEditingLocation({ customerId: cust.id, name: `${cust.legalName} · Merkez`, address: cust.address, value: { latitude: cust.latitude, longitude: cust.longitude, mapUrl: cust.mapUrl } })}
+                            style={{ height: '30px', padding: '0 8px', borderRadius: '6px', border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#15803d', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            title="Merkez konumunu haritadan seç"
+                          ><MapPin size={13}/> {cust.latitude != null ? 'Konumu Düzenle' : 'Konum Ekle'}</button>}
                           <button
                             type="button"
                             onClick={() => { setCustomerId(cust.id); setMode('existing'); }}
@@ -492,6 +517,7 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
                                     </div>
 
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '4px' }}>
+                                      {!brArchived && <button type="button" onClick={() => setEditingLocation({ customerId: cust.id, branchId: br.id, name: `${cust.legalName} · ${br.name}`, address: br.address, value: { latitude: br.latitude, longitude: br.longitude, mapUrl: br.mapUrl } })} style={{ height: '24px', padding: '0 6px', borderRadius: '4px', border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#15803d', fontSize: '10.5px', fontWeight: 700, cursor: 'pointer' }}><MapPin size={11}/> {br.latitude != null ? 'Konumu Düzenle' : 'Konum Ekle'}</button>}
                                       {brArchived ? (
                                         <button
                                           type="button"
@@ -542,9 +568,8 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
                 <label>Müşteri / marka adı<input name="legalName" required autoComplete="off" /></label><label>Müşteri kodu<input name="code" placeholder="Otomatik oluşturulur" autoComplete="off" /></label>
                 <label>Merkez yetkilisi<input name="contactName" placeholder="Ad Soyad" autoComplete="off" /></label><label>Merkez telefonu<input name="phoneNumber" type="tel" autoComplete="off" /></label>
                 <label>Merkez e-postası<input name="email" type="email" autoComplete="new-password" data-lpignore="true" placeholder="musteri@firma.com" /></label><label>İl / İlçe<span className="inline-field-pair"><input name="city" placeholder="İl" autoComplete="off" /><input name="district" placeholder="İlçe" autoComplete="off" /></span></label>
-                <label className="form-field-wide">Merkez adresi<input name="address" required={newCustomerStructure === 'single'} placeholder="Açık adres" autoComplete="off" /></label>
-                <label className="form-field-wide">Google Haritalar bağlantısı<input name="mapUrl" type="url" autoComplete="off" /></label>
-                <label>Enlem<input name="latitude" type="number" step="0.000001" autoComplete="off" /></label><label>Boylam<input name="longitude" type="number" step="0.000001" autoComplete="off" /></label>
+                <label className="form-field-wide">Merkez adresi<input name="address" value={customerAddress} onChange={(event)=>setCustomerAddress(event.target.value)} required={newCustomerStructure === 'single'} placeholder="Açık adres" autoComplete="off" /></label>
+                <div className="form-field-wide"><LocationPicker value={customerLocation} address={customerAddress} onChange={(value,formattedAddress)=>{setCustomerLocation(value);if(formattedAddress)setCustomerAddress(formattedAddress);}} /></div>
               </div>
               <div className="customer-portal-account-block">
                 <div className="modal-subheading"><CheckCircle2 size={18} /><div><strong>Çatı müşteri portal hesabı</strong><span>Bu hesap müşteri altındaki tüm şubeleri, işleri ve raporları görür.</span></div></div>
@@ -576,9 +601,7 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
                   <label>E-posta<input type="email" value={manualBranch.email} onChange={(event) => setManualBranch({ ...manualBranch, email: event.target.value })} autoComplete="new-password" data-lpignore="true" /></label>
                   <label>İl / İlçe<span className="inline-field-pair"><input value={manualBranch.city} onChange={(event) => setManualBranch({ ...manualBranch, city: event.target.value })} placeholder="İl" autoComplete="off" /><input value={manualBranch.district} onChange={(event) => setManualBranch({ ...manualBranch, district: event.target.value })} placeholder="İlçe" autoComplete="off" /></span></label>
                   <label className="form-field-wide">Açık adres<input value={manualBranch.address} onChange={(event) => setManualBranch({ ...manualBranch, address: event.target.value })} placeholder="Mahalle, cadde, bina ve kat bilgisi" autoComplete="off" /></label>
-                  <label className="form-field-wide">Google Haritalar bağlantısı<input type="url" value={manualBranch.mapUrl} onChange={(event) => setManualBranch({ ...manualBranch, mapUrl: event.target.value })} autoComplete="off" /></label>
-                  <label>Enlem<input type="number" step="0.000001" value={manualBranch.latitude} onChange={(event) => setManualBranch({ ...manualBranch, latitude: event.target.value })} autoComplete="off" /></label>
-                  <label>Boylam<input type="number" step="0.000001" value={manualBranch.longitude} onChange={(event) => setManualBranch({ ...manualBranch, longitude: event.target.value })} autoComplete="off" /></label>
+                  <div className="form-field-wide"><LocationPicker compact value={{ latitude: optionalNumber(manualBranch.latitude), longitude: optionalNumber(manualBranch.longitude), mapUrl: manualBranch.mapUrl || undefined }} address={manualBranch.address} onChange={(value,formattedAddress)=>setManualBranch({ ...manualBranch, address: formattedAddress || manualBranch.address, latitude: value.latitude?.toString() ?? '', longitude: value.longitude?.toString() ?? '', mapUrl: value.mapUrl ?? '' })}/></div>
                 </div>
                 <div className="branch-portal-fields"><strong>Şube müşteri portalı <small>Opsiyonel</small></strong><div className="form-grid customer-data-grid"><label>Portal yetkilisi<input value={manualBranch.portalContactName} onChange={(event) => setManualBranch({ ...manualBranch, portalContactName: event.target.value })} placeholder="Ad Soyad" autoComplete="off" /></label><label>Giriş e-postası<input type="email" value={manualBranch.portalEmail} onChange={(event) => setManualBranch({ ...manualBranch, portalEmail: event.target.value })} autoComplete="new-password" data-lpignore="true" /></label><label>Geçici şifre<input type="password" minLength={6} value={manualBranch.portalPassword} onChange={(event) => setManualBranch({ ...manualBranch, portalPassword: event.target.value })} placeholder="En az 6 karakter" autoComplete="new-password" data-lpignore="true" /></label><div className="portal-account-note">E-posta ve şifre birlikte girildiğinde yalnızca bu şubeyi gören müşteri hesabı açılır (Şifre en az 6 karakter olmalıdır).</div></div></div>
               </div> : importMode === 'excel' ? <>
@@ -612,6 +635,16 @@ export default function CustomerBranchModal({ accessToken, customers, onClose, o
             {error && <div className="modal-form-error" role="alert">{error}</div>}
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setMode('manage')}>Geri Dön</button><button type="submit" className="primary-button" disabled={isSubmitting || isReadingExcel || (mode === 'existing' && parsedBranches.length === 0)}>{isSubmitting ? 'Kaydediliyor…' : mode === 'new' && newCustomerStructure === 'single' ? 'Müşteri ve Merkez Lokasyonu Kaydet' : parsedBranches.length > 0 ? `${parsedBranches.length} Şubeyi Kaydet` : mode === 'existing' ? 'Şube Bilgilerini Tamamlayın' : 'Çatı Müşteriyi Kaydet'} <Plus size={17} /></button></div>
           </form>
+        )}
+
+        {editingLocation && (
+          <div className="modal-layer" style={{ zIndex: 1200 }}>
+            <div className="modal location-editor-modal">
+              <div className="modal-header"><div><p className="eyebrow">OPERASYON KONUMU</p><h2>{editingLocation.name}</h2><p>Mevcut adres ve iletişim bilgileri değişmeden yalnız harita konumu güncellenir.</p></div><button className="icon-button" type="button" onClick={()=>setEditingLocation(null)}><X/></button></div>
+              <LocationPicker value={editingLocation.value} address={editingLocation.address} onChange={(value)=>setEditingLocation((current)=>current?{...current,value}:current)} />
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={()=>setEditingLocation(null)}>Vazgeç</button><button type="button" className="primary-button" disabled={actionBusy || (!editingLocation.value.latitude && !editingLocation.value.mapUrl)} onClick={()=>void saveEditedLocation()}>{actionBusy?'Kaydediliyor…':'Konumu Kaydet'}</button></div>
+            </div>
+          </div>
         )}
 
         {deletingTarget && (
@@ -682,4 +715,3 @@ function optionalNumber(value: FormDataEntryValue | string | null) {
   const number = Number(text);
   return Number.isFinite(number) ? number : undefined;
 }
-

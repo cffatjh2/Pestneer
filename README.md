@@ -7,12 +7,14 @@ Pest kontrol ve ilaçlama firmaları için geliştirilen çok kiracılı operasy
 - Firma sahibi, firma çalışanı ve müşteri için ayrı giriş deneyimleri
 - Rol bazlı, firma sınırına bağlı JWT yetkilendirmesi
 - Operasyon merkezi, iş emirleri ve takvim
+- Yönetici ve personel için durum renkli günlük Google Maps saha görünümü ve mobil navigasyon
 - Firma sahibinin temel bilgiler, görev ve şifreyle anında çalışan hesabı oluşturabildiği ekip yönetimi
 - Çalışanların firma kodu, e-posta ve oluşturulan şifreyle ayrı portaldan girişi
 - Çalışanların işe başlama, mola, işe devam ve mesai bitiş kayıtlarıyla net çalışma süresi takibi
 - İlaç seçimi ve manuel ürün eklemeyi destekleyen araç stok kontrolü
 - Firma sahibi için günlük ve son 7 günlük personel sürelerini gösteren Rapor & Analizler ekranı
 - Stok yönetimi
+- İsteğe bağlı stok alış maliyeti ve aylık operasyonel kârlılık PDF'i
 - Dokunmatik cihazlarda imza alma
 - EK-1 benzeri yazdırılabilir hizmet raporu
 - Çalışan ve müşteri için ayrı portal görünümleri
@@ -61,4 +63,4 @@ Vercel dağıtımı `vercel.json` üzerinden React arayüzünü yayınlar; `/api
 
 PostgreSQL ayrı Railway servisi olduğu için uygulama yeniden dağıtılsa bile müşteri, personel, stok, takvim ve iş emri kayıtları korunur.
 
-Teknik ayrıntılar için `docs/architecture.md`, ürün karşılaştırması için `docs/competitive-roadmap.md` dosyasına bakın.
+Google Maps ve operasyonel kârlılık yayın ayarları için `docs/GOOGLE_MAPS_AND_OPERATIONAL_PROFITABILITY.md`, teknik ayrıntılar için `docs/architecture.md`, ürün karşılaştırması için `docs/competitive-roadmap.md` dosyasına bakın.

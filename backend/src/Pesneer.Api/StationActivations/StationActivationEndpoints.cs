@@ -332,16 +332,17 @@ public static class StationActivationEndpoints
         if (employeeId.HasValue)
         {
             vehicle = await db.Vehicles
-                .Include(v => v.StockItems)
+                .Include(v => v.StockItems).ThenInclude(item => item.InventoryItem)
                 .FirstOrDefaultAsync(v => v.AssignedEmployeeAccountId == employeeId.Value && v.IsActive, cancellationToken);
         }
         vehicle ??= await db.Vehicles
-            .Include(v => v.StockItems)
+            .Include(v => v.StockItems).ThenInclude(item => item.InventoryItem)
             .FirstOrDefaultAsync(v => v.IsActive, cancellationToken);
 
         var explicitIds = itemsToDeduct.Where(x => x.StockItemId.HasValue).Select(x => x.StockItemId!.Value).Distinct().ToArray();
         var stockItems = await db.VehicleStockItems
             .Include(item => item.Vehicle)
+            .Include(item => item.InventoryItem)
             .Where(item => explicitIds.Contains(item.Id) && item.IsActive)
             .ToDictionaryAsync(item => item.Id, cancellationToken);
 
@@ -384,9 +385,11 @@ public static class StationActivationEndpoints
                 CompanyId = context.CompanyId!.Value,
                 VehicleStockItemId = stockItem.Id,
                 InventoryItemId = stockItem.InventoryItemId,
+                WorkOrderId = workOrder.Id,
                 PerformedByAccountId = context.AccountId,
                 Type = "ApplicationUse",
                 Quantity = deduction.Value,
+                UnitCostSnapshot = stockItem.InventoryItem?.UnitCost,
                 Unit = stockItem.Unit,
                 Note = $"{workOrder.Number} nolu iş emri istasyon uygulaması ({workOrder.Customer?.LegalName ?? workOrder.Number})",
                 OccurredAt = now

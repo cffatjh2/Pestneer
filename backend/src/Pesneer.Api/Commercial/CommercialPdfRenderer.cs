@@ -7,6 +7,71 @@ namespace Pesneer.Api.Commercial;
 
 public static class CommercialPdfRenderer
 {
+    public static byte[] Profitability(ProfitabilitySummaryResponse summary, Company company) => Document.Create(document =>
+    {
+        document.Page(page =>
+        {
+            page.Size(PageSizes.A4.Landscape());
+            page.Margin(28);
+            page.DefaultTextStyle(style => style.FontSize(8).FontColor("#243B53"));
+            page.Header().Element(header => Header(header, company, "AYLIK OPERASYON KÂRLILIK RAPORU", $"{summary.PeriodStart:MM.yyyy}"));
+            page.Content().PaddingVertical(14).Column(column =>
+            {
+                column.Spacing(12);
+                column.Item().Text($"Rapor dönemi: {summary.PeriodStart:dd.MM.yyyy} – {summary.PeriodEnd:dd.MM.yyyy}")
+                    .FontSize(10).SemiBold().FontColor("#0B315A");
+                column.Item().Row(row =>
+                {
+                    row.RelativeItem().Element(card => Info(card, "Gelir", $"{summary.Revenue:N2} ₺", $"Tamamlanan {summary.Rows.Sum(item => item.CompletedVisits)} ziyaret"));
+                    row.ConstantItem(10);
+                    row.RelativeItem().Element(card => Info(card, "Toplam maliyet", $"{summary.TotalCost:N2} ₺", "Ürün, personel, yakıt ve ek maliyetler"));
+                    row.ConstantItem(10);
+                    row.RelativeItem().Element(card => Info(card, "Brüt kâr", $"{summary.GrossProfit:N2} ₺", $"Kâr marjı %{summary.MarginPercent:N1}"));
+                    row.ConstantItem(10);
+                    row.RelativeItem().Element(card => Info(card, "Tahsilat", $"%{summary.CollectionRate:N1}", $"Açık bakiye {summary.ReceivableBalance:N2} ₺"));
+                });
+                if (summary.UnpricedUsageCount > 0)
+                {
+                    column.Item().Border(1).BorderColor("#F5C26B").Background("#FFF8E8").Padding(9)
+                        .Text($"Maliyet bilgisi girilmemiş {summary.UnpricedUsageCount} stok kullanımı hesaplamaya 0 ₺ olarak dahil edildi.")
+                        .SemiBold().FontColor("#8A5A00");
+                }
+                column.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(2.6f); columns.RelativeColumn(); columns.RelativeColumn(); columns.RelativeColumn();
+                        columns.RelativeColumn(); columns.RelativeColumn(); columns.RelativeColumn(); columns.RelativeColumn();
+                    });
+                    table.Header(header =>
+                    {
+                        Cell(header.Cell(), "Müşteri / Şube", true); Cell(header.Cell(), "Gelir", true);
+                        Cell(header.Cell(), "Ürün", true); Cell(header.Cell(), "Personel", true);
+                        Cell(header.Cell(), "Yakıt", true); Cell(header.Cell(), "Ek maliyet", true);
+                        Cell(header.Cell(), "Brüt kâr", true); Cell(header.Cell(), "Marj", true);
+                    });
+                    foreach (var item in summary.Rows)
+                    {
+                        Cell(table.Cell(), $"{item.CustomerName}\n{item.BranchName} · {item.CompletedVisits} ziyaret");
+                        Cell(table.Cell(), $"{item.Revenue:N2} ₺"); Cell(table.Cell(), $"{item.ProductCost:N2} ₺");
+                        Cell(table.Cell(), $"{item.PersonnelCost:N2} ₺"); Cell(table.Cell(), $"{item.FuelCost:N2} ₺");
+                        Cell(table.Cell(), $"{item.RepeatVisitCost + item.EmergencyCallCost + item.OtherCost:N2} ₺");
+                        Cell(table.Cell(), $"{item.GrossProfit:N2} ₺"); Cell(table.Cell(), $"%{item.MarginPercent:N1}");
+                    }
+                    if (summary.Rows.Count == 0)
+                        Cell(table.Cell().ColumnSpan(8), "Seçilen ayda tamamlanmış ve maliyetlendirilmiş iş bulunmuyor.");
+                });
+                column.Item().Text("Bu rapor operasyonel yönetim ve iç kârlılık takibi içindir; resmi muhasebe belgesi, e-Fatura veya vergi beyannamesi değildir.")
+                    .FontSize(7).Italic().FontColor("#6F8397");
+            });
+            page.Footer().AlignCenter().Text(text =>
+            {
+                text.Span("Pestneer operasyonel kârlılık raporu  •  ");
+                text.CurrentPageNumber(); text.Span(" / "); text.TotalPages();
+            });
+        });
+    }).GeneratePdf();
+
     public static byte[] Proposal(CommercialProposal proposal, Company company) => Document.Create(document =>
     {
         document.Page(page =>

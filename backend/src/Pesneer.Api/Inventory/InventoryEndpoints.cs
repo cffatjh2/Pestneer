@@ -152,7 +152,7 @@ public static class InventoryEndpoints
                 Quantity = request.Quantity,
                 Unit = request.Unit.Trim(),
                 MinimumQuantity = request.MinimumQuantity,
-                UnitCost = request.UnitCost,
+                UnitCost = request.UnitCost ?? 0m,
                 LotNumber = lotNumber,
                 LastMovementAt = DateTimeOffset.UtcNow
             };
@@ -160,9 +160,15 @@ public static class InventoryEndpoints
         }
         else
         {
+            var previousQuantity = item.Quantity;
             item.Quantity += request.Quantity;
             item.MinimumQuantity = request.MinimumQuantity;
-            item.UnitCost = request.UnitCost;
+            if (request.UnitCost.HasValue)
+            {
+                item.UnitCost = previousQuantity <= 0 || item.UnitCost <= 0
+                    ? request.UnitCost.Value
+                    : decimal.Round(((previousQuantity * item.UnitCost) + (request.Quantity * request.UnitCost.Value)) / item.Quantity, 4);
+            }
             item.Category = request.Category.Trim();
             item.LastMovementAt = DateTimeOffset.UtcNow;
         }
@@ -174,6 +180,7 @@ public static class InventoryEndpoints
             InventoryItemId = item.Id,
             Type = "Entry",
             Quantity = request.Quantity,
+            UnitCostSnapshot = request.UnitCost,
             Unit = item.Unit,
             Note = lotNumber is null ? null : $"Lot / Parti: {lotNumber}",
             OccurredAt = item.LastMovementAt
@@ -225,6 +232,7 @@ public static class InventoryEndpoints
             InventoryItemId = item.Id,
             Type = "Exit",
             Quantity = request.Quantity,
+            UnitCostSnapshot = item.UnitCost,
             Unit = item.Unit,
             Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
             OccurredAt = occurredAt
@@ -299,8 +307,8 @@ public static class InventoryEndpoints
         inventory.Quantity -= request.Quantity; inventory.LastMovementAt = now;
         vehicleItem.Quantity += request.Quantity; vehicleItem.LastMovementAt = now;
         var note = string.IsNullOrWhiteSpace(request.Note) ? $"{vehicle.Plate} aracına transfer" : request.Note.Trim();
-        dbContext.InventoryMovements.Add(new InventoryMovement { Id = Guid.NewGuid(), CompanyId = context.CompanyId.Value, InventoryItemId = inventory.Id, Type = "TransferToVehicle", Quantity = request.Quantity, Unit = inventory.Unit, Note = note, OccurredAt = now });
-        dbContext.VehicleStockMovements.Add(new VehicleStockMovement { Id = Guid.NewGuid(), CompanyId = context.CompanyId.Value, VehicleStockItemId = vehicleItem.Id, InventoryItemId = inventory.Id, PerformedByAccountId = context.AccountId, Type = "TransferIn", Quantity = request.Quantity, Unit = vehicleItem.Unit, Note = note, OccurredAt = now });
+        dbContext.InventoryMovements.Add(new InventoryMovement { Id = Guid.NewGuid(), CompanyId = context.CompanyId.Value, InventoryItemId = inventory.Id, Type = "TransferToVehicle", Quantity = request.Quantity, UnitCostSnapshot = inventory.UnitCost, Unit = inventory.Unit, Note = note, OccurredAt = now });
+        dbContext.VehicleStockMovements.Add(new VehicleStockMovement { Id = Guid.NewGuid(), CompanyId = context.CompanyId.Value, VehicleStockItemId = vehicleItem.Id, InventoryItemId = inventory.Id, PerformedByAccountId = context.AccountId, Type = "TransferIn", Quantity = request.Quantity, UnitCostSnapshot = inventory.UnitCost, Unit = vehicleItem.Unit, Note = note, OccurredAt = now });
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { inventory = await InventoryResponseAsync(dbContext, inventory, cancellationToken), vehicle = await VehicleResponseAsync(dbContext, vehicle.Id, cancellationToken) });
     }

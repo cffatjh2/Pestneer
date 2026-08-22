@@ -1,20 +1,21 @@
 import { useMemo, useState } from 'react';
-import { Activity, AlertCircle, Building2, Eye, ExternalLink, MapPinned, Pencil, Plus, RefreshCw, Search, Store } from 'lucide-react';
+import { Activity, AlertCircle, Building2, Eye, ExternalLink, MapPinned, Pencil, Plus, RefreshCw, Route, Search, Store } from 'lucide-react';
 import type { WorkOrder } from '../types';
 import type { CustomerRecord } from '../services/workOrderApi';
 import StatusBadge from '../components/common/StatusBadge';
 import OwnerEmergencyRequests from '../components/workorders/OwnerEmergencyRequests';
 import type { EmployeeRecord } from '../services/employeeApi';
+import RouteOptimizer from '../components/workorders/RouteOptimizer';
 
 type Props = { accessToken: string; employees: EmployeeRecord[]; onSessionExpired: () => void; workOrders: WorkOrder[]; customers: CustomerRecord[]; isLoading: boolean; loadError: string | null; onReload: () => void; onCreate: () => void; onManageCustomers: () => void; onEdit: (order: WorkOrder) => void; onView: (order: WorkOrder) => void };
 
 export default function WorkOrders({ accessToken, employees, onSessionExpired, workOrders, customers, isLoading, loadError, onReload, onCreate, onManageCustomers, onEdit, onView }: Props) {
-  const [query, setQuery] = useState(''); const [status, setStatus] = useState('all');
+  const [query, setQuery] = useState(''); const [status, setStatus] = useState('all'); const [routeOpen,setRouteOpen]=useState(false);
   const totalBranches = customers.reduce((sum, customer) => sum + customer.branches.length, 0);
   const filteredOrders = useMemo(() => { const normalized = query.trim().toLocaleLowerCase('tr-TR'); return workOrders.filter((order) => (!normalized || `${order.id} ${order.client} ${order.branch} ${order.technician} ${order.service}`.toLocaleLowerCase('tr-TR').includes(normalized)) && (status === 'all' || order.status === status)); }, [workOrders, query, status]);
 
   return <section className="page work-orders-page">
-    <div className="page-heading"><div><p className="eyebrow">OPERASYON YÖNETİMİ</p><h1>İş emirleri</h1><p>Çok şubeli müşteri planlarını, personel atamalarını ve saha kapanışlarını yönetin.</p></div><div className="page-heading-actions"><button className="secondary-button" onClick={onManageCustomers}><Building2 size={18} /> Müşteri & Şube</button><button className="primary-button" onClick={onCreate}><Plus size={19} /> Yeni iş emri</button></div></div>
+    <div className="page-heading"><div><p className="eyebrow">OPERASYON YÖNETİMİ</p><h1>İş emirleri</h1><p>Çok şubeli müşteri planlarını, personel atamalarını ve saha kapanışlarını yönetin.</p></div><div className="page-heading-actions"><button className="secondary-button" onClick={()=>setRouteOpen(true)}><Route size={18}/> Günlük harita</button><button className="secondary-button" onClick={onManageCustomers}><Building2 size={18} /> Müşteri & Şube</button><button className="primary-button" onClick={onCreate}><Plus size={19} /> Yeni iş emri</button></div></div>
     <div className="work-order-kpis"><article className="surface"><span><Building2 size={19} /></span><div><small>Kurumsal müşteri</small><strong>{customers.length}</strong><em>Çatı firma kaydı</em></div></article><article className="surface"><span className="green"><Store size={19} /></span><div><small>Tanımlı şube</small><strong>{totalBranches}</strong><em>Bağımsız konum ve iletişim</em></div></article><article className="surface"><span className="orange"><Activity size={19} /></span><div><small>Aktif iş emri</small><strong>{workOrders.filter((item) => item.technicalStatus !== 'Completed' && item.technicalStatus !== 'Cancelled').length}</strong><em>Planlanan ve sahadaki</em></div></article></div>
     <OwnerEmergencyRequests accessToken={accessToken} employees={employees} onSessionExpired={onSessionExpired} />
     <section className="surface toolbar-surface"><div className="toolbar"><div className="search-field"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="İş emri, müşteri, şube veya personel ara" /></div><label className="toolbar-select"><Activity size={17} /><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Tüm durumlar</option><option value="Planlandı">Planlandı</option><option value="Sahada">Sahada</option><option value="Tamamlandı">Tamamlandı</option><option value="İptal">İptal</option></select></label></div></section>
@@ -24,6 +25,7 @@ export default function WorkOrders({ accessToken, employees, onSessionExpired, w
         {filteredOrders.length === 0 && <tr><td colSpan={6} className="work-orders-empty"><Store size={28} /><strong>{customers.length === 0 ? 'Önce müşteri ve şubelerini tanımlayın' : 'Eşleşen iş emri bulunamadı'}</strong><span>Yeni bir plan oluşturabilir veya filtreleri değiştirebilirsiniz.</span><button className="secondary-button" onClick={customers.length === 0 ? onManageCustomers : onCreate}><Plus size={16} /> {customers.length === 0 ? 'Müşteri & Şube Ekle' : 'Yeni İş Emri'}</button></td></tr>}
       </tbody></table></div>}
     </section>
+    {routeOpen && <RouteOptimizer orders={workOrders} onClose={()=>setRouteOpen(false)}/>}
   </section>;
 }
 

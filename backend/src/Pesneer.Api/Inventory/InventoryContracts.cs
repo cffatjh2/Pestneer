@@ -6,7 +6,7 @@ public sealed record CreateInventoryEntryRequest(
     decimal Quantity,
     string Unit,
     decimal MinimumQuantity,
-    decimal UnitCost,
+    decimal? UnitCost,
     string? LotNumber);
 
 public sealed record CreateInventoryExitRequest(
