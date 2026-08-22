@@ -33,6 +33,7 @@ using Pesneer.Api.Vision;
 using Pesneer.Api.WorkOrders;
 using Pesneer.Api.SystemAdministration;
 using Pesneer.Api.Storage;
+using Pesneer.Api.Maps;
 
 var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
@@ -65,6 +66,7 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 builder.Services.Configure<EmailDeliveryOptions>(builder.Configuration.GetSection(EmailDeliveryOptions.SectionName));
 builder.Services.Configure<SupabaseStorageOptions>(builder.Configuration.GetSection(SupabaseStorageOptions.SectionName));
 builder.Services.Configure<RequestMetricsOptions>(builder.Configuration.GetSection(RequestMetricsOptions.SectionName));
+builder.Services.Configure<GoogleMapsQuotaOptions>(builder.Configuration.GetSection(GoogleMapsQuotaOptions.SectionName));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICompanyContext, HttpCompanyContext>();
 builder.Services.AddScoped<PrivacySafeDbRequestMetrics>();
@@ -328,6 +330,7 @@ app.MapVisionSettingsEndpoints();
 app.MapAccountSecurityEndpoints();
 app.MapSystemAdministrationEndpoints();
 app.MapFileStorageEndpoints();
+app.MapGoogleMapsQuotaEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();
@@ -374,6 +377,15 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
 
 static async Task EnsureSqlitePrivateStorageFoundationAsync(PesneerDbContext db)
 {
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "GoogleMapsUsageCounters" (
+            "PeriodKey" TEXT NOT NULL,
+            "Metric" TEXT NOT NULL,
+            "UsedUnits" INTEGER NOT NULL,
+            "UpdatedAt" TEXT NOT NULL,
+            CONSTRAINT "PK_GoogleMapsUsageCounters" PRIMARY KEY ("PeriodKey", "Metric")
+        );
+        """);
     // Local databases historically use EnsureCreated rather than migration history. Keep their
     // upgrade additive and idempotent so existing inline bytes remain untouched.
     (string Table, string Column, string Sql)[] additiveColumns =

@@ -1,3 +1,5 @@
+import { apiFetch } from '../services/apiBase';
+
 type GoogleMapsRuntime = {
   maps: Record<string, unknown> & {
     Map: new (...args: unknown[]) => unknown;
@@ -22,6 +24,34 @@ let mapsPromise: Promise<GoogleMapsRuntime> | undefined;
 
 export const googleMapsConfigured = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim());
 export const googleMapsMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID?.trim();
+
+export type GoogleMapsQuotaMetric = 'dynamic_maps' | 'autocomplete_requests' | 'place_details' | 'geocoding';
+
+function currentAccessToken() {
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      const raw = storage.getItem('pesneer.session');
+      if (!raw) continue;
+      const token = JSON.parse(raw)?.accessToken;
+      if (typeof token === 'string' && token) return token;
+    } catch { /* An unreadable legacy session is treated as unauthenticated. */ }
+  }
+  return undefined;
+}
+
+export async function acquireGoogleMapsQuota(metric: GoogleMapsQuotaMetric, units = 1) {
+  const accessToken = currentAccessToken();
+  if (!accessToken) throw new Error('Harita kotası doğrulanamadı. Lütfen yeniden giriş yapın.');
+  const response = await apiFetch('/api/maps/quota/acquire', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ metric, units }),
+  });
+  if (response.status === 429)
+    throw new Error('Aylık ücretsiz Google Maps kotası doldu. Bağlantı ve koordinat girişi kullanılabilir.');
+  if (!response.ok) throw new Error('Harita kotası güvenli biçimde doğrulanamadı.');
+  return response.json() as Promise<{ allowed: boolean; remaining: number; limit: number; period: string }>;
+}
 
 export function loadGoogleMaps(): Promise<GoogleMapsRuntime> {
   if (window.google?.maps) return Promise.resolve(window.google);

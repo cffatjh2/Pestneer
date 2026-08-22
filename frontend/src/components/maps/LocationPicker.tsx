@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, LocateFixed, MapPin, Search } from 'lucide-react';
-import { coordinatesFromGoogleMapsUrl, googleMapsConfigured, googleMapsMapId, googleMapsUrl, loadGoogleMaps } from '../../utils/googleMaps';
+import { acquireGoogleMapsQuota, coordinatesFromGoogleMapsUrl, googleMapsConfigured, googleMapsMapId, googleMapsUrl, loadGoogleMaps } from '../../utils/googleMaps';
 
 export type LocationValue = { latitude?: number; longitude?: number; mapUrl?: string };
 
@@ -27,7 +27,7 @@ export default function LocationPicker({ value, address, onChange, compact = fal
   useEffect(() => {
     if (!googleMapsConfigured || !mapRef.current) return;
     let cancelled = false;
-    void loadGoogleMaps().then(async (runtime) => {
+    void acquireGoogleMapsQuota('dynamic_maps').then(() => loadGoogleMaps()).then(async (runtime) => {
       if (cancelled || !mapRef.current) return;
       const maps = runtime.maps as Record<string, any>;
       runtimeRef.current = maps;
@@ -60,17 +60,21 @@ export default function LocationPicker({ value, address, onChange, compact = fal
 
       const PlaceAutocompleteElement = maps.places?.PlaceAutocompleteElement;
       if (PlaceAutocompleteElement && autocompleteHostRef.current) {
+        await acquireGoogleMapsQuota('autocomplete_requests', 12);
         const autocomplete = new PlaceAutocompleteElement({ componentRestrictions: { country: 'tr' } });
         autocomplete.placeholder = 'İşletme adı veya adres ara';
         autocomplete.addEventListener('gmp-select', async (event: any) => {
           try {
             const place = event.placePrediction?.toPlace();
             if (!place) return;
-            await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
+            await acquireGoogleMapsQuota('place_details');
+            // Keep the request in the Essentials data category; displayName is a higher-priced
+            // Places field and is not needed after an address has been selected.
+            await place.fetchFields({ fields: ['formattedAddress', 'location'] });
             const location = place.location;
             if (location) {
               setLoadError(undefined);
-              select(location.lat(), location.lng(), place.formattedAddress ?? place.displayName);
+              select(location.lat(), location.lng(), place.formattedAddress);
             }
           } catch {
             setLoadError('Seçilen konumun ayrıntıları alınamadı.');
@@ -81,9 +85,12 @@ export default function LocationPicker({ value, address, onChange, compact = fal
       } else {
         const Autocomplete = maps.places?.Autocomplete;
         if (!Autocomplete || !searchRef.current) return;
+        await acquireGoogleMapsQuota('autocomplete_requests', 12);
         const autocomplete = new Autocomplete(searchRef.current, { fields: ['formatted_address', 'geometry', 'name'], componentRestrictions: { country: 'tr' } });
         autocomplete.bindTo('bounds', map);
-        autocomplete.addListener('place_changed', () => {
+        autocomplete.addListener('place_changed', async () => {
+          try { await acquireGoogleMapsQuota('place_details'); }
+          catch (cause) { return setLoadError(cause instanceof Error ? cause.message : 'Konum ayrıntısı kotası doldu.'); }
           const place = autocomplete.getPlace();
           const location = place.geometry?.location;
           if (location) select(location.lat(), location.lng(), place.formatted_address ?? place.name);
@@ -117,6 +124,7 @@ export default function LocationPicker({ value, address, onChange, compact = fal
     if (!query || !maps?.Geocoder) return;
     setSearching(true);
     try {
+      await acquireGoogleMapsQuota('geocoding');
       const result = await new maps.Geocoder().geocode({ address: query, region: 'TR' });
       const location = result.results?.[0]?.geometry?.location;
       if (!location) return setLoadError('Adres Google Maps üzerinde bulunamadı.');

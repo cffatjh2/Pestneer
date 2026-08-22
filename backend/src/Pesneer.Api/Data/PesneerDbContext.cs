@@ -58,12 +58,19 @@ public class PesneerDbContext(
     public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
     public DbSet<StoredObject> StoredObjects => Set<StoredObject>();
     public DbSet<StoredObjectUploadSession> StoredObjectUploadSessions => Set<StoredObjectUploadSession>();
+    public DbSet<GoogleMapsUsageCounter> GoogleMapsUsageCounters => Set<GoogleMapsUsageCounter>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Storage-only audit artifacts are a PostgreSQL-only canary. SQLite keeps its historical
         // NOT NULL schema and legacy byte behavior, including existing EnsureCreated databases.
         var requiresInlineAuditBytes = !Database.IsNpgsql();
+        modelBuilder.Entity<GoogleMapsUsageCounter>(entity =>
+        {
+            entity.HasKey(item => new { item.PeriodKey, item.Metric });
+            entity.Property(item => item.PeriodKey).HasMaxLength(7).IsFixedLength();
+            entity.Property(item => item.Metric).HasMaxLength(40);
+        });
         modelBuilder.Entity<Company>(entity =>
         {
             entity.HasIndex(company => company.Code).IsUnique();

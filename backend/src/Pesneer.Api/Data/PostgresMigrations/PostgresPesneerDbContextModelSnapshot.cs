@@ -1389,6 +1389,28 @@ namespace Pesneer.Api.Data.PostgresMigrations
                     b.ToTable("EmergencyRequestHistories");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.GoogleMapsUsageCounter", b =>
+                {
+                    b.Property<string>("PeriodKey")
+                        .HasMaxLength(7)
+                        .HasColumnType("character(7)")
+                        .IsFixedLength();
+
+                    b.Property<string>("Metric")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UsedUnits")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PeriodKey", "Metric");
+
+                    b.ToTable("GoogleMapsUsageCounters");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.InventoryItem", b =>
                 {
                     b.Property<Guid>("Id")

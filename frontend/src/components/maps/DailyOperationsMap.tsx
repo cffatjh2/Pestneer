@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Clock3, ExternalLink, MapPinned, Navigation, Route } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { optimizeDailyRoute, routeDateKey } from '../../utils/routeOptimization';
-import { googleMapsConfigured, googleMapsMapId, googleMapsUrl, loadGoogleMaps } from '../../utils/googleMaps';
+import { acquireGoogleMapsQuota, googleMapsConfigured, googleMapsMapId, googleMapsUrl, loadGoogleMaps } from '../../utils/googleMaps';
 
 const statusMeta: Record<string, { label: string; color: string }> = {
   Planned: { label: 'Planlandı', color: '#2563eb' },
@@ -29,7 +29,7 @@ export default function DailyOperationsMap({ orders, date, onDateChange, title =
   useEffect(() => {
     if (!googleMapsConfigured || !mapRef.current || locatedOrders.length === 0) return;
     let cancelled = false;
-    void loadGoogleMaps().then((runtime) => {
+    void acquireGoogleMapsQuota('dynamic_maps').then(() => loadGoogleMaps()).then((runtime) => {
       if (cancelled || !mapRef.current) return;
       const maps = runtime.maps as Record<string, any>;
       const center = { lat: locatedOrders[0].branchLatitude!, lng: locatedOrders[0].branchLongitude! };
