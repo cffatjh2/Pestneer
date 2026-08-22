@@ -155,6 +155,8 @@ var allowedOrigins = (builder.Configuration.GetSection("Cors:AllowedOrigins").Ge
     .Concat([
         builder.Configuration["Email:FrontendBaseUrl"],
         "http://localhost:5173",
+        "https://www.pestneer.com",
+        "https://pestneer.com",
         "https://pestneer-ctf.pages.dev",
         "https://pesneer.onrender.com"
     ])

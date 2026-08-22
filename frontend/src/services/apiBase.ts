@@ -1,4 +1,4 @@
-const PRODUCTION_API_ORIGIN = 'https://pesneer.onrender.com';
+const PRODUCTION_API_ORIGIN = 'https://api.pestneer.com';
 const CACHEABLE_PATHS = ['/api/v2/', '/api/company/dashboard'];
 const MAX_CACHE_ENTRIES = 40;
 const MAX_CACHE_ENTRY_BYTES = 2 * 1024 * 1024;

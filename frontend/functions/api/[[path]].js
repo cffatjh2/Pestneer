@@ -1,4 +1,4 @@
-const DEFAULT_API_ORIGIN = 'https://pesneer.onrender.com';
+const DEFAULT_API_ORIGIN = 'https://api.pestneer.com';
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',

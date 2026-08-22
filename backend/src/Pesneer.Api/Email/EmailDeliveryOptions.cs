@@ -15,8 +15,8 @@ public sealed class EmailDeliveryOptions
     public string FromName { get; set; } = "Pestneer Raporlama";
     public string? ReplyTo { get; set; }
     public bool EnableSsl { get; set; } = true;
-    public string PublicBaseUrl { get; set; } = "https://pesneer.onrender.com";
-    public string FrontendBaseUrl { get; set; } = "https://pestneer-ctf.pages.dev";
+    public string PublicBaseUrl { get; set; } = "https://api.pestneer.com";
+    public string FrontendBaseUrl { get; set; } = "https://www.pestneer.com";
     public string? GoogleClientId { get; set; }
     public string? GoogleClientSecret { get; set; }
     public string GoogleAuthorizationUrl { get; set; } = "https://accounts.google.com/o/oauth2/v2/auth";

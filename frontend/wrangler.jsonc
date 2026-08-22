@@ -4,6 +4,6 @@
   "compatibility_date": "2024-09-23",
   "pages_build_output_dir": "./dist",
   "vars": {
-    "API_ORIGIN": "https://pesneer.onrender.com"
+    "API_ORIGIN": "https://api.pestneer.com"
   }
 }
