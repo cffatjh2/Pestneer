@@ -7,12 +7,16 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
+  DollarSign,
+  Download,
   FileCheck2,
   Fingerprint,
   Layers3,
   Mail,
   MailCheck,
+  MapPinned,
   MapPin,
+  Navigation,
   PackageCheck,
   Play,
   QrCode,
@@ -21,6 +25,7 @@ import {
   Signature,
   Sparkles,
   Store,
+  TrendingUp,
   UsersRound,
   WifiOff,
 } from 'lucide-react';
@@ -32,12 +37,14 @@ type LandingPageProps = {
 };
 
 const featureCards = [
-  { icon: Route, title: 'Akıllı planlama & rota', text: 'Çok şubeli işleri ekiplere dağıtın; günlük rotayı, görevlileri ve ziyaret durumlarını tek akışta yönetin.', tone: 'blue' },
+  { icon: MapPinned, title: 'Google Maps & akıllı rota', text: 'Müşteri konumunu haritadan seçin; günlük işleri, en uygun rotayı ve anlık ziyaret durumlarını tek haritada görün.', tone: 'blue' },
   { icon: WifiOff, title: 'Çevrimdışı saha modu', text: 'İnternet olmasa da iş emri, istasyon, fotoğraf ve imza kaydedilir; bağlantı gelince güvenle eşitlenir.', tone: 'green' },
   { icon: QrCode, title: 'QR istasyon turu', text: 'İstasyonu QR ile açın; aktivite, hasar, ürün ve miktar kayıtlarını hızlı saha ekranından tamamlayın.', tone: 'purple' },
   { icon: BrainCircuit, title: 'PestneerVision & Lens', text: 'Yapışkan kart fotoğraflarındaki zararlıları cihazda analiz edin, sonucu kontrol ederek trende aktarın.', tone: 'orange' },
-  { icon: PackageCheck, title: 'Depo, araç ve sarf stoku', text: 'Depodan araca, uygulamadan tüketime kadar ürün hareketlerini ruhsat ve kritik seviye bağlantısıyla izleyin.', tone: 'cyan' },
-  { icon: FileCheck2, title: 'Denetim & müşteri portalı', text: 'İmzalı PDF, trend, risk, kroki, ruhsat ve MSDS/GBF belgelerini yetkili müşterilerle güvenle paylaşın.', tone: 'emerald' },
+  { icon: PackageCheck, title: 'Maliyetli stok yönetimi', text: 'Alış fiyatını isteğe bağlı girin; depodan araca ve saha kullanımına kadar gerçek ürün maliyetini otomatik izleyin.', tone: 'cyan' },
+  { icon: TrendingUp, title: 'Aylık kârlılık & PDF', text: 'Gelir, ürün, personel, yakıt ve ek maliyetleri müşteri/şube bazında karşılaştırın; aylık raporu PDF indirin.', tone: 'indigo' },
+  { icon: FileCheck2, title: 'Denetim & özel belge arşivi', text: 'İmzalı PDF, trend, risk, kroki, ruhsat ve MSDS/GBF belgelerini yetkili müşterilerle güvenle paylaşın.', tone: 'emerald' },
+  { icon: UsersRound, title: 'Role özel operasyon ekranları', text: 'Yönetici, saha personeli ve müşteri yalnız ihtiyacı olan iş, harita, rapor ve belgelere kendi portalından erişir.', tone: 'rose' },
 ];
 
 export default function LandingPage({ onLogin, onOpenDemo }: LandingPageProps) {
@@ -51,7 +58,7 @@ export default function LandingPage({ onLogin, onOpenDemo }: LandingPageProps) {
           <span className="landing-logo-shell"><img src="/pesneer-mark.jpeg" alt="Pestneer" /></span>
           <div><strong>Pestneer</strong><small>PEST KONTROL YÖNETİM SİSTEMİ</small></div>
         </a>
-        <nav aria-label="Tanıtım menüsü"><a href="#features">Özellikler</a><a href="#workflow">Nasıl çalışır?</a><a href="#security">Güvenlik</a></nav>
+        <nav aria-label="Tanıtım menüsü"><a href="#features">Özellikler</a><a href="#operations">Harita & kârlılık</a><a href="#workflow">Nasıl çalışır?</a><a href="#security">Güvenlik</a></nav>
         <button className="landing-login-button" onClick={onLogin}>Giriş Yap <ArrowRight size={17} /></button>
       </header>
 
@@ -59,7 +66,7 @@ export default function LandingPage({ onLogin, onOpenDemo }: LandingPageProps) {
         <div className="landing-hero-copy">
           <div className="landing-pill"><span><Sparkles size={14} /></span> 7 Günlük Ücretsiz Demo Hesabı <i /></div>
           <h1>Saha hızlansın.<br /><span>Her kayıt kanıta dönüşsün.</span></h1>
-          <p>Çevrimdışı saha turundan QR istasyon kontrolüne, araç stokundan imzalı PDF ve müşteri portalına kadar tüm operasyonunuzu tek bir profesyonel platformda yönetin.</p>
+          <p>Google Maps destekli günlük rotadan çevrimdışı saha turuna, maliyetli stoktan aylık kârlılık PDF’ine kadar tüm operasyonunuzu tek bir profesyonel platformda yönetin.</p>
           <div className="landing-hero-actions">
             <button className="landing-primary" onClick={handleOpenDemo}>
               <Sparkles size={18} /> 1 Hafta Ücretsiz Demo Başlat <ArrowRight size={18} />
@@ -95,11 +102,47 @@ export default function LandingPage({ onLogin, onOpenDemo }: LandingPageProps) {
         </div>
       </section>
 
-      <div className="landing-marquee" aria-hidden="true"><div>{['OFFLINE PWA','QR İSTASYON TURU','PESTNEERVISION','AKILLI ROTA','ARAÇ STOKU','İMZALI PDF','MSDS / GBF','MÜŞTERİ PORTALI','OFFLINE PWA','QR İSTASYON TURU','PESTNEERVISION','AKILLI ROTA','ARAÇ STOKU','İMZALI PDF','MSDS / GBF','MÜŞTERİ PORTALI'].map((item, index) => <span key={`${item}-${index}`}><i />{item}</span>)}</div></div>
+      <div className="landing-marquee" aria-hidden="true"><div>{['GOOGLE MAPS','OFFLINE PWA','QR İSTASYON TURU','PESTNEERVISION','AKILLI ROTA','MALİYETLİ STOK','KÂRLILIK PDF','ÖZEL BELGE ARŞİVİ','GOOGLE MAPS','OFFLINE PWA','QR İSTASYON TURU','PESTNEERVISION','AKILLI ROTA','MALİYETLİ STOK','KÂRLILIK PDF','ÖZEL BELGE ARŞİVİ'].map((item, index) => <span key={`${item}-${index}`}><i />{item}</span>)}</div></div>
 
       <section className="landing-section landing-features" id="features">
         <div className="landing-section-heading"><p>TÜM OPERASYON, TEK PLATFORM</p><h2>Sahada hız, merkezde <span>tam kontrol.</span></h2><div>Günlük operasyon yükünü azaltan, veriyi düzenleyen ve büyümeye hazır profesyonel modüller.</div></div>
         <div className="landing-feature-grid">{featureCards.map(({ icon: Icon, title, text, tone }, index) => <article key={title} className={`landing-feature-card tone-${tone}`} style={{ '--feature-index': index } as CSSProperties}><div className="feature-icon"><Icon size={22} /></div><span>0{index + 1}</span><h3>{title}</h3><p>{text}</p><button onClick={onLogin}>Modülü keşfet <ArrowRight size={14} /></button></article>)}</div>
+      </section>
+
+      <section className="landing-capabilities" id="operations" aria-label="Harita ve kârlılık özellikleri">
+        <div className="landing-capabilities-heading">
+          <p>YENİ NESİL OPERASYON KONTROLÜ</p>
+          <h2>Günün sahasını izleyin.<br /><span>Ayın sonucunu ölçün.</span></h2>
+          <div>Konum, iş durumu, kullanılan ürün ve operasyon maliyeti aynı kayıt zincirinde birleşir.</div>
+        </div>
+        <div className="capability-showcase">
+          <article className="capability-panel capability-map-panel">
+            <header><span><MapPinned size={18} /></span><div><small>GOOGLE MAPS DESTEKLİ</small><strong>Günlük operasyon haritası</strong></div><em>CANLI</em></header>
+            <div className="capability-map-canvas" aria-hidden="true">
+              <i className="capability-road road-a" /><i className="capability-road road-b" /><i className="capability-road road-c" />
+              <span className="capability-map-pin map-pin-done"><Check size={14} /></span>
+              <span className="capability-map-pin map-pin-next"><Navigation size={14} /></span>
+              <span className="capability-map-pin map-pin-wait"><Clock3 size={14} /></span>
+              <div className="capability-route-line" />
+              <div className="capability-map-tooltip"><small>SIRADAKİ İŞ · 11:00</small><strong>Kuzey Hat Depo</strong><span>Rotayı başlat <ArrowRight size={12} /></span></div>
+            </div>
+            <div className="capability-legend"><span><i className="legend-done" /> Tamamlandı</span><span><i className="legend-next" /> Sıradaki iş</span><span><i className="legend-wait" /> Bekliyor</span></div>
+            <ul><li><Check size={14} /> Müşteriyi doğrudan haritadan seçin</li><li><Check size={14} /> Personel ve yönetici aynı günlük akışı görsün</li><li><Check size={14} /> Tamamlanan işin işareti otomatik değişsin</li></ul>
+          </article>
+
+          <article className="capability-panel capability-profit-panel">
+            <header><span><DollarSign size={18} /></span><div><small>DİNAMİK MALİYET ANALİZİ</small><strong>Aylık operasyon kârlılığı</strong></div><button type="button" onClick={onLogin}><Download size={14} /> PDF</button></header>
+            <div className="profit-preview-month"><span>AĞUSTOS 2026</span><em>24 tamamlanan ziyaret</em></div>
+            <div className="profit-preview-total"><div><small>BRÜT KÂR</small><strong>₺84.750</strong><span><TrendingUp size={13} /> %31,4 marj</span></div><i><DollarSign size={25} /></i></div>
+            <div className="profit-preview-bars"><div><span>Gelir</span><i><b style={{ width: '100%' }} /></i><strong>₺270.000</strong></div><div><span>Ürün</span><i><b style={{ width: '38%' }} /></i><strong>₺48.600</strong></div><div><span>Personel</span><i><b style={{ width: '57%' }} /></i><strong>₺72.400</strong></div><div><span>Diğer</span><i><b style={{ width: '50%' }} /></i><strong>₺64.250</strong></div></div>
+            <div className="profit-preview-note"><PackageCheck size={17} /><span><strong>Fiyat girişi isteğe bağlı</strong><small>Ürün fiyatı girildiğinde saha kullanımı gerçek maliyete otomatik yansır.</small></span></div>
+          </article>
+        </div>
+        <div className="capability-foundation">
+          <span><ShieldCheck size={17} /><strong>Özel dosya alanı</strong><small>Belgeler yetki kontrollü saklanır</small></span>
+          <span><Route size={17} /><strong>Tek operasyon akışı</strong><small>Konumdan rapora kesintisiz kayıt</small></span>
+          <span><Download size={17} /><strong>Hazır çıktılar</strong><small>Aylık kârlılık raporu PDF olarak iner</small></span>
+        </div>
       </section>
 
       <section className="landing-intelligence" aria-label="Pestneer birleşik operasyon akışı">
