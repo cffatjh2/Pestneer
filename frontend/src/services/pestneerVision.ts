@@ -1,10 +1,9 @@
 import type { InferenceSession } from 'onnxruntime-web';
-import * as ortWasm from 'onnxruntime-web';
-import * as ortWebGpu from 'onnxruntime-web/webgpu';
 import type { VisionModelPreference } from './pestneerVisionApi';
 
-ortWasm.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
-ortWebGpu.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+const ONNX_RUNTIME_VERSION = '1.27.0';
+const WASM_ASSET_ROOT = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ONNX_RUNTIME_VERSION}/dist/`;
+type OrtRuntime = typeof import('onnxruntime-web');
 
 type ModelKey = 'pVision' | 'pLens';
 type Manifest = {
@@ -63,8 +62,8 @@ export async function analyzePestImage(file: File, preference: VisionModelPrefer
   const manifest = await loadManifest();
   const image = await loadImage(file);
   try {
-    const modelKey = selectModel(preference);
-    const wantsWebGpu = modelKey === 'pLens' && supportsWebGpu();
+    const modelKey = await selectModel(preference);
+    const wantsWebGpu = modelKey === 'pLens';
     let runtime: VisionAnalysis['runtime'] = wantsWebGpu ? 'webgpu' : 'wasm';
     let activeKey: ModelKey = modelKey;
     let session: InferenceSession;
@@ -75,7 +74,7 @@ export async function analyzePestImage(file: File, preference: VisionModelPrefer
       runtime = 'wasm';
       session = await getSession(manifest.models.pVision.url, runtime);
     }
-    const ort = getRuntime(runtime);
+    const ort = await getRuntime(runtime);
     const tiles = createTiles(image.width, image.height, manifest.tileSize, manifest.tileOverlap);
     const detections: VisionDetection[] = [];
     const inputName = session.inputNames[0] ?? 'images';
@@ -112,14 +111,29 @@ async function loadManifest() {
   return manifestPromise;
 }
 
-function selectModel(preference: VisionModelPreference): ModelKey {
+async function selectModel(preference: VisionModelPreference): Promise<ModelKey> {
   if (preference === 'pVision') return 'pVision';
-  if (preference === 'pLens') return supportsWebGpu() ? 'pLens' : 'pVision';
-  return supportsWebGpu() && !isMobileDevice() ? 'pLens' : 'pVision';
+  const webGpuReady = await supportsWebGpu();
+  if (preference === 'pLens') return webGpuReady ? 'pLens' : 'pVision';
+  return webGpuReady && !isMobileDevice() ? 'pLens' : 'pVision';
 }
 
+let webGpuSupportPromise: Promise<boolean> | undefined;
 function supportsWebGpu() {
-  return typeof navigator !== 'undefined' && 'gpu' in navigator;
+  webGpuSupportPromise ??= (async () => {
+    if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+    try {
+      const gpu = (navigator as Navigator & { gpu: { requestAdapter: () => Promise<{ requestDevice: () => Promise<unknown> } | null> } }).gpu;
+      const adapter = await gpu.requestAdapter();
+      if (!adapter) return false;
+      const device = await adapter.requestDevice();
+      (device as { destroy?: () => void }).destroy?.();
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  return webGpuSupportPromise;
 }
 
 function isMobileDevice() {
@@ -127,7 +141,7 @@ function isMobileDevice() {
 }
 
 async function getSession(url: string, runtime: VisionAnalysis['runtime']) {
-  const ort = getRuntime(runtime);
+  const ort = await getRuntime(runtime);
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.proxy = false;
   const key = `${runtime}:${url}`;
@@ -143,8 +157,26 @@ async function getSession(url: string, runtime: VisionAnalysis['runtime']) {
   }
 }
 
-function getRuntime(runtime: VisionAnalysis['runtime']): typeof ortWasm {
-  return (runtime === 'webgpu' ? ortWebGpu : ortWasm) as typeof ortWasm;
+const runtimeCache = new Map<VisionAnalysis['runtime'], Promise<OrtRuntime>>();
+async function getRuntime(runtime: VisionAnalysis['runtime']): Promise<OrtRuntime> {
+  let promise = runtimeCache.get(runtime);
+  if (!promise) {
+    promise = (runtime === 'webgpu'
+      ? import('onnxruntime-web/webgpu')
+      : import('onnxruntime-web'))
+      .then((module) => {
+        const selected = module as unknown as OrtRuntime;
+        selected.env.wasm.wasmPaths = WASM_ASSET_ROOT;
+        return selected;
+      });
+    runtimeCache.set(runtime, promise);
+  }
+  try {
+    return await promise;
+  } catch (error) {
+    runtimeCache.delete(runtime);
+    throw error;
+  }
 }
 
 type LoadedImage = { source: CanvasImageSource; width: number; height: number; close: () => void };

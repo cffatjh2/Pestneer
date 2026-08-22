@@ -3,7 +3,7 @@ import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Clock3, Download,
 import { useReactToPrint } from 'react-to-print';
 import type { AuthenticatedSession } from '../auth/types';
 import ServiceReportPrintSheet from '../components/report/ServiceReportPrintSheet';
-import { getCustomerServiceReports, getServiceReportPdfUrl, type ServiceReportRecord } from '../services/serviceReportApi';
+import { getCustomerServiceReportSummaries, getServiceReportDetail, getServiceReportPdfUrl, ReportSessionExpiredError, type ServiceReportRecord, type ServiceReportSummary } from '../services/serviceReportApi';
 import { addCustomerRequestMessage, approveCustomerRequestClosure, createEmergencyRequest, CustomerPortalSessionExpiredError, getCustomerCommercialSummary, getCustomerPortalSummary, type CreateEmergencyRequestInput, type CustomerCommercialSummary, type CustomerPortalSummary, type EmergencyRequestRecord } from '../services/customerPortalApi';
 import WeatherRiskPanel from '../components/weather/WeatherRiskPanel';
 import { getCustomerWeatherRisks, WeatherRiskSessionExpiredError, type WeatherRiskOverview } from '../services/weatherRiskApi';
@@ -16,22 +16,70 @@ import HealthWasteCenter from '../components/compliance/HealthWasteCenter';
 import { PasswordChangeCard } from '../components/security/PasswordSecurityCards';
 import { downloadBlob, shareProtectedDocument } from '../utils/shareUtils';
 import { apiFetch } from '../services/apiBase';
-import { getCustomerStationActivations, type StationActivationRecord } from '../services/stationActivationApi';
+import { getCustomerStationActivationSummaries, getStationActivationDetail, type StationActivationRecord, type StationActivationSummary } from '../services/stationActivationApi';
 
 type Tab = 'overview' | 'services' | 'stations' | 'commercial' | 'health' | 'weather' | 'reports' | 'documents' | 'actions' | 'requests' | 'account';
 
 export default function CustomerPortal({ session, onLogout }: { session: AuthenticatedSession; onLogout: () => void }) {
-  const [summary, setSummary] = useState<CustomerPortalSummary | null>(null); const [reports, setReports] = useState<ServiceReportRecord[]>([]);
+  const [summary, setSummary] = useState<CustomerPortalSummary | null>(null); const [reports, setReports] = useState<ServiceReportSummary[]>([]);
   const [weatherRisk, setWeatherRisk] = useState<WeatherRiskOverview | null>(null);
   const [commercial, setCommercial] = useState<CustomerCommercialSummary | null>(null);
-  const [stationActivations, setStationActivations] = useState<StationActivationRecord[]>([]);
+  const [stationActivations, setStationActivations] = useState<StationActivationSummary[]>([]);
+  const [stationActivationDetails, setStationActivationDetails] = useState<Record<string, StationActivationRecord>>({});
+  const [stationDetailsLoading, setStationDetailsLoading] = useState(false);
+  const [stationDetailsLoaded, setStationDetailsLoaded] = useState(false);
+  const [stationDetailsError, setStationDetailsError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('overview'); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false); const [preview, setPreview] = useState<ServiceReportRecord | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
+  const [reportActionError, setReportActionError] = useState<string | null>(null);
+  const stationHydrationKey = useRef('');
   const printRef = useRef<HTMLDivElement>(null); const print = useReactToPrint({ contentRef: printRef, documentTitle: preview ? `${preview.reportNumber}_${preview.branchName}` : 'Pestneer_Hizmet_Raporu' });
-  const downloadReport = async (report: ServiceReportRecord) => { const response = await apiFetch(getServiceReportPdfUrl(report.id), { headers: { Authorization: `Bearer ${session.accessToken}` } }); if (!response.ok) throw new Error('Hizmet raporu indirilemedi.'); downloadBlob(await response.blob(), `${report.reportNumber}.pdf`); };
-  const shareReport = async (report: ServiceReportRecord) => { await shareProtectedDocument(session.accessToken, getServiceReportPdfUrl(report.id), `${report.reportNumber}.pdf`, `${report.reportNumber} Hizmet Raporu`); };
-  const load = async (forceWeather = false) => { setLoading(true); setError(null); try { const [portal, reportItems, risk, commercialItems, activations] = await Promise.all([getCustomerPortalSummary(session.accessToken), getCustomerServiceReports(session.accessToken), getCustomerWeatherRisks(session.accessToken, forceWeather), getCustomerCommercialSummary(session.accessToken), getCustomerStationActivations(session.accessToken)]); setSummary(portal); setReports(reportItems); setWeatherRisk(risk); setCommercial(commercialItems); setStationActivations(activations); } catch (loadError) { if (loadError instanceof CustomerPortalSessionExpiredError || loadError instanceof WeatherRiskSessionExpiredError) return onLogout(); setError(loadError instanceof Error ? loadError.message : 'Müşteri verileri yüklenemedi.'); } finally { setLoading(false); } };
+  const downloadReport = async (report: Pick<ServiceReportSummary, 'id' | 'reportNumber'>) => { const response = await apiFetch(getServiceReportPdfUrl(report.id), { headers: { Authorization: `Bearer ${session.accessToken}` } }); if (!response.ok) throw new Error('Hizmet raporu indirilemedi.'); downloadBlob(await response.blob(), `${report.reportNumber}.pdf`); };
+  const shareReport = async (report: Pick<ServiceReportSummary, 'id' | 'reportNumber'>) => { await shareProtectedDocument(session.accessToken, getServiceReportPdfUrl(report.id), `${report.reportNumber}.pdf`, `${report.reportNumber} Hizmet Raporu`); };
+  const openReport = async (report: ServiceReportSummary) => {
+    setPreviewLoadingId(report.id);
+    setReportActionError(null);
+    try {
+      setPreview(await getServiceReportDetail(session.accessToken, report));
+    } catch (detailError) {
+      if (detailError instanceof ReportSessionExpiredError) return onLogout();
+      setReportActionError(detailError instanceof Error ? detailError.message : 'Rapor detayı yüklenemedi.');
+    } finally {
+      setPreviewLoadingId(null);
+    }
+  };
+  const load = async (forceWeather = false) => { setLoading(true); setError(null); try { const [portal, reportItems, risk, commercialItems, activations] = await Promise.all([getCustomerPortalSummary(session.accessToken), getCustomerServiceReportSummaries(session.accessToken), getCustomerWeatherRisks(session.accessToken, forceWeather), getCustomerCommercialSummary(session.accessToken), getCustomerStationActivationSummaries(session.accessToken)]); setSummary(portal); setReports(reportItems); setWeatherRisk(risk); setCommercial(commercialItems); setStationActivations(activations); setStationActivationDetails({}); setStationDetailsLoaded(false); setStationDetailsError(null); stationHydrationKey.current = ''; } catch (loadError) { if (loadError instanceof CustomerPortalSessionExpiredError || loadError instanceof WeatherRiskSessionExpiredError || loadError instanceof ReportSessionExpiredError) return onLogout(); setError(loadError instanceof Error ? loadError.message : 'Müşteri verileri yüklenemedi.'); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, [session.accessToken]);
+  useEffect(() => {
+    if (tab !== 'stations' || stationActivations.length === 0 || stationDetailsLoaded) return;
+    const key = stationActivations.map((item) => item.id).join(',');
+    if (stationHydrationKey.current === key) return;
+    stationHydrationKey.current = key;
+    let cancelled = false;
+    setStationDetailsLoading(true);
+    setStationDetailsError(null);
+
+    void (async () => {
+      const details: Record<string, StationActivationRecord> = {};
+      let failed = 0;
+      for (let index = 0; index < stationActivations.length; index += 4) {
+        const batch = stationActivations.slice(index, index + 4);
+        const results = await Promise.allSettled(batch.map((item) => getStationActivationDetail(session.accessToken, item)));
+        if (cancelled) return;
+        results.forEach((result, resultIndex) => {
+          if (result.status === 'fulfilled') details[batch[resultIndex].id] = result.value;
+          else failed += 1;
+        });
+      }
+      if (cancelled) return;
+      setStationActivationDetails(details);
+      setStationDetailsLoaded(true);
+      if (failed > 0) setStationDetailsError(`${failed} aktivasyonun istasyon detayı alınamadı; özet bilgiler gösterilmeye devam ediyor.`);
+    })().finally(() => { if (!cancelled) setStationDetailsLoading(false); });
+
+    return () => { cancelled = true; stationHydrationKey.current = ''; };
+  }, [session.accessToken, stationActivations, stationDetailsLoaded, tab]);
   const openRequests = summary?.emergencyRequests.filter((item) => !['Completed', 'Cancelled'].includes(item.status)).length ?? 0;
   const allServices = useMemo(() => [...(summary?.upcomingWorkOrders ?? []), ...(summary?.completedWorkOrders ?? [])].sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)), [summary]);
   const sortedReports = useMemo(() => {
@@ -48,12 +96,20 @@ export default function CustomerPortal({ session, onLogout }: { session: Authent
     <main className="role-portal-main customer-portal-main">
       <div className="role-welcome"><div><p>MÜŞTERİ OPERASYONLARI</p><h1>{summary?.customerName ?? 'Hizmetleriniz tek ekranda'}</h1><span>{summary?.scope === 'Branch' ? 'Yalnızca yetkili olduğunuz şubenin hizmetleri gösteriliyor.' : 'Şubelerinizi, uygulama raporlarını ve yaklaşan kontrolleri güvenle takip edin.'}</span></div><button onClick={() => setRequestOpen(true)}><ShieldAlert size={18} />Talep oluştur</button></div>
       <nav className="customer-portal-tabs">{([['overview','Genel Bakış'],['services','Hizmetler'],['stations',`İstasyon İzleme${stationActivations.length ? ` (${stationActivations.reduce((sum, a) => sum + a.totalStations, 0)})` : ''}`],['commercial',`Teklif & Sözleşme${commercial?.pendingProposalCount ? ` (${commercial.pendingProposalCount})` : ''}`],['health','Şube Sağlık Skoru'],['weather',`Hava & Risk${weatherRisk?.highRiskLocations ? ` (${weatherRisk.highRiskLocations})` : ''}`],['reports','Raporlar'],['documents','Belgeler & Analizler'],['actions','Düzeltici Faaliyetler'],['requests',`Talep & Şikâyet${openRequests ? ` (${openRequests})` : ''}`],['account','Hesabım']] as [Tab,string][]).map(([value,label]) => <button key={value} className={tab === value ? 'active' : ''} onClick={() => setTab(value)}>{label}</button>)}<button className="customer-refresh" onClick={() => void load()} aria-label="Yenile"><RefreshCw size={16} /></button></nav>
+      {reportActionError && <div className="field-operation-error"><AlertTriangle size={16} /><span>{reportActionError} Özet liste kullanılmaya devam ediyor.</span></div>}
       {loading ? <PortalState icon={<RefreshCw className="spin-icon" />} text="Müşteri portalı hazırlanıyor…" /> : error || !summary ? <PortalState icon={<AlertTriangle />} text={error ?? 'Müşteri kaydı bulunamadı.'} action={() => void load()} /> : <>
         {tab === 'overview' && <><div className="customer-kpis"><Kpi label="Yetkili şube" value={summary.branches.length} detail={summary.scope === 'Branch' ? 'Şube kapsamlı hesap' : 'Çatı müşteri hesabı'} icon={<Building2 />} /><Kpi label="Yaklaşan hizmet" value={summary.upcomingWorkOrders.length} detail="Planlanan ve sahadaki" icon={<CalendarDays />} /><Kpi label="İmzalı rapor" value={reports.length} detail="Yayınlanan hizmet raporu" icon={<FileCheck2 />} /><Kpi label="Açık çağrı" value={openRequests} detail="Takip edilen talep" icon={<ShieldAlert />} /></div>
           <div className="customer-layout"><section className="role-surface upcoming-service"><div className="role-section-title"><div><p>YAKLAŞAN HİZMET</p><h2>Bir sonraki uygulama</h2></div></div>{summary.upcomingWorkOrders[0] ? <ServiceCard item={summary.upcomingWorkOrders[0]} /> : <Empty icon={<CalendarDays />} text="Planlanmış yaklaşan hizmet bulunmuyor." />}</section>
-          <section className="role-surface recent-documents"><div className="role-section-title"><div><p>BELGELER</p><h2>Son hizmet raporları</h2></div><button onClick={() => setTab('reports')}>Tüm raporlar</button></div>{sortedReports.slice(0, 3).map((report) => <button className="document-row customer-document-button" key={report.id} onClick={() => setPreview(report)}><span><FileText size={18} /></span><div><strong>{report.branchName}</strong><small>{formatReportDate(report.scheduledAt)} · {report.reportNumber}</small></div><Printer size={17} /></button>)}{reports.length === 0 && <Empty icon={<FileText />} text="Henüz yayınlanmış rapor yok." />}</section></div></>}
+          <section className="role-surface recent-documents"><div className="role-section-title"><div><p>BELGELER</p><h2>Son hizmet raporları</h2></div><button onClick={() => setTab('reports')}>Tüm raporlar</button></div>{sortedReports.slice(0, 3).map((report) => <button className="document-row customer-document-button" key={report.id} disabled={previewLoadingId === report.id} onClick={() => void openReport(report)}><span><FileText size={18} /></span><div><strong>{report.branchName}</strong><small>{formatReportDate(report.scheduledAt)} · {report.reportNumber}</small></div><Printer size={17} /></button>)}{reports.length === 0 && <Empty icon={<FileText />} text="Henüz yayınlanmış rapor yok." />}</section></div></>}
         {tab === 'services' && <section className="role-surface customer-list-surface"><div className="role-section-title"><div><p>HİZMET GEÇMİŞİ</p><h2>Planlanan ve tamamlanan işler</h2></div></div><div className="customer-service-list">{allServices.map((item) => <ServiceCard key={item.id} item={item} />)}{allServices.length === 0 && <Empty icon={<CalendarDays />} text="Hizmet kaydı bulunmuyor." />}</div></section>}
-        {tab === 'stations' && <section className="role-surface customer-list-surface"><div className="role-section-title"><div><p>İSTASYON İZLEME</p><h2>Sahada tanımlı istasyonlar ve kontrol durumları</h2></div></div>{stationActivations.length > 0 ? <div className="customer-station-activations">{stationActivations.map((activation) => <article key={activation.id} className="customer-station-card"><header><div><strong>{activation.branchName}</strong><small>{activation.workOrderNumber} · {activation.operatorName} · {formatDate(activation.scheduledAt)}</small></div><em>{activation.status === 'Finalized' ? 'Onaylandı' : 'Taslak'}</em></header><div className="customer-station-stats"><span><strong>{activation.totalStations}</strong> toplam</span><span className="activity"><strong>{activation.activeStations}</strong> aktivite</span><span className="damaged"><strong>{activation.damagedStations}</strong> hasarlı</span><span className="inaccessible"><strong>{activation.inaccessibleStations}</strong> ulaşılamadı</span></div><div className="customer-station-list">{activation.stations.map((station, i) => <div key={i} className={`customer-station-row status-${station.deviceStatus.toLowerCase()}`}><strong>{station.deviceNumber}</strong><span>{station.area}</span><em>{stationStatusLabel(station.deviceStatus)}</em></div>)}</div>{activation.notes && <p className="customer-station-note">{activation.notes}</p>}</article>)}</div> : <Empty icon={<FileCheck2 />} text="Henüz sahada istasyon tanımı yapılmamış." />}</section>}
+        {tab === 'stations' && <section className="role-surface customer-list-surface">
+          <div className="role-section-title"><div><p>İSTASYON İZLEME</p><h2>Sahada tanımlı istasyonlar ve kontrol durumları</h2></div></div>
+          {stationDetailsError && <div className="field-operation-error"><AlertTriangle size={16} /><span>{stationDetailsError}</span></div>}
+          {stationActivations.length > 0 ? <div className="customer-station-activations">{stationActivations.map((activation) => {
+            const detail = stationActivationDetails[activation.id];
+            return <article key={activation.id} className="customer-station-card"><header><div><strong>{activation.branchName}</strong><small>{activation.workOrderNumber} · {activation.operatorName} · {formatDate(activation.scheduledAt)}</small></div><em>{activation.status === 'Finalized' ? 'Onaylandı' : 'Taslak'}</em></header><div className="customer-station-stats"><span><strong>{activation.totalStations}</strong> toplam</span><span className="activity"><strong>{activation.activeStations}</strong> aktivite</span><span className="damaged"><strong>{activation.damagedStations}</strong> hasarlı</span><span className="inaccessible"><strong>{activation.inaccessibleStations}</strong> ulaşılamadı</span></div>{detail ? <><div className="customer-station-list">{detail.stations.map((station, i) => <div key={i} className={`customer-station-row status-${station.deviceStatus.toLowerCase()}`}><strong>{station.deviceNumber}</strong><span>{station.area}</span><em>{stationStatusLabel(station.deviceStatus)}</em></div>)}</div>{detail.notes && <p className="customer-station-note">{detail.notes}</p>}</> : <p className="customer-station-note">{stationDetailsLoading ? 'İstasyon detayları yükleniyor…' : 'İstasyon özeti gösteriliyor; detay şu anda alınamadı.'}</p>}</article>;
+          })}</div> : <Empty icon={<FileCheck2 />} text="Henüz sahada istasyon tanımı yapılmamış." />}
+        </section>}
         {tab === 'commercial' && commercial && <CustomerCommercialCenter data={commercial} token={session.accessToken} onChanged={(proposal) => setCommercial((current) => current ? { ...current, pendingProposalCount: current.pendingProposalCount - 1, proposals: current.proposals.map((item) => item.id === proposal.id ? proposal : item) } : current)} />}
         {tab === 'health' && <section className="role-surface customer-health-surface"><HealthWasteCenter accessToken={session.accessToken} mode="customer" onSessionExpired={onLogout} /></section>}
         {tab === 'weather' && <WeatherRiskPanel overview={weatherRisk} loading={loading} error={error} onRefresh={() => void load(true)} />}
@@ -94,8 +150,8 @@ export default function CustomerPortal({ session, onLogout }: { session: Authent
                   </div>
 
                   <div className="customer-report-actions">
-                    <button type="button" onClick={() => setPreview(report)}>
-                      <Printer size={15} /> Görüntüle
+                    <button type="button" disabled={previewLoadingId === report.id} onClick={() => void openReport(report)}>
+                      <Printer size={15} /> {previewLoadingId === report.id ? 'Yükleniyor…' : 'Görüntüle'}
                     </button>
                     <button type="button" onClick={() => void downloadReport(report)}>
                       <Download size={15} /> PDF
@@ -175,4 +231,3 @@ function formatDuration(start: string, end: string) { const minutes = Math.max(0
 function statusLabel(value: string) { return ({ New: 'Yeni', Acknowledged: 'Kabul edildi', Planned: 'Planlandı', Completed: 'Tamamlandı', Cancelled: 'İptal', InProgress: 'İşlemde', AwaitingCustomerApproval: 'Onayınız bekleniyor' } as Record<string,string>)[value] ?? value; }
 function priorityLabel(value: string) { return ({ Low: 'Düşük', Normal: 'Normal', Urgent: 'Acil', Critical: 'Kritik' } as Record<string,string>)[value] ?? value; }
 function stationStatusLabel(value: string) { return ({ Unchecked: 'Kontrol bekliyor', NoActivity: 'Aktivite yok', Activity: 'Aktivite var', Damaged: 'Kırık / hasarlı', Inaccessible: 'Ulaşılamadı' } as Record<string,string>)[value] ?? value; }
-

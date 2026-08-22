@@ -1,6 +1,10 @@
 import { apiFetch } from './apiBase';
 import type { SitePlanCanvas } from './sitePlanApi';
 
+const privateFileStorageEnabled = String(import.meta.env.VITE_PRIVATE_FILE_STORAGE ?? 'false').toLowerCase() === 'true';
+const maximumQualityDocumentBytes = 15 * 1024 * 1024;
+const qualityDocumentExtensions = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'png', 'jpg', 'jpeg', 'webp']);
+
 export type QualityLocation = { customerId: string; customerName: string; branchId?: string; branchName: string; address: string };
 export type TrendPeriodPayload = { period: string; reportCount: number; totalStations: number; activeStations: number; plateChanges: number; totalCaught: number; activityRate: number };
 export type PestTotalPayload = { pest: string; totalCaught: number };
@@ -72,11 +76,58 @@ export const unarchiveQualityDocument = (token: string, documentId: string) => r
 export const deleteQualityDocument = (token: string, documentId: string) => request<{ message: string }>(`/api/quality/documents/${documentId}`, token, { method: 'DELETE' });
 
 export async function uploadQualityDocument(token: string, input: UploadQualityDocumentInput) {
+  if (privateFileStorageEnabled) {
+    let storageUploadStarted = false;
+    try {
+      const { getFileStorageCapabilities, uploadPrivateFile } = await import('./fileStorageApi');
+      const capabilities = await getFileStorageCapabilities(token);
+      const extension = input.file.name.split('.').pop()?.toLowerCase() ?? '';
+      if (!capabilities.directUploadEnabled || input.file.size > maximumQualityDocumentBytes
+        || input.file.size > capabilities.maximumFileSizeBytes || !qualityDocumentExtensions.has(extension)) {
+        return uploadQualityDocumentLegacy(token, input);
+      }
+      const uploaded = await uploadPrivateFile(token, input.file, {
+        onProgress: (progress) => { if (progress.phase !== 'hashing') storageUploadStarted = true; },
+      });
+      storageUploadStarted = true;
+      return await request<QualityDocument>('/api/v2/quality/documents/from-stored-object', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          uploadId: uploaded.uploadId,
+          storedObjectId: uploaded.file.id,
+          category: input.category,
+          title: input.title,
+          description: input.description,
+          customerId: input.customerId,
+          branchId: input.branchId,
+          inventoryItemId: input.inventoryItemId,
+          licenseNumber: input.licenseNumber,
+        }),
+      });
+    } catch (error) {
+      if (error instanceof QualitySessionExpiredError || storageErrorStatus(error) === 401) throw new QualitySessionExpiredError();
+      const status = storageErrorStatus(error);
+      const mayUseLegacy = !storageUploadStarted && (status === undefined || [403, 404, 405, 503].includes(status));
+      if (!mayUseLegacy) {
+        throw error instanceof Error ? error : new Error('Belge güvenli depolamaya yüklenemedi. Lütfen tekrar deneyin.');
+      }
+    }
+  }
+
+  return uploadQualityDocumentLegacy(token, input);
+}
+
+async function uploadQualityDocumentLegacy(token: string, input: UploadQualityDocumentInput) {
   const form = new FormData(); form.append('file', input.file); form.append('category', input.category);
   if (input.title) form.append('title', input.title); if (input.description) form.append('description', input.description);
   if (input.customerId) form.append('customerId', input.customerId); if (input.branchId) form.append('branchId', input.branchId);
   if (input.inventoryItemId) form.append('inventoryItemId', input.inventoryItemId); if (input.licenseNumber) form.append('licenseNumber', input.licenseNumber);
   return request<QualityDocument>('/api/quality/documents/upload', token, { method: 'POST', body: form }, false);
+}
+
+function storageErrorStatus(error: unknown) {
+  if (!error || typeof error !== 'object' || !('status' in error)) return undefined;
+  return typeof error.status === 'number' ? error.status : undefined;
 }
 
 export async function downloadQualityDocument(token: string, document: QualityDocument, open = false) {

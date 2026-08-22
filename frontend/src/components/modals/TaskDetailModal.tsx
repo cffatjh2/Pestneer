@@ -18,14 +18,14 @@ import {
 } from 'lucide-react';
 import type { WorkOrder, WorkOrderPhoto } from '../../types';
 import type { CalendarEntryRecord } from '../../services/calendarApi';
-import type { ServiceReportRecord } from '../../services/serviceReportApi';
+import type { ServiceReportSummary } from '../../services/serviceReportApi';
 import { shareOrDownloadFile } from '../../utils/shareUtils';
 import { apiFetch } from '../../services/apiBase';
 
 type Props = {
   task: CalendarEntryRecord;
   order?: WorkOrder | null;
-  report?: ServiceReportRecord | null;
+  report?: ServiceReportSummary | null;
   accessToken: string;
   isShiftActive?: boolean;
   onClose: () => void;

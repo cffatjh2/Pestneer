@@ -6,9 +6,10 @@ import {
 } from 'lucide-react';
 import type { QualityLocation } from '../../services/qualityApi';
 import {
-  createSitePlan, downloadSitePlan, getSitePlans, shareSitePlan, SitePlanSessionExpiredError, updateSitePlan,
+  createSitePlan, downloadSitePlan, getSitePlanDetail, getSitePlanSummaries, shareSitePlan, SitePlanSessionExpiredError,
+  toSitePlanSummary, updateSitePlan,
   type SaveSitePlanInput, type SitePlanCanvas, type SitePlanElement, type SitePlanEquipmentShape,
-  type SitePlanEquipmentType, type SitePlanRecord,
+  type SitePlanEquipmentType, type SitePlanRecord, type SitePlanSummary,
 } from '../../services/sitePlanApi';
 import QrScannerModal from '../modals/QrScannerModal';
 import { downloadSitePlanStationLabels } from '../../utils/stationQr';
@@ -50,7 +51,7 @@ const emptyCanvas = (): SitePlanCanvas => ({
 const uid = () => crypto.randomUUID();
 
 export default function SitePlanCenter({ accessToken, mode, locations, selectedLocationKey = '', onSessionExpired, onCount, onSaved }: Props) {
-  const [plans, setPlans] = useState<SitePlanRecord[]>([]);
+  const [plans, setPlans] = useState<SitePlanSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<SitePlanRecord | 'new' | null>(null);
@@ -58,12 +59,13 @@ export default function SitePlanCenter({ accessToken, mode, locations, selectedL
   const [loadingBlueprint, setLoadingBlueprint] = useState(false);
   const [editorInitialCanvas, setEditorInitialCanvas] = useState<SitePlanCanvas | null>(null);
   const [editorSuggestedTitle, setEditorSuggestedTitle] = useState<string | undefined>();
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const mainBlueprintInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const items = await getSitePlans(accessToken);
+      const items = await getSitePlanSummaries(accessToken);
       setPlans(items);
     } catch (loadError) {
       if (loadError instanceof SitePlanSessionExpiredError) return onSessionExpired();
@@ -91,7 +93,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, selectedL
     onCount?.(visiblePlans.length);
   }, [visiblePlans.length, onCount]);
 
-  const download = async (plan: SitePlanRecord, open = false) => {
+  const download = async (plan: SitePlanSummary, open = false) => {
     try { await downloadSitePlan(accessToken, plan, open); }
     catch (downloadError) {
       if (downloadError instanceof SitePlanSessionExpiredError) return onSessionExpired();
@@ -99,7 +101,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, selectedL
     }
   };
 
-  const share = async (plan: SitePlanRecord) => {
+  const share = async (plan: SitePlanSummary) => {
     try { await shareSitePlan(accessToken, plan); }
     catch (shareError) {
       if (shareError instanceof SitePlanSessionExpiredError) return onSessionExpired();
@@ -107,8 +109,10 @@ export default function SitePlanCenter({ accessToken, mode, locations, selectedL
     }
   };
 
-  const downloadQrLabels = async (plan: SitePlanRecord) => {
+  const downloadQrLabels = async (plan: SitePlanSummary) => {
     try {
+      setDetailLoadingId(plan.id);
+      const detail = await getSitePlanDetail(accessToken, plan);
       let companyName = 'Pestneer';
       let logoUrl: string | null = null;
       try {
@@ -120,9 +124,27 @@ export default function SitePlanCenter({ accessToken, mode, locations, selectedL
       } catch {
         // use defaults
       }
-      await downloadSitePlanStationLabels(plan, { companyName, logoUrl });
+      await downloadSitePlanStationLabels(detail, { companyName, logoUrl });
     } catch (qrError) {
+      if (qrError instanceof SitePlanSessionExpiredError) return onSessionExpired();
       setError(qrError instanceof Error ? qrError.message : 'QR etiketleri oluşturulamadı.');
+    } finally {
+      setDetailLoadingId(null);
+    }
+  };
+
+  const editPlan = async (plan: SitePlanSummary) => {
+    try {
+      setDetailLoadingId(plan.id);
+      setError(null);
+      setEditorInitialCanvas(null);
+      setEditorSuggestedTitle(undefined);
+      setEditing(await getSitePlanDetail(accessToken, plan));
+    } catch (detailError) {
+      if (detailError instanceof SitePlanSessionExpiredError) return onSessionExpired();
+      setError(messageOf(detailError));
+    } finally {
+      setDetailLoadingId(null);
     }
   };
 
@@ -163,7 +185,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, selectedL
   const save = async (input: SaveSitePlanInput) => {
     try {
       const saved = editing === 'new' ? await createSitePlan(accessToken, input) : await updateSitePlan(accessToken, editing!.id, input);
-      setPlans((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setPlans((current) => [toSitePlanSummary(saved), ...current.filter((item) => item.id !== saved.id)]);
       onCount?.(editing === 'new' ? plans.length + 1 : plans.length);
       void onSaved?.();
       setEditing(null);
@@ -235,7 +257,7 @@ export default function SitePlanCenter({ accessToken, mode, locations, selectedL
       </div>
     </div>
     {error && <div className="site-plan-error">{error}<button onClick={() => setError(null)}>Kapat</button></div>}
-    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : visiblePlans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>{plans.length > 0 ? 'Seçili müşteriye ait yerleşim planı bulunamadı' : 'Henüz yerleşim planı yok'}</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturun veya mimari plan görseli yükleyerek istasyonları yerleştirin.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{visiblePlans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><MiniPlan canvas={plan.canvas} /></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{stationCount(plan.canvas)} ekipman noktası</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div className="site-plan-card-actions"><button title="QR Etiketlerini Yazdır (A4 PDF)" className="site-plan-qr-btn" onClick={() => void downloadQrLabels(plan)}><QrCode size={15} /><span>QR Etiketleri</span></button><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button><button title="Paylaş" onClick={() => void share(plan)}><Share2 size={16} /></button>{mode === 'staff' && <button title="Planı düzenle" onClick={() => { setEditorInitialCanvas(null); setEditorSuggestedTitle(undefined); setEditing(plan); }}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
+    {loading ? <div className="surface site-plan-empty"><RotateCcw className="spin-icon" /><strong>Yerleşim planları yükleniyor…</strong></div> : visiblePlans.length === 0 ? <div className="surface site-plan-empty"><Map /><strong>{plans.length > 0 ? 'Seçili müşteriye ait yerleşim planı bulunamadı' : 'Henüz yerleşim planı yok'}</strong><span>{mode === 'staff' ? 'İlk A4 krokinizi oluşturun veya mimari plan görseli yükleyerek istasyonları yerleştirin.' : 'Firmanız tarafından yayımlanan planlar burada görünür.'}</span></div> : <div className="site-plan-grid">{visiblePlans.map((plan) => <article className="surface site-plan-card" key={plan.id}><div className="site-plan-card-preview"><Map size={44} /><span>R{String(plan.revision).padStart(2, '0')}</span></div><div className="site-plan-card-body"><span>{plan.number} · R{String(plan.revision).padStart(2, '0')}</span><h3>{plan.title}</h3><p>{plan.customerName} · {plan.branchName}</p><div><small>{plan.areaName}</small><small>{plan.status}</small></div></div><footer><span>{formatDate(plan.updatedAt)} · {plan.createdBy}</span><div className="site-plan-card-actions"><button disabled={detailLoadingId === plan.id} title="QR Etiketlerini Yazdır (A4 PDF)" className="site-plan-qr-btn" onClick={() => void downloadQrLabels(plan)}><QrCode size={15} /><span>{detailLoadingId === plan.id ? 'Yükleniyor…' : 'QR Etiketleri'}</span></button><button title="PDF görüntüle" onClick={() => void download(plan, true)}><Eye size={16} /></button><button title="PDF indir" onClick={() => void download(plan)}><Download size={16} /></button><button title="Paylaş" onClick={() => void share(plan)}><Share2 size={16} /></button>{mode === 'staff' && <button disabled={detailLoadingId === plan.id} title="Planı düzenle" onClick={() => void editPlan(plan)}><MousePointer2 size={16} /></button>}</div></footer></article>)}</div>}
     {editing && (
       <SitePlanEditor
         locations={locations}

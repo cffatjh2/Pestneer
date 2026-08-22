@@ -5,6 +5,7 @@ using System.Net;
 using System.Text.Json;
 using Pesneer.Api.Data;
 using Pesneer.Api.Email;
+using Pesneer.Api.Optimization;
 
 namespace Pesneer.Api.Branding;
 
@@ -65,8 +66,7 @@ public static class CompanyBrandingEndpoints
             .Select(item => new { item.LogoData, item.LogoContentType, item.LogoFileName, item.LogoUpdatedAt })
             .SingleOrDefaultAsync(cancellationToken);
         if (company?.LogoData is null) return Results.NotFound(new { message = "Firma logosu yüklenmemiş." });
-        return Results.File(company.LogoData, company.LogoContentType ?? "image/png", company.LogoFileName,
-            lastModified: company.LogoUpdatedAt, enableRangeProcessing: true);
+        return PrivateFileResults.Exact(company.LogoData, company.LogoContentType ?? "image/png", company.LogoFileName ?? "company-logo", company.LogoUpdatedAt);
     }
 
     private static async Task<IResult> UploadLogoAsync(HttpRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -78,9 +78,7 @@ public static class CompanyBrandingEndpoints
         if (file.Length > MaximumLogoSize) return Results.BadRequest(new { message = "Logo en fazla 4 MB olabilir." });
         if (!AllowedTypes.Contains(file.ContentType)) return Results.BadRequest(new { message = "Logo PNG, JPG veya WEBP olmalıdır." });
 
-        await using var memory = new MemoryStream();
-        await file.CopyToAsync(memory, cancellationToken);
-        var data = memory.ToArray();
+        var data = await UploadBuffers.ReadExactlyAsync(file, cancellationToken);
         if (!MatchesSignature(data, file.ContentType)) return Results.BadRequest(new { message = "Logo dosyasının biçimi doğrulanamadı." });
 
         var company = await CompanyQuery(dbContext, context).SingleOrDefaultAsync(cancellationToken);

@@ -6,8 +6,11 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-/models/*
-  Cache-Control: public, max-age=86400
+/models/*/*.onnx
+  Cache-Control: public, max-age=31536000, immutable
+
+/models/*/manifest.json
+  Cache-Control: public, max-age=0, must-revalidate
 
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate

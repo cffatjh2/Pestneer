@@ -196,6 +196,34 @@ public sealed record ServiceReportResponse(
     IReadOnlyList<ServiceReportProductResponse> Products,
     IReadOnlyList<ServiceReportPhotoResponse> Photos);
 
+public sealed record ServiceReportSummaryResponse(
+    Guid Id,
+    Guid WorkOrderId,
+    string WorkOrderNumber,
+    string ReportNumber,
+    string Status,
+    Guid CustomerId,
+    string CustomerName,
+    Guid? BranchId,
+    string BranchName,
+    DateTimeOffset ScheduledAt,
+    string OperatorName,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? FinalizedAt,
+    int TotalStations,
+    int ActiveStations,
+    int PlateChanges,
+    int TotalCaught,
+    decimal ActivityRate,
+    int RiskScore,
+    string RiskLevel,
+    bool InfestationIndicator,
+    string EmailDeliveryStatus,
+    int EmailSentCount,
+    int EmailRecipientCount,
+    string DetailUrl,
+    string PdfUrl);
+
 public sealed record TrendPeriodResponse(
     string Period,
     int ReportCount,

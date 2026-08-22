@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
+using Pesneer.Api.Optimization;
 
 namespace Pesneer.Api.SitePlans;
 
@@ -21,22 +22,107 @@ public static partial class SitePlanEndpoints
         var staff = app.MapGroup("/api/site-plans").RequireAuthorization("CompanyStaff");
         staff.MapPost("/", CreatePlanAsync);
         staff.MapPut("/{planId:guid}", UpdatePlanAsync);
+        app.MapGet("/api/v2/site-plans", GetPlanSummariesAsync).RequireAuthorization();
+        app.MapGet("/api/v2/site-plans/{planId:guid}", GetPlanAsync).RequireAuthorization();
         return app;
+    }
+
+    private static async Task<IResult> GetPlanSummariesAsync(
+        int? limit,
+        string? cursor,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
+    {
+        if (HasMissingEmployeeIdentity(context)) return Results.Forbid();
+
+        var pageSize = CursorPaging.NormalizeLimit(limit);
+        var hasCursor = CursorPaging.TryRead(cursor, out var position);
+        if (!string.IsNullOrWhiteSpace(cursor) && !hasCursor)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["cursor"] = ["Sayfalama anahtarı geçerli değil."] });
+
+        var snapshot = hasCursor ? position.Snapshot : DateTimeOffset.UtcNow;
+        var query = AccessiblePlans(dbContext, context).AsNoTracking();
+        List<SitePlanSummaryProjection> rows;
+
+        if (dbContext.Database.IsNpgsql())
+        {
+            query = query.Where(item => item.CreatedAt <= snapshot);
+            if (hasCursor)
+                query = query.Where(item => item.CreatedAt < position.Sort ||
+                    (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0));
+            rows = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(pageSize + 1)
+                .Select(item => new SitePlanSummaryProjection(
+                    item.Id, item.Number, item.Title, item.AreaName, item.FieldGuide, item.Status, item.Revision,
+                    item.RevisionNote, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId,
+                    item.CustomerBranch != null ? item.CustomerBranch.Name : "Genel / Merkez",
+                    item.CreatedByAccount.DisplayName, item.CreatedAt, item.UpdatedAt,
+                    item.Documents.OrderByDescending(document => document.CreatedAt).Select(document => (Guid?)document.Id).FirstOrDefault(),
+                    item.Documents.OrderByDescending(document => document.CreatedAt).Select(document => document.FileName).FirstOrDefault(),
+                    item.Documents.OrderByDescending(document => document.CreatedAt).Select(document => document.ContentType).FirstOrDefault()))
+                .ToListAsync(cancellationToken);
+        }
+        else
+        {
+            var candidates = await query.Select(item => new SitePlanSummaryBaseProjection(
+                    item.Id, item.Number, item.Title, item.AreaName, item.FieldGuide, item.Status, item.Revision,
+                    item.RevisionNote, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId,
+                    item.CustomerBranch != null ? item.CustomerBranch.Name : "Genel / Merkez",
+                    item.CreatedByAccount.DisplayName, item.CreatedAt, item.UpdatedAt))
+                .ToListAsync(cancellationToken);
+            var selected = candidates
+                .Where(item => item.CreatedAt <= snapshot && (!hasCursor || item.CreatedAt < position.Sort ||
+                    (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0)))
+                .OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(pageSize + 1).ToList();
+            var planIds = selected.Select(item => item.Id).ToArray();
+            List<SitePlanDocumentProjection> documents = planIds.Length == 0
+                ? []
+                : await dbContext.QualityDocuments.AsNoTracking()
+                    .Where(document => document.SitePlanId.HasValue && planIds.Contains(document.SitePlanId.Value))
+                    .Select(document => new SitePlanDocumentProjection(document.SitePlanId!.Value, document.Id,
+                        document.FileName, document.ContentType, document.CreatedAt))
+                    .ToListAsync(cancellationToken);
+            var documentByPlan = documents.GroupBy(document => document.SitePlanId)
+                .ToDictionary(group => group.Key, group => group.OrderByDescending(document => document.CreatedAt).First());
+            rows = selected.Select(item =>
+            {
+                var document = documentByPlan.GetValueOrDefault(item.Id);
+                return new SitePlanSummaryProjection(item.Id, item.Number, item.Title, item.AreaName, item.FieldGuide,
+                    item.Status, item.Revision, item.RevisionNote, item.CustomerId, item.CustomerName, item.BranchId,
+                    item.BranchName, item.CreatedBy, item.CreatedAt, item.UpdatedAt, document?.Id, document?.FileName,
+                    document?.ContentType);
+            }).ToList();
+        }
+
+        var hasMore = rows.Count > pageSize;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        var items = rows.Select(ToSummaryResponse).ToArray();
+        var last = rows.LastOrDefault();
+        var nextCursor = hasMore && last is not null ? CursorPaging.Write(snapshot, last.CreatedAt, last.Id) : null;
+        return Results.Ok(new CursorPage<SitePlanSummaryResponse>(items, nextCursor, hasMore, snapshot.ToString("O")));
     }
 
     private static async Task<IResult> GetPlansAsync(PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
-        var items = await AccessiblePlans(dbContext, context).AsNoTracking()
-            .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount)
-            .Include(item => item.Documents).ToListAsync(cancellationToken);
-        return Results.Ok(items.OrderByDescending(item => item.UpdatedAt).Select(ToResponse).ToArray());
+        if (HasMissingEmployeeIdentity(context)) return Results.Forbid();
+
+        var query = AccessiblePlans(dbContext, context).AsNoTracking();
+        var items = dbContext.Database.IsSqlite()
+            ? (await LoadSitePlanProjectionsAsync(query, dbContext, cancellationToken)).OrderByDescending(item => item.UpdatedAt).ToList()
+            : await query.OrderByDescending(item => item.UpdatedAt).Select(SitePlanProjectionExpression()).ToListAsync(cancellationToken);
+        return Results.Ok(items.Select(ToResponse).ToArray());
     }
 
     private static async Task<IResult> GetPlanAsync(Guid planId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
-        var item = await AccessiblePlans(dbContext, context).AsNoTracking()
-            .Include(plan => plan.Customer).Include(plan => plan.CustomerBranch).Include(plan => plan.CreatedByAccount)
-            .Include(plan => plan.Documents).SingleOrDefaultAsync(plan => plan.Id == planId, cancellationToken);
+        if (HasMissingEmployeeIdentity(context)) return Results.Forbid();
+
+        var query = AccessiblePlans(dbContext, context).AsNoTracking().Where(plan => plan.Id == planId);
+        var item = dbContext.Database.IsSqlite()
+            ? (await LoadSitePlanProjectionsAsync(query, dbContext, cancellationToken)).SingleOrDefault()
+            : await query.Select(SitePlanProjectionExpression()).SingleOrDefaultAsync(cancellationToken);
         return item is null ? Results.NotFound(new { message = "Yerleşim planı bulunamadı." }) : Results.Ok(ToResponse(item));
     }
 
@@ -136,8 +222,10 @@ public static partial class SitePlanEndpoints
         }
         else if (context.Portal == PortalType.Employee)
         {
-            query = query.Where(item => item.CreatedByAccountId == context.AccountId
-                || dbContext.WorkOrders.Any(workOrder => workOrder.AssignedEmployeeAccountId == context.AccountId
+            if (!context.AccountId.HasValue) return query.Where(_ => false);
+            var accountId = context.AccountId.Value;
+            query = query.Where(item => item.CreatedByAccountId == accountId
+                || dbContext.WorkOrders.Any(workOrder => workOrder.AssignedEmployeeAccountId == accountId
                     && workOrder.CustomerId == item.CustomerId
                     && (!item.CustomerBranchId.HasValue || workOrder.CustomerBranchId == item.CustomerBranchId)));
         }
@@ -150,9 +238,13 @@ public static partial class SitePlanEndpoints
             && (!branchId.HasValue || await dbContext.CustomerBranches.AnyAsync(item => item.Id == branchId && item.CustomerId == customerId && item.IsActive, cancellationToken));
         if (!exists) return false;
         if (context.Portal == PortalType.Owner) return true;
-        return context.Portal == PortalType.Employee && await dbContext.WorkOrders.AnyAsync(item => item.AssignedEmployeeAccountId == context.AccountId
+        return context.Portal == PortalType.Employee && context.AccountId.HasValue &&
+            await dbContext.WorkOrders.AnyAsync(item => item.AssignedEmployeeAccountId == context.AccountId.Value
             && item.CustomerId == customerId && (!branchId.HasValue || item.CustomerBranchId == branchId), cancellationToken);
     }
+
+    private static bool HasMissingEmployeeIdentity(ICompanyContext context) =>
+        context.Portal == PortalType.Employee && !context.AccountId.HasValue;
 
     private static IResult? Validate(SaveSitePlanRequest request)
     {
@@ -208,6 +300,104 @@ public static partial class SitePlanEndpoints
             item.CreatedByAccount.DisplayName, item.CreatedAt, item.UpdatedAt, canvas,
             new SitePlanDocumentResponse(document.Id, document.FileName, document.ContentType, $"/api/quality/documents/{document.Id}/download"));
     }
+
+    private static System.Linq.Expressions.Expression<Func<SitePlan, SitePlanProjection>> SitePlanProjectionExpression() => item =>
+        new SitePlanProjection(
+            item.Id,
+            item.Number,
+            item.Title,
+            item.AreaName,
+            item.FieldGuide,
+            item.Status,
+            item.Revision,
+            item.RevisionNote,
+            item.CustomerId,
+            item.Customer.LegalName,
+            item.CustomerBranchId,
+            item.CustomerBranch != null ? item.CustomerBranch.Name : "Genel / Merkez",
+            item.CreatedByAccount.DisplayName,
+            item.CreatedAt,
+            item.UpdatedAt,
+            item.CanvasJson,
+            item.Documents.OrderByDescending(document => document.CreatedAt).Select(document => (Guid?)document.Id).FirstOrDefault(),
+            item.Documents.OrderByDescending(document => document.CreatedAt).Select(document => document.FileName).FirstOrDefault(),
+            item.Documents.OrderByDescending(document => document.CreatedAt).Select(document => document.ContentType).FirstOrDefault());
+
+    private static async Task<List<SitePlanProjection>> LoadSitePlanProjectionsAsync(
+        IQueryable<SitePlan> query,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var items = await query.Select(item => new SitePlanBaseProjection(
+                item.Id, item.Number, item.Title, item.AreaName, item.FieldGuide, item.Status, item.Revision,
+                item.RevisionNote, item.CustomerId, item.Customer.LegalName, item.CustomerBranchId,
+                item.CustomerBranch != null ? item.CustomerBranch.Name : "Genel / Merkez",
+                item.CreatedByAccount.DisplayName, item.CreatedAt, item.UpdatedAt, item.CanvasJson))
+            .ToListAsync(cancellationToken);
+        if (items.Count == 0) return [];
+        var planIds = items.Select(item => item.Id).ToArray();
+        var documents = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(document => document.SitePlanId.HasValue && planIds.Contains(document.SitePlanId.Value))
+            .Select(document => new SitePlanDocumentProjection(document.SitePlanId!.Value, document.Id,
+                document.FileName, document.ContentType, document.CreatedAt))
+            .ToListAsync(cancellationToken);
+        var documentByPlan = documents.GroupBy(document => document.SitePlanId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(document => document.CreatedAt).First());
+        return items.Select(item =>
+        {
+            var document = documentByPlan.GetValueOrDefault(item.Id);
+            return new SitePlanProjection(item.Id, item.Number, item.Title, item.AreaName, item.FieldGuide, item.Status,
+                item.Revision, item.RevisionNote, item.CustomerId, item.CustomerName, item.BranchId, item.BranchName,
+                item.CreatedBy, item.CreatedAt, item.UpdatedAt, item.CanvasJson, document?.Id, document?.FileName,
+                document?.ContentType);
+        }).ToList();
+    }
+
+    private static SitePlanResponse ToResponse(SitePlanProjection item)
+    {
+        if (!item.DocumentId.HasValue || item.DocumentFileName is null || item.DocumentContentType is null)
+            throw new InvalidOperationException("Yerleşim planı belgesi bulunamadı.");
+        var canvas = JsonSerializer.Deserialize<SitePlanCanvasInput>(item.CanvasJson, JsonOptions)
+            ?? throw new InvalidOperationException("Kroki verisi okunamadı.");
+        return new SitePlanResponse(item.Id, item.Number, item.Title, item.AreaName, item.FieldGuide, item.Status, item.Revision,
+            item.RevisionNote, item.CustomerId, item.CustomerName, item.BranchId, item.BranchName, item.CreatedBy,
+            item.CreatedAt, item.UpdatedAt, canvas,
+            new SitePlanDocumentResponse(item.DocumentId.Value, item.DocumentFileName, item.DocumentContentType,
+                $"/api/quality/documents/{item.DocumentId.Value}/download"));
+    }
+
+    private static SitePlanSummaryResponse ToSummaryResponse(SitePlanSummaryProjection item)
+    {
+        if (!item.DocumentId.HasValue || item.DocumentFileName is null || item.DocumentContentType is null)
+            throw new InvalidOperationException("Yerleşim planı belgesi bulunamadı.");
+        return new SitePlanSummaryResponse(item.Id, item.Number, item.Title, item.AreaName, item.FieldGuide, item.Status,
+            item.Revision, item.RevisionNote, item.CustomerId, item.CustomerName, item.BranchId, item.BranchName,
+            item.CreatedBy, item.CreatedAt, item.UpdatedAt,
+            new SitePlanDocumentResponse(item.DocumentId.Value, item.DocumentFileName, item.DocumentContentType,
+                $"/api/quality/documents/{item.DocumentId.Value}/download"),
+            $"/api/v2/site-plans/{item.Id}");
+    }
+
+    private sealed record SitePlanProjection(Guid Id, string Number, string Title, string AreaName, string FieldGuide,
+        string Status, int Revision, string? RevisionNote, Guid CustomerId, string CustomerName, Guid? BranchId,
+        string BranchName, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string CanvasJson,
+        Guid? DocumentId, string? DocumentFileName, string? DocumentContentType);
+
+    private sealed record SitePlanBaseProjection(Guid Id, string Number, string Title, string AreaName, string FieldGuide,
+        string Status, int Revision, string? RevisionNote, Guid CustomerId, string CustomerName, Guid? BranchId,
+        string BranchName, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string CanvasJson);
+
+    private sealed record SitePlanDocumentProjection(Guid SitePlanId, Guid Id, string FileName, string ContentType,
+        DateTimeOffset CreatedAt);
+
+    private sealed record SitePlanSummaryBaseProjection(Guid Id, string Number, string Title, string AreaName,
+        string FieldGuide, string Status, int Revision, string? RevisionNote, Guid CustomerId, string CustomerName,
+        Guid? BranchId, string BranchName, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+    private sealed record SitePlanSummaryProjection(Guid Id, string Number, string Title, string AreaName,
+        string FieldGuide, string Status, int Revision, string? RevisionNote, Guid CustomerId, string CustomerName,
+        Guid? BranchId, string BranchName, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+        Guid? DocumentId, string? DocumentFileName, string? DocumentContentType);
 
     private static string FileName(SitePlan plan) => $"{plan.Number}-R{plan.Revision:00}.pdf";
     private static string Description(SitePlan plan) => $"{plan.AreaName} ekipman yerleşim planı · Revizyon R{plan.Revision:00}";

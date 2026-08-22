@@ -28,3 +28,25 @@ public sealed record StationActivationResponse(
     DateTimeOffset UpdatedAt,
     DateTimeOffset? FinalizedAt,
     IReadOnlyList<ServiceReportStationInput> Stations);
+
+public sealed record StationActivationSummaryResponse(
+    Guid Id,
+    Guid WorkOrderId,
+    string WorkOrderNumber,
+    string Number,
+    string Status,
+    Guid CustomerId,
+    string CustomerName,
+    Guid? BranchId,
+    string BranchName,
+    DateTimeOffset ScheduledAt,
+    string OperatorName,
+    int TotalStations,
+    int ActiveStations,
+    int DamagedStations,
+    int InaccessibleStations,
+    int TotalCaught,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? FinalizedAt,
+    string DetailUrl,
+    string PdfUrl);

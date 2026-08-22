@@ -163,14 +163,19 @@ public static class FieldOperationsEndpoints
         CancellationToken cancellationToken)
     {
         if (!TryGetEmployeeIdentity(companyContext, out var employeeId)) return Results.Forbid();
-        var vehicle = await dbContext.Vehicles.AsNoTracking().Include(item => item.StockItems).ThenInclude(item => item.InventoryItem).ThenInclude(item => item!.LicenseDocuments)
-            .SingleOrDefaultAsync(item => item.AssignedEmployeeAccountId == employeeId && item.IsActive, cancellationToken);
+        var vehicle = await dbContext.Vehicles.AsNoTracking()
+            .Where(item => item.AssignedEmployeeAccountId == employeeId && item.IsActive)
+            .Select(item => new CurrentVehicleProjection(item.Id, item.Plate, item.Brand, item.Model, item.CreatedAt))
+            .SingleOrDefaultAsync(cancellationToken);
         if (vehicle is null) return Results.NoContent();
-        var checks = await dbContext.VehicleStockChecks.AsNoTracking()
+        var checkQuery = dbContext.VehicleStockChecks.AsNoTracking()
             .Where(item => item.EmployeeAccountId == employeeId && item.VehicleId == vehicle.Id)
-            .ToListAsync(cancellationToken);
-        var lastCheck = checks.OrderByDescending(item => item.CheckedAt).FirstOrDefault();
-        return Results.Ok(ToCurrentVehicleStockResponse(vehicle, lastCheck));
+            .Select(item => new VehicleCheckProjection(item.Id, item.CheckedAt));
+        var lastCheck = dbContext.Database.IsSqlite()
+            ? (await checkQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.CheckedAt).FirstOrDefault()
+            : await checkQuery.OrderByDescending(item => item.CheckedAt).FirstOrDefaultAsync(cancellationToken);
+        var stockItems = await LoadCurrentVehicleStockItemsAsync(dbContext, vehicle.Id, cancellationToken);
+        return Results.Ok(ToCurrentVehicleStockResponse(vehicle, lastCheck, stockItems));
     }
 
     private static async Task<IResult> CreateVehicleStockCheckAsync(
@@ -291,12 +296,22 @@ public static class FieldOperationsEndpoints
             .Include(item => item.Breaks)
             .Where(item => item.WorkDate >= rangeStart && item.WorkDate <= today)
             .ToListAsync(cancellationToken);
-        var stockChecks = await dbContext.VehicleStockChecks.AsNoTracking()
-            .Select(item => new { item.EmployeeAccountId, item.CheckedAt })
-            .ToListAsync(cancellationToken);
-        var latestChecks = stockChecks
-            .GroupBy(item => item.EmployeeAccountId)
-            .ToDictionary(group => group.Key, group => (DateTimeOffset?)group.Max(item => item.CheckedAt));
+        Dictionary<Guid, DateTimeOffset?> latestChecks;
+        if (dbContext.Database.IsSqlite())
+        {
+            var stockCheckRows = await dbContext.VehicleStockChecks.AsNoTracking()
+                .Select(item => new { item.EmployeeAccountId, item.CheckedAt })
+                .ToListAsync(cancellationToken);
+            latestChecks = stockCheckRows.GroupBy(item => item.EmployeeAccountId)
+                .ToDictionary(group => group.Key, group => (DateTimeOffset?)group.Max(item => item.CheckedAt));
+        }
+        else
+        {
+            latestChecks = await dbContext.VehicleStockChecks.AsNoTracking()
+                .GroupBy(item => item.EmployeeAccountId)
+                .Select(group => new { EmployeeAccountId = group.Key, CheckedAt = (DateTimeOffset?)group.Max(item => item.CheckedAt) })
+                .ToDictionaryAsync(item => item.EmployeeAccountId, item => item.CheckedAt, cancellationToken);
+        }
 
         var rows = employees.Select(employee =>
         {
@@ -375,11 +390,72 @@ public static class FieldOperationsEndpoints
         vehicle.StockItems.Where(item => item.IsActive).OrderBy(item => item.ProductName).Select(item => new VehicleStockItemResponse(
             item.Id, item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit, item.InventoryItem?.LicenseNumber, LatestLicenseId(item.InventoryItem), !item.InventoryItemId.HasValue)).ToArray());
 
+    private static VehicleStockCheckResponse ToCurrentVehicleStockResponse(
+        CurrentVehicleProjection vehicle,
+        VehicleCheckProjection? check,
+        IReadOnlyList<CurrentVehicleStockItemProjection> stockItems) => new(
+        check?.Id ?? Guid.Empty,
+        check?.CheckedAt ?? vehicle.CreatedAt,
+        vehicle.Id,
+        vehicle.Plate,
+        $"{vehicle.Brand} {vehicle.Model}",
+        stockItems.OrderBy(item => item.ProductName).Select(item => new VehicleStockItemResponse(
+            item.Id, item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit,
+            item.LicenseNumber, item.LicenseDocumentId, !item.InventoryItemId.HasValue)).ToArray());
+
+    private static async Task<List<CurrentVehicleStockItemProjection>> LoadCurrentVehicleStockItemsAsync(
+        PesneerDbContext dbContext,
+        Guid vehicleId,
+        CancellationToken cancellationToken)
+    {
+        var baseQuery = dbContext.VehicleStockItems.AsNoTracking()
+            .Where(item => item.VehicleId == vehicleId && item.IsActive);
+        if (!dbContext.Database.IsSqlite())
+        {
+            return await baseQuery.OrderBy(item => item.ProductName)
+                .Select(item => new CurrentVehicleStockItemProjection(
+                    item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit,
+                    item.InventoryItem != null ? item.InventoryItem.LicenseNumber : null,
+                    item.InventoryItem == null
+                        ? null
+                        : item.InventoryItem.LicenseDocuments
+                            .Where(document => document.Category == "Licenses")
+                            .OrderByDescending(document => document.CreatedAt)
+                            .Select(document => (Guid?)document.Id)
+                            .FirstOrDefault()))
+                .ToListAsync(cancellationToken);
+        }
+
+        var rows = await baseQuery.Select(item => new CurrentVehicleStockItemBaseProjection(
+                item.Id, item.InventoryItemId, item.ProductName, item.Quantity, item.Unit,
+                item.InventoryItem != null ? item.InventoryItem.LicenseNumber : null))
+            .ToListAsync(cancellationToken);
+        var inventoryIds = rows.Where(item => item.InventoryItemId.HasValue)
+            .Select(item => item.InventoryItemId!.Value).Distinct().ToArray();
+        var licenses = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(document => document.InventoryItemId.HasValue && inventoryIds.Contains(document.InventoryItemId.Value) && document.Category == "Licenses")
+            .Select(document => new VehicleLicenseProjection(document.InventoryItemId!.Value, document.Id, document.CreatedAt))
+            .ToListAsync(cancellationToken);
+        var licenseByItem = licenses.GroupBy(document => document.InventoryItemId)
+            .ToDictionary(group => group.Key, group => (Guid?)group.OrderByDescending(document => document.CreatedAt).First().Id);
+        return rows.Select(item => new CurrentVehicleStockItemProjection(item.Id, item.InventoryItemId, item.ProductName,
+            item.Quantity, item.Unit, item.LicenseNumber,
+            item.InventoryItemId.HasValue ? licenseByItem.GetValueOrDefault(item.InventoryItemId.Value) : null)).ToList();
+    }
+
     private static Guid? LatestLicenseId(InventoryItem? item) => item?.LicenseDocuments
         .Where(document => document.Category == "Licenses")
         .OrderByDescending(document => document.CreatedAt)
         .Select(document => (Guid?)document.Id)
         .FirstOrDefault();
+
+    private sealed record CurrentVehicleProjection(Guid Id, string Plate, string Brand, string Model, DateTimeOffset CreatedAt);
+    private sealed record VehicleCheckProjection(Guid Id, DateTimeOffset CheckedAt);
+    private sealed record CurrentVehicleStockItemProjection(Guid Id, Guid? InventoryItemId, string ProductName,
+        decimal Quantity, string Unit, string? LicenseNumber, Guid? LicenseDocumentId);
+    private sealed record CurrentVehicleStockItemBaseProjection(Guid Id, Guid? InventoryItemId, string ProductName,
+        decimal Quantity, string Unit, string? LicenseNumber);
+    private sealed record VehicleLicenseProjection(Guid InventoryItemId, Guid Id, DateTimeOffset CreatedAt);
 
     private static Dictionary<string, string[]> ValidateStockItems(IReadOnlyList<VehicleStockItemRequest>? items)
     {

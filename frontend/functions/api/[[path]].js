@@ -46,11 +46,11 @@ export async function onRequest({ request, env }) {
     redirect: 'manual',
   };
 
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    init.body = await request.arrayBuffer();
-  }
+  const isSafeMethod = request.method === 'GET' || request.method === 'HEAD';
+  if (!isSafeMethod) init.body = request.body;
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  const maximumAttempts = isSafeMethod ? 3 : 1;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
     try {
       const response = await fetch(targetUrl, init);
       const responseHeaders = new Headers(response.headers);
@@ -63,7 +63,7 @@ export async function onRequest({ request, env }) {
         headers: responseHeaders,
       });
     } catch {
-      if (attempt === 3) break;
+      if (attempt === maximumAttempts) break;
       await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
     }
   }

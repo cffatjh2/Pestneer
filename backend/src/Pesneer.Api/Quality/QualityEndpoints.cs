@@ -1,11 +1,15 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.Compliance;
 using Pesneer.Api.StationActivations;
 using Pesneer.Api.SitePlans;
+using Pesneer.Api.Optimization;
+using Pesneer.Api.Storage;
 
 namespace Pesneer.Api.Quality;
 
@@ -39,11 +43,82 @@ public static class QualityEndpoints
         staff.MapPost("/documents/{documentId:guid}/archive", ArchiveDocumentAsync);
         staff.MapPost("/documents/{documentId:guid}/unarchive", UnarchiveDocumentAsync);
         staff.MapDelete("/documents/{documentId:guid}", DeleteDocumentAsync);
+
+        var owner = app.MapGroup("/api/quality").RequireAuthorization("OwnerPortal");
+        owner.MapPost("/documents/{documentId:guid}/stored-object", AttachStoredObjectAsync);
+
+        var ownerV2 = app.MapGroup("/api/v2/quality").RequireAuthorization("OwnerPortal");
+        ownerV2.MapPost("/documents/from-stored-object", CreateDocumentFromStoredObjectAsync);
+        app.MapGet("/api/v2/quality/documents", GetDocumentPageAsync).RequireAuthorization();
+        app.MapGet("/api/v2/quality/documents/{documentId:guid}", GetDocumentMetadataAsync).RequireAuthorization();
         return app;
+    }
+
+    private static async Task<IResult> GetDocumentPageAsync(
+        int? limit,
+        string? cursor,
+        string? category,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
+    {
+        if (HasMissingPortalIdentity(context)) return Results.Forbid();
+        if (!string.IsNullOrWhiteSpace(category) && !Categories.Contains(category))
+            return Validation("category", "Geçerli bir belge kategorisi seçin.");
+        var pageSize = CursorPaging.NormalizeLimit(limit);
+        var hasCursor = CursorPaging.TryRead(cursor, out var position);
+        if (!string.IsNullOrWhiteSpace(cursor) && !hasCursor)
+            return Validation("cursor", "Sayfalama anahtarı geçerli değil.");
+        var snapshot = hasCursor ? position.Snapshot : DateTimeOffset.UtcNow;
+        var query = AccessibleDocuments(dbContext, context).AsNoTracking()
+            .Where(item => item.Category != "Archived");
+        if (!string.IsNullOrWhiteSpace(category)) query = query.Where(item => item.Category == category);
+
+        QualityDocumentRow[] rows;
+        if (dbContext.Database.IsNpgsql())
+        {
+            query = query.Where(item => item.CreatedAt <= snapshot);
+            if (hasCursor) query = query.Where(item => item.CreatedAt < position.Sort ||
+                (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0));
+            rows = await DocumentResponseQuery(query.OrderByDescending(item => item.CreatedAt)
+                    .ThenByDescending(item => item.Id).Take(pageSize + 1))
+                .ToArrayAsync(cancellationToken);
+        }
+        else
+        {
+            rows = (await DocumentResponseQuery(query).ToArrayAsync(cancellationToken))
+                .Where(item => item.CreatedAt <= snapshot && (!hasCursor || item.CreatedAt < position.Sort ||
+                    (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0)))
+                .OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(pageSize + 1).ToArray();
+        }
+
+        var hasMore = rows.Length > pageSize;
+        if (hasMore) rows = rows[..pageSize];
+        var last = rows.LastOrDefault();
+        var nextCursor = hasMore && last is not null ? CursorPaging.Write(snapshot, last.CreatedAt, last.Id) : null;
+        return Results.Ok(new CursorPage<QualityDocumentResponse>(
+            rows.Select(ToDocumentResponse).ToArray(), nextCursor, hasMore, snapshot.ToString("O")));
+    }
+
+    private static async Task<IResult> GetDocumentMetadataAsync(
+        Guid documentId,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
+    {
+        if (HasMissingPortalIdentity(context)) return Results.Forbid();
+        var document = await DocumentResponseQuery(AccessibleDocuments(dbContext, context).AsNoTracking()
+                .Where(item => item.Id == documentId))
+            .SingleOrDefaultAsync(cancellationToken);
+        return document is null
+            ? Results.NotFound(new { message = "Belge bulunamadı." })
+            : Results.Ok(ToDocumentResponse(document));
     }
 
     private static async Task<IResult> GetLocationsAsync(PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
+        if (HasMissingPortalIdentity(context)) return Results.Forbid();
         if (context.Portal == PortalType.Owner)
         {
             var customers = await dbContext.Customers.AsNoTracking().Include(item => item.Branches)
@@ -52,7 +127,8 @@ public static class QualityEndpoints
         }
 
         var keys = await dbContext.WorkOrders.AsNoTracking()
-            .Where(item => item.AssignedEmployeeAccountId == context.AccountId)
+            .Where(item => item.AssignedEmployeeAccountId == context.AccountId ||
+                item.Assignments.Any(assignment => assignment.EmployeeAccountId == context.AccountId))
             .Select(item => new { item.CustomerId, item.CustomerBranchId }).Distinct().ToListAsync(cancellationToken);
         var customerIds = keys.Select(item => item.CustomerId).Distinct().ToArray();
         var permittedBranches = keys.Where(item => item.CustomerBranchId.HasValue).Select(item => item.CustomerBranchId!.Value).ToHashSet();
@@ -65,10 +141,13 @@ public static class QualityEndpoints
 
     private static async Task<IResult> GetAnalysesAsync(string? type, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
+        if (HasMissingPortalIdentity(context)) return Results.Forbid();
         var query = AccessibleAnalyses(dbContext, context).AsNoTracking()
             .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).AsQueryable();
         if (!string.IsNullOrWhiteSpace(type)) query = query.Where(item => item.AnalysisType == type);
-        var analyses = (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
+        var analyses = dbContext.Database.IsSqlite()
+            ? (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList()
+            : await query.OrderByDescending(item => item.CreatedAt).ToListAsync(cancellationToken);
         var ids = analyses.Select(item => item.Id).ToArray();
         var documentIds = await dbContext.QualityDocuments.AsNoTracking().Where(item => item.QualityAnalysisId.HasValue && ids.Contains(item.QualityAnalysisId.Value))
             .ToDictionaryAsync(item => item.QualityAnalysisId!.Value, item => item.Id, cancellationToken);
@@ -77,6 +156,7 @@ public static class QualityEndpoints
 
     private static async Task<IResult> GetAnalysisAsync(Guid analysisId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
+        if (HasMissingPortalIdentity(context)) return Results.Forbid();
         var analysis = await AccessibleAnalyses(dbContext, context).AsNoTracking()
             .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount)
             .SingleOrDefaultAsync(item => item.Id == analysisId, cancellationToken);
@@ -99,6 +179,7 @@ public static class QualityEndpoints
         ICompanyContext context,
         CancellationToken cancellationToken)
     {
+        if (HasMissingPortalIdentity(context)) return Results.Forbid();
         if (dateFrom.HasValue && dateTo.HasValue && dateTo < dateFrom)
             return Validation("dateTo", "Bitiş tarihi başlangıç tarihinden önce olamaz.");
         if (!string.IsNullOrWhiteSpace(category) && !Categories.Contains(category))
@@ -106,8 +187,7 @@ public static class QualityEndpoints
         var normalizedContentType = Clean(contentType, 20)?.ToLowerInvariant();
         if (normalizedContentType is not null && normalizedContentType is not ("pdf" or "office" or "image" or "text"))
             return Validation("contentType", "Geçerli bir dosya türü filtresi seçin.");
-        var query = AccessibleDocuments(dbContext, context).AsNoTracking()
-            .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem).AsQueryable();
+        var query = AccessibleDocuments(dbContext, context).AsNoTracking();
         if (!string.IsNullOrWhiteSpace(category))
         {
             query = query.Where(item => item.Category == category);
@@ -140,62 +220,158 @@ public static class QualityEndpoints
             var to = new DateTimeOffset(dateTo.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
             query = query.Where(item => item.CreatedAt < to);
         }
-        var normalizedSearch = Clean(search, 120)?.ToUpper();
-        if (normalizedSearch is not null)
-            query = query.Where(item => item.Title.ToUpper().Contains(normalizedSearch) || item.FileName.ToUpper().Contains(normalizedSearch) ||
-                (item.Description != null && item.Description.ToUpper().Contains(normalizedSearch)) ||
-                (item.LicenseNumber != null && item.LicenseNumber.ToUpper().Contains(normalizedSearch)) ||
-                (item.Customer != null && item.Customer.LegalName.ToUpper().Contains(normalizedSearch)) ||
-                (item.CustomerBranch != null && item.CustomerBranch.Name.ToUpper().Contains(normalizedSearch)) ||
-                (item.InventoryItem != null && item.InventoryItem.Name.ToUpper().Contains(normalizedSearch)));
-        return Results.Ok((await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).Take(1000).Select(ToDocumentResponse).ToArray());
+        var cleanedSearch = Clean(search, 120);
+        if (cleanedSearch is not null)
+        {
+            if (dbContext.Database.IsSqlite())
+            {
+                var normalizedSearch = cleanedSearch.ToUpperInvariant();
+                query = query.Where(item => item.Title.ToUpper().Contains(normalizedSearch) || item.FileName.ToUpper().Contains(normalizedSearch) ||
+                    (item.Description != null && item.Description.ToUpper().Contains(normalizedSearch)) ||
+                    (item.LicenseNumber != null && item.LicenseNumber.ToUpper().Contains(normalizedSearch)) ||
+                    (item.Customer != null && item.Customer.LegalName.ToUpper().Contains(normalizedSearch)) ||
+                    (item.CustomerBranch != null && item.CustomerBranch.Name.ToUpper().Contains(normalizedSearch)) ||
+                    (item.InventoryItem != null && item.InventoryItem.Name.ToUpper().Contains(normalizedSearch)));
+            }
+            else
+            {
+                var pattern = $"%{EscapeLikePattern(cleanedSearch)}%";
+                query = query.Where(item => EF.Functions.ILike(item.Title, pattern, "\\") ||
+                    EF.Functions.ILike(item.FileName, pattern, "\\") ||
+                    (item.Description != null && EF.Functions.ILike(item.Description, pattern, "\\")) ||
+                    (item.LicenseNumber != null && EF.Functions.ILike(item.LicenseNumber, pattern, "\\")) ||
+                    (item.Customer != null && EF.Functions.ILike(item.Customer.LegalName, pattern, "\\")) ||
+                    (item.CustomerBranch != null && EF.Functions.ILike(item.CustomerBranch.Name, pattern, "\\")) ||
+                    (item.InventoryItem != null && EF.Functions.ILike(item.InventoryItem.Name, pattern, "\\")));
+            }
+        }
+        QualityDocumentRow[] documents;
+        if (dbContext.Database.IsSqlite())
+        {
+            documents = (await DocumentResponseQuery(query).ToArrayAsync(cancellationToken))
+                .OrderByDescending(item => item.CreatedAt).Take(1000).ToArray();
+        }
+        else
+        {
+            documents = await DocumentResponseQuery(query.OrderByDescending(item => item.CreatedAt).Take(1000))
+                .ToArrayAsync(cancellationToken);
+        }
+        return Results.Ok(documents.Select(ToDocumentResponse).ToArray());
     }
 
-    private static async Task<IResult> DownloadDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    private static async Task<IResult> DownloadDocumentAsync(
+        Guid documentId,
+        HttpRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        IHybridFileStorage hybridFiles,
+        CancellationToken cancellationToken)
     {
+        if (HasMissingPortalIdentity(context)) return Results.Forbid();
         var document = await AccessibleDocuments(dbContext, context).AsNoTracking()
-            .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount)
-            .Include(item => item.QualityAnalysis).ThenInclude(item => item!.Customer)
-            .Include(item => item.QualityAnalysis).ThenInclude(item => item!.CustomerBranch)
-            .Include(item => item.QualityAnalysis).ThenInclude(item => item!.CreatedByAccount)
-            .SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
+            .Where(item => item.Id == documentId)
+            .Select(item => new
+            {
+                item.Id,
+                item.CompanyId,
+                item.FileName,
+                item.ContentType,
+                item.StoredObjectId,
+                item.QualityAnalysisId,
+                item.CreatedAt,
+                HasFileData = item.FileData != null
+            })
+            .SingleOrDefaultAsync(cancellationToken);
         if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
-        if (document.FileData is not null) return Results.File(document.FileData, document.ContentType, document.FileName);
-        if (document.QualityAnalysis is null) return Results.NotFound(new { message = "Belge içeriği bulunamadı." });
-        var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == context.CompanyId, cancellationToken);
-        return Results.File(QualityDocumentRenderer.Render(document.QualityAnalysis, company.LegalName, company.LogoData), "application/pdf", Path.ChangeExtension(document.FileName, ".pdf"));
+        var storedResult = await hybridFiles.TryReadAsync(
+            document.CompanyId,
+            document.StoredObjectId,
+            request,
+            document.FileName,
+            document.ContentType,
+            document.CreatedAt,
+            cancellationToken,
+            storageRequired: !document.HasFileData && document.StoredObjectId.HasValue);
+        if (storedResult is not null) return storedResult;
+        if (document.HasFileData)
+        {
+            var fileData = await dbContext.QualityDocuments.AsNoTracking()
+                .Where(item => item.Id == document.Id)
+                .Select(item => item.FileData)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (fileData is not null) return PrivateFileResults.Exact(fileData, document.ContentType, document.FileName, document.CreatedAt);
+            return Results.NotFound(new { message = "Belge içeriği bulunamadı." });
+        }
+        if (!document.QualityAnalysisId.HasValue) return Results.NotFound(new { message = "Belge içeriği bulunamadı." });
+
+        var analysis = await dbContext.QualityAnalyses.AsNoTracking()
+            .Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount)
+            .SingleOrDefaultAsync(item => item.Id == document.QualityAnalysisId.Value, cancellationToken);
+        if (analysis is null) return Results.NotFound(new { message = "Belge içeriği bulunamadı." });
+        var company = await dbContext.Companies.AsNoTracking()
+            .Where(item => item.Id == context.CompanyId)
+            .Select(item => new { item.LegalName, item.LogoData })
+            .SingleAsync(cancellationToken);
+        return PrivateFileResults.Exact(
+            QualityDocumentRenderer.Render(analysis, company.LegalName, company.LogoData),
+            "application/pdf",
+            Path.ChangeExtension(document.FileName, ".pdf"),
+            analysis.UpdatedAt);
     }
 
     private static async Task<IResult> CreateTrendAnalysisAsync(CreateTrendAnalysisRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
+        if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
         if (request.PeriodEnd < request.PeriodStart) return Validation("periodEnd", "Bitiş tarihi başlangıç tarihinden önce olamaz.");
         if (request.PeriodEnd.DayNumber - request.PeriodStart.DayNumber > 366) return Validation("periodEnd", "Trend dönemi en fazla 12 ay olabilir.");
         if (!await CanUseLocationAsync(request.CustomerId, request.BranchId, dbContext, context, cancellationToken)) return Results.Forbid();
 
         var start = new DateTimeOffset(request.PeriodStart.ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
         var end = new DateTimeOffset(request.PeriodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue), TurkeyOffset).ToUniversalTime();
-        var reportQuery = dbContext.ServiceReports.AsNoTracking().Include(item => item.WorkOrder).Include(item => item.Stations).ThenInclude(item => item.PestObservations)
+        var useDatabaseDateOperations = !dbContext.Database.IsSqlite();
+        var reportQuery = dbContext.ServiceReports.AsNoTracking()
             .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == request.CustomerId);
         if (request.BranchId.HasValue) reportQuery = reportQuery.Where(item => item.WorkOrder.CustomerBranchId == request.BranchId.Value);
-        var reports = (await reportQuery.ToListAsync(cancellationToken))
-            .Where(item => item.WorkOrder.ScheduledAt >= start && item.WorkOrder.ScheduledAt < end)
-            .OrderBy(item => item.WorkOrder.ScheduledAt)
-            .ToList();
-        var activationQuery = dbContext.StationActivations.AsNoTracking().Include(item => item.WorkOrder)
+        if (useDatabaseDateOperations)
+            reportQuery = reportQuery.Where(item => item.WorkOrder.ScheduledAt >= start && item.WorkOrder.ScheduledAt < end)
+                .OrderBy(item => item.WorkOrder.ScheduledAt);
+        var reportRows = await reportQuery
+            .Select(item => new
+            {
+                item.WorkOrder.ScheduledAt,
+                Stations = item.Stations.Select(station => new
+                {
+                    station.HasActivity,
+                    station.PlateChanged,
+                    station.CaughtCount,
+                    station.TargetPest,
+                    Pests = station.PestObservations.Select(pest => new { Name = pest.PestName, Count = pest.ApprovedCount }).ToArray()
+                }).ToArray()
+            })
+            .ToListAsync(cancellationToken);
+        var reports = reportRows.Where(item => item.ScheduledAt >= start && item.ScheduledAt < end)
+            .OrderBy(item => item.ScheduledAt)
+            .Select(item => new TrendSource(item.ScheduledAt, item.Stations.Select(station => new TrendStation(
+            station.HasActivity, station.PlateChanged, station.CaughtCount, station.TargetPest,
+            station.Pests.Select(pest => new TrendPest(pest.Name, pest.Count)).ToArray())).ToArray())).ToList();
+
+        var activationQuery = dbContext.StationActivations.AsNoTracking()
             .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == request.CustomerId);
         if (request.BranchId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerBranchId == request.BranchId.Value);
-        var activations = (await activationQuery.ToListAsync(cancellationToken))
-            .Where(item => item.WorkOrder.ScheduledAt >= start && item.WorkOrder.ScheduledAt < end)
-            .OrderBy(item => item.WorkOrder.ScheduledAt)
-            .ToList();
+        if (useDatabaseDateOperations)
+            activationQuery = activationQuery.Where(item => item.WorkOrder.ScheduledAt >= start && item.WorkOrder.ScheduledAt < end)
+                .OrderBy(item => item.WorkOrder.ScheduledAt);
+        var activationRows = await activationQuery
+            .Select(item => new { item.WorkOrder.ScheduledAt, item.StationsJson })
+            .ToListAsync(cancellationToken);
+        var activations = activationRows.Where(item => item.ScheduledAt >= start && item.ScheduledAt < end)
+            .OrderBy(item => item.ScheduledAt).ToList();
         if (reports.Count == 0 && activations.Count == 0) return Validation("periodStart", "Seçilen dönemde onaylanmış saha raporu veya aktivasyon listesi bulunmuyor.");
 
         var customer = await dbContext.Customers.AsNoTracking().SingleAsync(item => item.Id == request.CustomerId, cancellationToken);
         var branch = request.BranchId.HasValue ? await dbContext.CustomerBranches.AsNoTracking().SingleOrDefaultAsync(item => item.Id == request.BranchId, cancellationToken) : null;
-        var sources = reports.Where(item => item.Stations.Count > 0).Select(item => new TrendSource(item.WorkOrder.ScheduledAt, item.Stations.Select(station => new TrendStation(
-                station.HasActivity, station.PlateChanged, station.CaughtCount, station.TargetPest,
-                station.PestObservations.Select(pest => new TrendPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray()))
-            .Concat(activations.Select(item => new TrendSource(item.WorkOrder.ScheduledAt, StationActivationData.Deserialize(item.StationsJson).Select(station => new TrendStation(
+        var sources = reports.Where(item => item.Stations.Count > 0)
+            .Concat(activations.Select(item => new TrendSource(item.ScheduledAt, StationActivationData.Deserialize(item.StationsJson).Select(station => new TrendStation(
                 station.HasActivity, station.PlateChanged, station.CaughtCount, station.TargetPest,
                 (station.PestObservations ?? []).Select(pest => new TrendPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray())))
             .OrderBy(item => item.ScheduledAt).ToArray();
@@ -228,6 +404,7 @@ public static class QualityEndpoints
 
     private static async Task<IResult> CreateRiskAnalysisAsync(CreateRiskAnalysisRequest request, PesneerDbContext dbContext, ICompanyContext context, IWeatherRiskService weatherRiskService, CancellationToken cancellationToken)
     {
+        if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
         if (request.Answers.Count == 0) return Validation("answers", "Risk kontrol maddelerini değerlendirin.");
         if (request.Answers.Any(item => item.Score is < 0 or > 4)) return Validation("answers", "Her risk maddesi 0 ile 4 arasında puanlanmalıdır.");
         if (request.RiskMatrix.Count > 100 || request.RiskMatrix.Any(item => item.Severity is < 1 or > 3 || item.Likelihood is < 1 or > 3 || string.IsNullOrWhiteSpace(item.Location) || string.IsNullOrWhiteSpace(item.PestCategory))) return Validation("riskMatrix", "Lokasyon risk matrisindeki şiddet ve olasılık değerleri 1-3 arasında olmalıdır.");
@@ -334,8 +511,14 @@ public static class QualityEndpoints
         return Results.Created($"/api/quality/analyses/{analysis.Id}", ToAnalysisResponse(analysis, document.Id));
     }
 
-    private static async Task<IResult> UploadDocumentAsync(HttpRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    private static async Task<IResult> UploadDocumentAsync(
+        HttpRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        IHybridFileStorage hybridFiles,
+        CancellationToken cancellationToken)
     {
+        if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
         if (!request.HasFormContentType) return Results.BadRequest(new { message = "Belge multipart/form-data olarak yüklenmelidir." });
         var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files.GetFile("file");
@@ -359,68 +542,331 @@ public static class QualityEndpoints
             branchId = null;
         }
         if (customerId.HasValue && !await CanUseLocationAsync(customerId.Value, branchId, dbContext, context, cancellationToken)) return Results.Forbid();
-        await using var stream = new MemoryStream();
-        await file.CopyToAsync(stream, cancellationToken);
+        var data = await UploadBuffers.ReadExactlyAsync(file, cancellationToken);
         var document = new QualityDocument
         {
             Id = Guid.NewGuid(), CompanyId = context.CompanyId!.Value, CustomerId = customerId, CustomerBranchId = branchId, InventoryItemId = inventoryItemId,
             CreatedByAccountId = context.AccountId!.Value, Category = category, Title = Clean(form["title"].ToString(), 240) ?? Path.GetFileNameWithoutExtension(file.FileName),
             Description = Clean(form["description"].ToString(), 2000), LicenseNumber = licenseNumber, FileName = Path.GetFileName(file.FileName),
             ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-            SizeBytes = file.Length, FileData = stream.ToArray(), CreatedAt = DateTimeOffset.UtcNow
+            SizeBytes = file.Length, FileData = data, CreatedAt = DateTimeOffset.UtcNow
         };
         dbContext.QualityDocuments.Add(document);
         if (inventoryItem is not null && category == "Licenses") inventoryItem.LicenseNumber = licenseNumber;
         await dbContext.SaveChangesAsync(cancellationToken);
-        var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
-            .SingleAsync(item => item.Id == document.Id, cancellationToken);
+        await hybridFiles.TryDualWriteAsync(
+            HybridFileResourceKind.QualityDocument,
+            document.CompanyId,
+            document.Id,
+            document.FileName,
+            document.ContentType,
+            data,
+            cancellationToken);
+        var loaded = await DocumentResponseQuery(dbContext.QualityDocuments.AsNoTracking()
+                .Where(item => item.Id == document.Id))
+            .SingleAsync(cancellationToken);
+        return Results.Created($"/api/quality/documents/{document.Id}", ToDocumentResponse(loaded));
+    }
+
+    private static async Task<IResult> AttachStoredObjectAsync(
+        Guid documentId,
+        AttachQualityStoredObjectRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!context.CompanyId.HasValue) return Results.Forbid();
+        var document = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(item => item.Id == documentId && item.CompanyId == context.CompanyId.Value)
+            .Select(item => new
+            {
+                item.Id,
+                item.CompanyId,
+                item.StoredObjectId,
+                item.FileName,
+                item.ContentType,
+                item.SizeBytes,
+                HasInlineData = item.FileData != null
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
+        if (document.StoredObjectId.HasValue && document.StoredObjectId != request.StoredObjectId)
+            return Results.Conflict(new { message = "Belge başka bir doğrulanmış Storage nesnesine bağlı." });
+
+        var storedObject = await dbContext.StoredObjects.AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.Id == request.StoredObjectId && item.CompanyId == context.CompanyId.Value,
+                cancellationToken);
+        if (storedObject is null || storedObject.State != StoredObjectState.Ready)
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["storedObjectId"] = ["Aynı firmaya ait, doğrulanmış ve hazır bir Storage nesnesi seçilmelidir."]
+            });
+        if (storedObject.SizeBytes != document.SizeBytes ||
+            !NormalizeMediaType(storedObject.ContentType).Equals(NormalizeMediaType(document.ContentType), StringComparison.OrdinalIgnoreCase))
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["storedObjectId"] = ["Storage nesnesinin boyutu veya içerik türü belge metadatasıyla uyuşmuyor."]
+            });
+
+        if (document.HasInlineData)
+        {
+            var inlineData = await dbContext.QualityDocuments.AsNoTracking()
+                .Where(item => item.Id == document.Id)
+                .Select(item => item.FileData)
+                .SingleAsync(cancellationToken);
+            if (inlineData is null || !TryDecodeSha256(storedObject.Sha256, out var expectedHash) ||
+                !CryptographicOperations.FixedTimeEquals(SHA256.HashData(inlineData), expectedHash))
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["storedObjectId"] = ["Storage nesnesinin SHA-256 özeti mevcut belge içeriğiyle uyuşmuyor."]
+                });
+        }
+
+        if (!document.StoredObjectId.HasValue)
+        {
+            var stub = DocumentStub(document.Id, document.CompanyId);
+            dbContext.QualityDocuments.Attach(stub);
+            stub.StoredObjectId = storedObject.Id;
+            dbContext.Entry(stub).Property(item => item.StoredObjectId).IsModified = true;
+            await dbContext.SaveFileStorageBackfillChangesAsync(document.CompanyId, cancellationToken);
+        }
+
+        return Results.Ok(new
+        {
+            documentId = document.Id,
+            storedObjectId = storedObject.Id,
+            fileName = document.FileName,
+            contentType = document.ContentType,
+            sizeBytes = document.SizeBytes,
+            sha256 = storedObject.Sha256,
+            updatedAt = storedObject.VerifiedAt ?? storedObject.CreatedAt
+        });
+    }
+
+    private static async Task<IResult> CreateDocumentFromStoredObjectAsync(
+        CreateQualityDocumentFromStoredObjectRequest request,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        IFileStore fileStore,
+        IOptions<SupabaseStorageOptions> optionsAccessor,
+        CancellationToken cancellationToken)
+    {
+        if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
+        if (request.UploadId == Guid.Empty) return Validation("uploadId", "Geçerli bir yükleme oturumu seçilmelidir.");
+        if (request.StoredObjectId == Guid.Empty) return Validation("storedObjectId", "Geçerli bir Storage nesnesi seçilmelidir.");
+        if (!dbContext.Database.IsNpgsql() || !fileStore.IsConfigured ||
+            !optionsAccessor.Value.HybridReadEnabled ||
+            !optionsAccessor.Value.StorageOnlyWritesEnabled ||
+            !optionsAccessor.Value.IsHybridCompanyAllowed(context.CompanyId.Value))
+        {
+            return Results.Problem(
+                title: "Private dosya depolama okuması etkin değil.",
+                detail: "Mevcut multipart belge yükleme akışı kullanılmaya devam eder.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var companyId = context.CompanyId.Value;
+        var completedUpload = await dbContext.StoredObjectUploadSessions.AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.Id == request.UploadId &&
+                    item.CompanyId == companyId &&
+                    item.StoredObjectId == request.StoredObjectId &&
+                    item.CompletedAt != null,
+                cancellationToken);
+        if (completedUpload is null)
+            return Validation("uploadId", "Tamamlanmış yükleme oturumu aynı firma ve Storage nesnesiyle eşleşmelidir.");
+
+        var storedObject = await dbContext.StoredObjects.AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.Id == request.StoredObjectId && item.CompanyId == companyId,
+                cancellationToken);
+        if (storedObject is null || storedObject.State != StoredObjectState.Ready)
+            return Validation("storedObjectId", "Aynı firmaya ait, doğrulanmış ve hazır bir Storage nesnesi seçilmelidir.");
+        if (storedObject.SizeBytes <= 0 || storedObject.SizeBytes > MaximumFileSize)
+            return Validation("storedObjectId", "Belge boyutu en fazla 15 MB olabilir.");
+        if (!IsCompatibleQualityFile(completedUpload.FileName, storedObject.ContentType))
+            return Validation("storedObjectId", "Storage nesnesinin dosya uzantısı ve içerik türü desteklenen belge biçimiyle uyuşmuyor.");
+
+        var category = string.IsNullOrWhiteSpace(request.Category) ? "Other" : request.Category.Trim();
+        if (!Categories.Contains(category)) return Validation("category", "Geçerli bir belge kategorisi seçin.");
+        var customerId = request.CustomerId;
+        var branchId = request.BranchId;
+        var inventoryItemId = request.InventoryItemId;
+        var licenseNumber = Clean(request.LicenseNumber, 160);
+
+        if (branchId.HasValue && !customerId.HasValue)
+            return Validation("branchId", "Şube seçildiğinde müşteri de seçilmelidir.");
+
+        InventoryItem? inventoryItem = null;
+        if (inventoryItemId.HasValue)
+        {
+            inventoryItem = await dbContext.InventoryItems
+                .SingleOrDefaultAsync(item => item.Id == inventoryItemId.Value && item.IsActive, cancellationToken);
+            if (inventoryItem is null)
+                return Validation("inventoryItemId", "Bağlanacak aktif stok ürünü bulunamadı.");
+        }
+
+        if (category is "Licenses" or "SafetyDataSheets")
+        {
+            if (inventoryItem is null)
+                return Validation("inventoryItemId", category == "Licenses"
+                    ? "Ruhsatın bağlı olduğu stok ürününü seçin."
+                    : "MSDS / GBF belgesinin bağlı olduğu stok ürününü seçin.");
+            if (category == "Licenses" && licenseNumber is null)
+                return Validation("licenseNumber", "Ürün ruhsat numarasını girin.");
+            customerId = null;
+            branchId = null;
+        }
+        else if (customerId.HasValue &&
+                 !await CanUseLocationAsync(customerId.Value, branchId, dbContext, context, cancellationToken))
+        {
+            return Results.Forbid();
+        }
+
+        // StoredObject metadata is canonical by hash and can be shared by multiple filenames. The
+        // completed upload session preserves the filename selected for this resource creation.
+        var fileName = Path.GetFileName(completedUpload.FileName);
+        var title = Clean(request.Title, 240) ?? Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(title)) return Validation("title", "Belge başlığını girin.");
+        var description = Clean(request.Description, 2000);
+        var contentType = NormalizeMediaType(storedObject.ContentType);
+
+        // The completed upload-session ID is also the deterministic resource ID. A lost 201 response
+        // can therefore be replayed without creating a duplicate document or adding another schema key.
+        var existing = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(item => item.Id == request.UploadId && item.CompanyId == companyId)
+            .Select(item => new
+            {
+                item.Id,
+                item.StoredObjectId,
+                item.CustomerId,
+                item.CustomerBranchId,
+                item.InventoryItemId,
+                item.Category,
+                item.Title,
+                item.Description,
+                item.LicenseNumber,
+                item.FileName,
+                item.ContentType,
+                item.SizeBytes
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (existing is not null)
+        {
+            if (existing.StoredObjectId != storedObject.Id || existing.CustomerId != customerId ||
+                existing.CustomerBranchId != branchId || existing.InventoryItemId != inventoryItemId ||
+                !existing.Category.Equals(category, StringComparison.Ordinal) ||
+                !existing.Title.Equals(title, StringComparison.Ordinal) || existing.Description != description ||
+                existing.LicenseNumber != licenseNumber || !existing.FileName.Equals(fileName, StringComparison.Ordinal) ||
+                !NormalizeMediaType(existing.ContentType).Equals(contentType, StringComparison.Ordinal) ||
+                existing.SizeBytes != storedObject.SizeBytes)
+                return Results.Conflict(new { message = "Yükleme oturumu farklı belge metadatasıyla yeniden kullanılamaz." });
+
+            var existingResponse = await DocumentResponseQuery(dbContext.QualityDocuments.AsNoTracking()
+                    .Where(item => item.Id == existing.Id))
+                .SingleAsync(cancellationToken);
+            return Results.Created($"/api/quality/documents/{existing.Id}", ToDocumentResponse(existingResponse));
+        }
+
+        var document = new QualityDocument
+        {
+            Id = request.UploadId,
+            CompanyId = companyId,
+            CustomerId = customerId,
+            CustomerBranchId = branchId,
+            InventoryItemId = inventoryItemId,
+            CreatedByAccountId = context.AccountId.Value,
+            Category = category,
+            Title = title,
+            Description = description,
+            LicenseNumber = licenseNumber,
+            FileName = fileName,
+            ContentType = contentType,
+            SizeBytes = storedObject.SizeBytes,
+            FileData = null,
+            StoredObjectId = storedObject.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        dbContext.QualityDocuments.Add(document);
+        if (inventoryItem is not null && category == "Licenses") inventoryItem.LicenseNumber = licenseNumber;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var loaded = await DocumentResponseQuery(dbContext.QualityDocuments.AsNoTracking()
+                .Where(item => item.Id == document.Id))
+            .SingleAsync(cancellationToken);
         return Results.Created($"/api/quality/documents/{document.Id}", ToDocumentResponse(loaded));
     }
 
     private static async Task<IResult> ArchiveDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
-        var document = await dbContext.QualityDocuments.SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
+        if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
+        var document = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(item => item.Id == documentId)
+            .Select(item => new { item.CompanyId, item.Category, item.Description })
+            .SingleOrDefaultAsync(cancellationToken);
         if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
 
         var prevCat = document.Category;
-        document.Category = "Archived";
-        document.Description = $"[ARCHIVED_FROM:{prevCat}]{document.Description ?? string.Empty}";
+        var description = $"[ARCHIVED_FROM:{prevCat}]{document.Description ?? string.Empty}";
+        var updatedDocument = DocumentStub(documentId, document.CompanyId);
+        dbContext.QualityDocuments.Attach(updatedDocument);
+        updatedDocument.Category = "Archived";
+        updatedDocument.Description = description;
+        dbContext.Entry(updatedDocument).Property(item => item.Category).IsModified = true;
+        dbContext.Entry(updatedDocument).Property(item => item.Description).IsModified = true;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
-            .SingleAsync(item => item.Id == document.Id, cancellationToken);
+        var loaded = await DocumentResponseQuery(dbContext.QualityDocuments.AsNoTracking()
+                .Where(item => item.Id == documentId))
+            .SingleAsync(cancellationToken);
         return Results.Ok(ToDocumentResponse(loaded));
     }
 
     private static async Task<IResult> UnarchiveDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
-        var document = await dbContext.QualityDocuments.SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
+        if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
+        var document = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(item => item.Id == documentId)
+            .Select(item => new { item.CompanyId, item.Description })
+            .SingleOrDefaultAsync(cancellationToken);
         if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
 
         var restoredCategory = "General";
-        if (document.Description != null && document.Description.StartsWith("[ARCHIVED_FROM:"))
+        var description = document.Description;
+        if (description != null && description.StartsWith("[ARCHIVED_FROM:"))
         {
-            var endIdx = document.Description.IndexOf(']');
+            var endIdx = description.IndexOf(']');
             if (endIdx > 15)
             {
-                restoredCategory = document.Description.Substring(15, endIdx - 15);
-                document.Description = document.Description.Substring(endIdx + 1);
+                restoredCategory = description.Substring(15, endIdx - 15);
+                description = description.Substring(endIdx + 1);
             }
         }
-        document.Category = Categories.Contains(restoredCategory) && restoredCategory != "Archived" ? restoredCategory : "General";
+        restoredCategory = Categories.Contains(restoredCategory) && restoredCategory != "Archived" ? restoredCategory : "General";
+        var updatedDocument = DocumentStub(documentId, document.CompanyId);
+        dbContext.QualityDocuments.Attach(updatedDocument);
+        updatedDocument.Category = restoredCategory;
+        updatedDocument.Description = description;
+        dbContext.Entry(updatedDocument).Property(item => item.Category).IsModified = true;
+        dbContext.Entry(updatedDocument).Property(item => item.Description).IsModified = true;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var loaded = await dbContext.QualityDocuments.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch).Include(item => item.CreatedByAccount).Include(item => item.QualityAnalysis).Include(item => item.InventoryItem)
-            .SingleAsync(item => item.Id == document.Id, cancellationToken);
+        var loaded = await DocumentResponseQuery(dbContext.QualityDocuments.AsNoTracking()
+                .Where(item => item.Id == documentId))
+            .SingleAsync(cancellationToken);
         return Results.Ok(ToDocumentResponse(loaded));
     }
 
     private static async Task<IResult> DeleteDocumentAsync(Guid documentId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
-        var document = await dbContext.QualityDocuments.SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
+        if (!context.CompanyId.HasValue || !context.AccountId.HasValue) return Results.Forbid();
+        var document = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(item => item.Id == documentId)
+            .Select(item => new { item.Id, item.CompanyId })
+            .SingleOrDefaultAsync(cancellationToken);
         if (document is null) return Results.NotFound(new { message = "Belge bulunamadı." });
-
-        dbContext.QualityDocuments.Remove(document);
+        dbContext.QualityDocuments.Remove(DocumentStub(document.Id, document.CompanyId));
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { message = "Belge başarıyla silindi." });
     }
@@ -434,7 +880,10 @@ public static class QualityEndpoints
         }
         else if (context.Portal == PortalType.Employee)
         {
-            query = query.Where(item => item.CreatedByAccountId == context.AccountId || dbContext.WorkOrders.Any(workOrder => workOrder.AssignedEmployeeAccountId == context.AccountId && workOrder.CustomerId == item.CustomerId && (!item.CustomerBranchId.HasValue || workOrder.CustomerBranchId == item.CustomerBranchId)));
+            query = query.Where(item => item.CreatedByAccountId == context.AccountId || dbContext.WorkOrders.Any(workOrder =>
+                (workOrder.AssignedEmployeeAccountId == context.AccountId || workOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == context.AccountId)) &&
+                workOrder.CustomerId == item.CustomerId &&
+                (!item.CustomerBranchId.HasValue || workOrder.CustomerBranchId == item.CustomerBranchId)));
         }
         return query;
     }
@@ -467,8 +916,19 @@ public static class QualityEndpoints
             && (!branchId.HasValue || await dbContext.CustomerBranches.AnyAsync(item => item.Id == branchId && item.CustomerId == customerId && item.IsActive, cancellationToken));
         if (!exists) return false;
         if (context.Portal == PortalType.Owner) return true;
-        return await dbContext.WorkOrders.AnyAsync(item => item.AssignedEmployeeAccountId == context.AccountId && item.CustomerId == customerId && (!branchId.HasValue || item.CustomerBranchId == branchId), cancellationToken);
+        return await dbContext.WorkOrders.AnyAsync(item =>
+            (item.AssignedEmployeeAccountId == context.AccountId || item.Assignments.Any(assignment => assignment.EmployeeAccountId == context.AccountId)) &&
+            item.CustomerId == customerId &&
+            (!branchId.HasValue || item.CustomerBranchId == branchId), cancellationToken);
     }
+
+    private static bool HasMissingPortalIdentity(ICompanyContext context) => context.Portal switch
+    {
+        PortalType.Employee => !context.AccountId.HasValue,
+        PortalType.Customer => !context.CustomerId.HasValue,
+        PortalType.Owner => !context.CompanyId.HasValue || !context.AccountId.HasValue,
+        _ => true
+    };
 
     private static QualityAnalysis NewAnalysis(ICompanyContext context, Guid customerId, Guid? branchId, string type, string template, string? requestedTitle, string defaultTitle, DateOnly start, DateOnly end, int score, string level, string summary, string? findings, string? recommendations, object payload) => new()
     {
@@ -492,13 +952,29 @@ public static class QualityEndpoints
         item.CustomerBranchId, item.CustomerBranch?.Name ?? "Genel", item.PeriodStart, item.PeriodEnd, item.Score, item.Level,
         item.Summary, item.Findings, item.Recommendations, item.CreatedByAccount.DisplayName, item.CreatedAt, PayloadElement(item.PayloadJson), documentId);
 
-    private static QualityDocumentResponse ToDocumentResponse(QualityDocument item) => new(
+    private static IQueryable<QualityDocumentRow> DocumentResponseQuery(IQueryable<QualityDocument> query) => query.Select(item => new QualityDocumentRow(
+        item.Id, item.Category, item.Title, item.Description, item.FileName, item.ContentType, item.SizeBytes, item.CustomerId,
+        item.Customer != null ? item.Customer.LegalName : null, item.CustomerBranchId, item.CustomerBranch != null ? item.CustomerBranch.Name : null,
+        item.CreatedByAccount.DisplayName, item.CreatedAt, item.InventoryItemId, item.InventoryItem != null ? item.InventoryItem.Name : null,
+        item.LicenseNumber, item.QualityAnalysisId, item.QualityAnalysis != null ? item.QualityAnalysis.AnalysisType : null));
+
+    private static QualityDocumentResponse ToDocumentResponse(QualityDocumentRow item) => new(
         item.Id, item.Category, item.Title, item.Description,
         item.QualityAnalysisId.HasValue ? Path.ChangeExtension(item.FileName, ".pdf") : item.FileName,
         item.QualityAnalysisId.HasValue ? "application/pdf" : item.ContentType, item.SizeBytes, item.CustomerId,
-        item.Customer?.LegalName ?? "Firma içi", item.CustomerBranchId, item.CustomerBranch?.Name ?? (item.CustomerId.HasValue ? "Genel" : "Firma içi"),
-        item.CreatedByAccount.DisplayName, item.CreatedAt, item.InventoryItemId, item.InventoryItem?.Name, item.LicenseNumber,
-        item.QualityAnalysisId, item.QualityAnalysis?.AnalysisType, $"/api/quality/documents/{item.Id}/download");
+        item.CustomerName ?? "Firma içi", item.CustomerBranchId, item.CustomerBranchName ?? (item.CustomerId.HasValue ? "Genel" : "Firma içi"),
+        item.CreatedBy, item.CreatedAt, item.InventoryItemId, item.ProductName, item.LicenseNumber,
+        item.QualityAnalysisId, item.AnalysisType, $"/api/quality/documents/{item.Id}/download");
+
+    private static QualityDocument DocumentStub(Guid id, Guid companyId) => new()
+    {
+        Id = id,
+        CompanyId = companyId,
+        Category = string.Empty,
+        Title = string.Empty,
+        FileName = string.Empty,
+        ContentType = string.Empty
+    };
 
     private static IReadOnlyList<QualityLocationResponse> ToLocationResponses(IEnumerable<Customer> customers) => customers.SelectMany(customer =>
         new[] { new QualityLocationResponse(customer.Id, customer.LegalName, null, "Genel / Merkez", customer.Address ?? string.Empty) }
@@ -524,6 +1000,48 @@ public static class QualityEndpoints
             : "Risk esaslı aylık kontrol; bulgu halinde sıklık artırımı";
     }
     private static string RiskLabel(string level) => level == "High" ? "Yüksek" : level == "Medium" ? "Orta" : "Düşük";
+    private static string EscapeLikePattern(string value) => value
+        .Replace("\\", "\\\\", StringComparison.Ordinal)
+        .Replace("%", "\\%", StringComparison.Ordinal)
+        .Replace("_", "\\_", StringComparison.Ordinal);
+    private static string NormalizeMediaType(string value) => value.Split(';', 2)[0].Trim().ToLowerInvariant();
+    private static bool IsCompatibleQualityFile(string fileName, string contentType)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) ||
+            !Path.GetFileName(fileName).Equals(fileName, StringComparison.Ordinal) ||
+            fileName.Any(character => char.IsControl(character) || Path.GetInvalidFileNameChars().Contains(character)))
+            return false;
+
+        var extension = Path.GetExtension(fileName);
+        if (!AllowedExtensions.Contains(extension)) return false;
+        return NormalizeMediaType(contentType) switch
+        {
+            "application/pdf" => extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
+            "application/msword" => extension.Equals(".doc", StringComparison.OrdinalIgnoreCase),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => extension.Equals(".docx", StringComparison.OrdinalIgnoreCase),
+            "application/vnd.ms-excel" => extension.Equals(".xls", StringComparison.OrdinalIgnoreCase),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase),
+            "text/csv" => extension.Equals(".csv", StringComparison.OrdinalIgnoreCase),
+            "text/plain" => extension.Equals(".txt", StringComparison.OrdinalIgnoreCase),
+            "image/png" => extension.Equals(".png", StringComparison.OrdinalIgnoreCase),
+            "image/jpeg" => extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase),
+            "image/webp" => extension.Equals(".webp", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+    }
+    private static bool TryDecodeSha256(string value, out byte[] hash)
+    {
+        try
+        {
+            hash = Convert.FromHexString(value);
+            return hash.Length == SHA256.HashSizeInBytes;
+        }
+        catch (FormatException)
+        {
+            hash = [];
+            return false;
+        }
+    }
     private static string? Clean(string? value, int maxLength) { value = value?.Trim(); return string.IsNullOrWhiteSpace(value) ? null : value[..Math.Min(value.Length, maxLength)]; }
     private static string? JoinText(string? primary, IEnumerable<string> values)
     {
@@ -537,8 +1055,26 @@ public static class QualityEndpoints
     private sealed record TrendPest(string Name, int Count);
     private sealed record TrendPeriodPayload(string Period, int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate);
     private sealed record PestTotalPayload(string Pest, int TotalCaught);
+    private sealed record QualityDocumentRow(
+        Guid Id, string Category, string Title, string? Description, string FileName, string ContentType, long SizeBytes,
+        Guid? CustomerId, string? CustomerName, Guid? CustomerBranchId, string? CustomerBranchName, string CreatedBy,
+        DateTimeOffset CreatedAt, Guid? InventoryItemId, string? ProductName, string? LicenseNumber,
+        Guid? QualityAnalysisId, string? AnalysisType);
     private sealed record TrendAnalysisPayload(int ReportCount, int TotalStations, int ActiveStations, int PlateChanges, int TotalCaught, decimal ActivityRate, string TrendDirection, IReadOnlyList<TrendPeriodPayload> Periods, IReadOnlyList<PestTotalPayload> PestTotals);
     public sealed record RiskHotspotPayload(string Location, string PestCategory, int Severity, int Likelihood, int Score, string Level, string? Note, string? MatchedElementId, decimal? X, decimal? Y, decimal? Width, decimal? Height);
     public sealed record SitePlanRiskMapPayload(Guid Id, string Number, string Title, string AreaName, int Revision, SitePlanCanvasInput Canvas, IReadOnlyList<RiskHotspotPayload> Hotspots);
     private sealed record RiskAnalysisPayload(int StructuralRiskScore, int MatrixRiskScore, int WeatherRiskScore, int OverallRiskScore, string RiskLevel, string? SectorType, string? CurrentFrequency, string RecommendedFrequency, IReadOnlyList<RiskAnswerInput> Answers, IReadOnlyList<RiskMatrixInput> RiskMatrix, LocationWeatherRiskResponse? Weather, IReadOnlyList<string> GeneratedRecommendations, string Disclaimer, SitePlanRiskMapPayload? SitePlan = null);
 }
+
+public sealed record AttachQualityStoredObjectRequest(Guid StoredObjectId);
+
+public sealed record CreateQualityDocumentFromStoredObjectRequest(
+    Guid UploadId,
+    Guid StoredObjectId,
+    string? Category,
+    string? Title,
+    string? Description,
+    Guid? CustomerId,
+    Guid? BranchId,
+    Guid? InventoryItemId,
+    string? LicenseNumber);

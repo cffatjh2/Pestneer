@@ -71,6 +71,25 @@ public sealed record SitePlanResponse(
     SitePlanCanvasInput Canvas,
     SitePlanDocumentResponse Document);
 
+public sealed record SitePlanSummaryResponse(
+    Guid Id,
+    string Number,
+    string Title,
+    string AreaName,
+    string FieldGuide,
+    string Status,
+    int Revision,
+    string? RevisionNote,
+    Guid CustomerId,
+    string CustomerName,
+    Guid? BranchId,
+    string BranchName,
+    string CreatedBy,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    SitePlanDocumentResponse Document,
+    string DetailUrl);
+
 public sealed record SitePlanRiskHotspot(
     string Location,
     string PestCategory,

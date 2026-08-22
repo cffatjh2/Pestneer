@@ -100,27 +100,26 @@ public sealed class ReportEmailDispatcher(
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken, Guid? companyId = null)
     {
         var now = DateTimeOffset.UtcNow;
-        var staleQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters()
-            .Where(item => item.Status == "Sending");
+        var staleQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters().Where(item => item.Status == "Sending");
         if (companyId.HasValue) staleQuery = staleQuery.Where(item => item.CompanyId == companyId.Value);
-        var stale = (await staleQuery.OrderBy(item => item.Id).Take(500).ToListAsync(cancellationToken))
-            .Where(item => item.LastAttemptAt < now.AddMinutes(-10))
-            .OrderBy(item => item.CreatedAt)
-            .ToList();
+        var staleCutoff = now.AddMinutes(-10);
+        var stale = dbContext.Database.IsNpgsql()
+            ? await staleQuery.Where(item => item.LastAttemptAt < staleCutoff).OrderBy(item => item.CreatedAt).Take(500).ToListAsync(cancellationToken)
+            : (await staleQuery.ToListAsync(cancellationToken)).Where(item => item.LastAttemptAt < staleCutoff).OrderBy(item => item.CreatedAt).Take(500).ToList();
         foreach (var companyGroup in stale.GroupBy(item => item.CompanyId))
         {
             foreach (var item in companyGroup) item.Status = "Pending";
             await dbContext.SaveReportEmailDeliveryChangesAsync(companyGroup.Key, cancellationToken);
         }
 
-        var deliveryQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters()
-            .Where(item => item.Status == "Pending");
+        var deliveryQuery = dbContext.ReportEmailDeliveries.IgnoreQueryFilters().Where(item => item.Status == "Pending");
         if (companyId.HasValue) deliveryQuery = deliveryQuery.Where(item => item.CompanyId == companyId.Value);
-        var deliveries = (await deliveryQuery.OrderBy(item => item.Id).Take(500).ToListAsync(cancellationToken))
-            .Where(item => !item.NextAttemptAt.HasValue || item.NextAttemptAt <= now)
-            .OrderBy(item => item.CreatedAt).Take(10).ToList();
+        var deliveries = dbContext.Database.IsNpgsql()
+            ? await deliveryQuery.Where(item => !item.NextAttemptAt.HasValue || item.NextAttemptAt <= now).OrderBy(item => item.CreatedAt).Take(10).ToListAsync(cancellationToken)
+            : (await deliveryQuery.ToListAsync(cancellationToken)).Where(item => !item.NextAttemptAt.HasValue || item.NextAttemptAt <= now).OrderBy(item => item.CreatedAt).Take(10).ToList();
         var sent = 0;
         var statusByCompany = new Dictionary<Guid, EmailSenderStatus>();
+        var preparedByReport = new Dictionary<Guid, PreparedReportEmail>();
         foreach (var delivery in deliveries)
         {
             if (!statusByCompany.TryGetValue(delivery.CompanyId, out var senderStatus))
@@ -130,8 +129,8 @@ public sealed class ReportEmailDispatcher(
             }
             if (!senderStatus.IsConfigured)
             {
-                logger.LogWarning("Email delivery for company {CompanyId} is waiting for configuration: {Error}",
-                    delivery.CompanyId, senderStatus.ConfigurationError);
+                logger.LogWarning("Report email delivery is waiting for sender configuration ({ErrorType}).",
+                    string.IsNullOrWhiteSpace(senderStatus.ConfigurationError) ? "NotConfigured" : "ConfigurationError");
                 continue;
             }
 
@@ -141,25 +140,27 @@ public sealed class ReportEmailDispatcher(
             await dbContext.SaveReportEmailDeliveryChangesAsync(delivery.CompanyId, cancellationToken);
             try
             {
-                var report = await dbContext.ServiceReports.IgnoreQueryFilters().AsNoTracking()
-                    .Include(item => item.WorkOrder).ThenInclude(item => item.Customer)
-                    .Include(item => item.WorkOrder).ThenInclude(item => item.CustomerBranch)
-                    .Include(item => item.WorkOrder).ThenInclude(item => item.AssignedEmployeeAccount)
-                    .Include(item => item.CreatedByAccount).Include(item => item.Stations).Include(item => item.Products)
-                    .AsSplitQuery().SingleAsync(item => item.Id == delivery.ServiceReportId, cancellationToken);
-                var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == delivery.CompanyId, cancellationToken);
-                var location = report.WorkOrder.CustomerBranch?.Name ?? "Merkez / Genel";
-                var subject = $"{report.ReportNumber} · {report.WorkOrder.Customer.LegalName} / {location} EK-1 Biyosidal Saha Raporu";
-                var body = BuildBody(company, report, location);
-                var ek1Pdf = AuditPackageRenderer.RenderOfficialEk1Form(report, company);
-                var summaryPdf = AuditPackageRenderer.RenderServiceReport(report, company);
-                var attachments = new List<EmailAttachment>
+                if (!preparedByReport.TryGetValue(delivery.ServiceReportId, out var prepared))
                 {
-                    new($"EK-1_Biyosidal_Islem_Formu_{report.ReportNumber}.pdf", "application/pdf", ek1Pdf),
-                    new($"Saha_Uygulama_Raporu_{report.ReportNumber}.pdf", "application/pdf", summaryPdf)
-                };
+                    var report = await dbContext.ServiceReports.IgnoreQueryFilters().AsNoTracking()
+                        .Include(item => item.WorkOrder).ThenInclude(item => item.Customer)
+                        .Include(item => item.WorkOrder).ThenInclude(item => item.CustomerBranch)
+                        .Include(item => item.WorkOrder).ThenInclude(item => item.AssignedEmployeeAccount)
+                        .Include(item => item.CreatedByAccount).Include(item => item.Stations).Include(item => item.Products)
+                        .AsSplitQuery().SingleAsync(item => item.Id == delivery.ServiceReportId, cancellationToken);
+                    var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == delivery.CompanyId, cancellationToken);
+                    var location = report.WorkOrder.CustomerBranch?.Name ?? "Merkez / Genel";
+                    prepared = new PreparedReportEmail(
+                        $"{report.ReportNumber} · {report.WorkOrder.Customer.LegalName} / {location} EK-1 Biyosidal Saha Raporu",
+                        BuildBody(company, report, location),
+                        [
+                            new($"EK-1_Biyosidal_Islem_Formu_{report.ReportNumber}.pdf", "application/pdf", AuditPackageRenderer.RenderOfficialEk1Form(report, company)),
+                            new($"Saha_Uygulama_Raporu_{report.ReportNumber}.pdf", "application/pdf", AuditPackageRenderer.RenderServiceReport(report, company))
+                        ]);
+                    preparedByReport.Add(delivery.ServiceReportId, prepared);
+                }
                 await emailSender.SendAsync(new OutboundEmail(delivery.CompanyId, $"pestneer-report-{delivery.Id:N}",
-                    delivery.RecipientEmail, subject, body, attachments), cancellationToken);
+                    delivery.RecipientEmail, prepared.Subject, prepared.Body, prepared.Attachments), cancellationToken);
                 delivery.Status = "Sent";
                 delivery.SentAt = DateTimeOffset.UtcNow;
                 delivery.NextAttemptAt = null;
@@ -168,7 +169,7 @@ public sealed class ReportEmailDispatcher(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Report email delivery {DeliveryId} failed", delivery.Id);
+                logger.LogError("Report email delivery failed ({ExceptionType}).", exception.GetType().Name);
                 delivery.Status = delivery.AttemptCount >= 8 ? "Failed" : "Pending";
                 delivery.NextAttemptAt = delivery.Status == "Failed" ? null : DateTimeOffset.UtcNow.AddMinutes(RetryMinutes(delivery.AttemptCount));
                 delivery.LastError = exception.Message.Length > 2000 ? exception.Message[..2000] : exception.Message;
@@ -200,6 +201,7 @@ public sealed class ReportEmailDispatcher(
     }
 
     private static int RetryMinutes(int attempt) => attempt switch { 1 => 1, 2 => 5, 3 => 15, 4 => 30, _ => 60 };
+    private sealed record PreparedReportEmail(string Subject, string Body, IReadOnlyList<EmailAttachment> Attachments);
 }
 
 public sealed class ReportEmailDeliveryWorker(IServiceScopeFactory scopeFactory, ILogger<ReportEmailDeliveryWorker> logger) : BackgroundService
@@ -215,7 +217,7 @@ public sealed class ReportEmailDeliveryWorker(IServiceScopeFactory scopeFactory,
                 await scope.ServiceProvider.GetRequiredService<IReportEmailDispatcher>().DispatchPendingAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
-            catch (Exception exception) { logger.LogError(exception, "Report email delivery worker failed"); }
+            catch (Exception exception) { logger.LogError("Report email delivery worker failed ({ExceptionType}).", exception.GetType().Name); }
             await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
         }
     }

@@ -106,14 +106,26 @@ export async function compressImage(
 }
 
 /**
- * Batch compresses an array of image files in parallel.
+ * Batch compresses images with bounded concurrency to avoid decoding several
+ * full-resolution mobile photos into memory at the same time.
  */
 export async function compressImages(
   files: File[],
   options?: ImageCompressionOptions
 ): Promise<File[]> {
   if (!files || files.length === 0) return [];
-  return Promise.all(files.map((file) => compressImage(file, options)));
+  const results = new Array<File>(files.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(2, files.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (nextIndex < files.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await compressImage(files[index], options);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 /**

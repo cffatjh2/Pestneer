@@ -1,10 +1,13 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.FieldOperations;
 using Pesneer.Api.Inventory;
 using Pesneer.Api.Reports;
+using Pesneer.Api.Optimization;
 
 namespace Pesneer.Api.StationActivations;
 
@@ -20,16 +23,111 @@ public static class StationActivationEndpoints
         staff.MapPut("/work-orders/{workOrderId:guid}", UpsertAsync);
         staff.MapGet("/{id:guid}/pdf", DownloadPdfAsync);
         app.MapGet("/api/customer/station-activations", ListCustomerAsync).RequireAuthorization("CustomerPortal");
+        app.MapGet("/api/v2/station-activations", ListPageAsync).RequireAuthorization("CompanyStaff");
+        app.MapGet("/api/v2/customer/station-activations", ListCustomerPageAsync).RequireAuthorization("CustomerPortal");
+        app.MapGet("/api/v2/station-activations/{id:guid}", GetDetailAsync).RequireAuthorization();
         return app;
+    }
+
+    private static Task<IResult> ListPageAsync(
+        int? limit, string? cursor, PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        var query = db.StationActivations.AsNoTracking().AsQueryable();
+        if (context.Portal == PortalType.Employee)
+        {
+            if (!context.AccountId.HasValue) return Task.FromResult<IResult>(Results.Forbid());
+            var accountId = context.AccountId.Value;
+            query = query.Where(item => item.WorkOrder.AssignedEmployeeAccountId == accountId ||
+                item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == accountId));
+        }
+        return GetSummaryPageAsync(query, limit, cursor, db, cancellationToken);
+    }
+
+    private static Task<IResult> ListCustomerPageAsync(
+        int? limit, string? cursor, PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        if (!context.CustomerId.HasValue) return Task.FromResult<IResult>(Results.Forbid());
+        var customerId = context.CustomerId.Value;
+        var query = db.StationActivations.AsNoTracking()
+            .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == customerId);
+        if (context.CustomerBranchId.HasValue)
+        {
+            var branchId = context.CustomerBranchId.Value;
+            query = query.Where(item => item.WorkOrder.CustomerBranchId == branchId);
+        }
+        return GetSummaryPageAsync(query, limit, cursor, db, cancellationToken);
+    }
+
+    private static async Task<IResult> GetDetailAsync(
+        Guid id, PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        var activation = await Query(db).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        return activation is null || !CanView(activation, context)
+            ? Results.NotFound(new { message = "İstasyon aktivasyonu bulunamadı." })
+            : Results.Ok(ToResponse(activation));
+    }
+
+    private static async Task<IResult> GetSummaryPageAsync(
+        IQueryable<StationActivation> query,
+        int? requestedLimit,
+        string? cursor,
+        PesneerDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var limit = CursorPaging.NormalizeLimit(requestedLimit);
+        var hasCursor = CursorPaging.TryRead(cursor, out var position);
+        if (!string.IsNullOrWhiteSpace(cursor) && !hasCursor)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["cursor"] = ["Sayfalama anahtarı geçerli değil."] });
+        var snapshot = hasCursor ? position.Snapshot : DateTimeOffset.UtcNow;
+
+        var projected = query.Select(item => new StationActivationSummaryRow(
+            item.Id, item.WorkOrderId, item.WorkOrder.Number, item.Number, item.Status,
+            item.WorkOrder.CustomerId, item.WorkOrder.Customer.LegalName, item.WorkOrder.CustomerBranchId,
+            item.WorkOrder.CustomerBranch != null ? item.WorkOrder.CustomerBranch.Name : "Merkez / Genel",
+            item.WorkOrder.ScheduledAt, item.CreatedByAccount.DisplayName,
+            item.TotalStations, item.ActiveStations, item.DamagedStations, item.InaccessibleStations,
+            item.TotalCaught, item.CreatedAt, item.UpdatedAt, item.FinalizedAt));
+
+        List<StationActivationSummaryRow> rows;
+        if (db.Database.IsNpgsql())
+        {
+            projected = projected.Where(item => item.CreatedAt <= snapshot);
+            if (hasCursor)
+                projected = projected.Where(item => item.CreatedAt < position.Sort ||
+                    (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0));
+            rows = await projected.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(limit + 1).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            rows = (await projected.ToListAsync(cancellationToken))
+                .Where(item => item.CreatedAt <= snapshot && (!hasCursor || item.CreatedAt < position.Sort ||
+                    (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0)))
+                .OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id).Take(limit + 1).ToList();
+        }
+
+        var hasMore = rows.Count > limit;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        var items = rows.Select(ToSummary).ToArray();
+        var last = rows.LastOrDefault();
+        var nextCursor = hasMore && last is not null ? CursorPaging.Write(snapshot, last.CreatedAt, last.Id) : null;
+        return Results.Ok(new CursorPage<StationActivationSummaryResponse>(items, nextCursor, hasMore, snapshot.ToString("O")));
     }
 
     private static async Task<IResult> ListAsync(PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
     {
         var query = Query(db);
-        if (context.Portal == PortalType.Employee && context.AccountId.HasValue)
-            query = query.Where(item => item.WorkOrder.AssignedEmployeeAccountId == context.AccountId || item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == context.AccountId));
-        var activations = await query.ToListAsync(cancellationToken);
-        return Results.Ok(activations.OrderByDescending(item => item.UpdatedAt).Select(ToResponse));
+        if (context.Portal == PortalType.Employee)
+        {
+            if (!context.AccountId.HasValue) return Results.Forbid();
+            var accountId = context.AccountId.Value;
+            query = query.Where(item => item.WorkOrder.AssignedEmployeeAccountId == accountId ||
+                item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == accountId));
+        }
+        var activations = db.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.UpdatedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.UpdatedAt).ToList();
+        return Results.Ok(activations.Select(ToResponse));
     }
 
     private static async Task<IResult> ListCustomerAsync(PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
@@ -37,8 +135,10 @@ public static class StationActivationEndpoints
         if (!context.CustomerId.HasValue) return Results.Forbid();
         var query = Query(db).Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == context.CustomerId.Value);
         if (context.CustomerBranchId.HasValue) query = query.Where(item => item.WorkOrder.CustomerBranchId == context.CustomerBranchId.Value);
-        var activations = await query.ToListAsync(cancellationToken);
-        return Results.Ok(activations.OrderByDescending(item => item.FinalizedAt).Select(ToResponse));
+        var activations = db.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.FinalizedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.FinalizedAt).ToList();
+        return Results.Ok(activations.Select(ToResponse));
     }
 
     private static async Task<IResult> GetByWorkOrderAsync(Guid workOrderId, PesneerDbContext db, ICompanyContext context, CancellationToken cancellationToken)
@@ -49,11 +149,12 @@ public static class StationActivationEndpoints
         if (activation is not null) return Results.Ok(ToResponse(activation));
 
         // If no activation exists for this work order, inherit defined stations from the latest customer activation
-        var previousActivation = await Query(db)
+        var previousQuery = Query(db)
             .Where(item => item.WorkOrder.CustomerId == workOrder.CustomerId &&
-                           (workOrder.CustomerBranchId == null || item.WorkOrder.CustomerBranchId == workOrder.CustomerBranchId))
-            .OrderByDescending(item => item.UpdatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+                           (workOrder.CustomerBranchId == null || item.WorkOrder.CustomerBranchId == workOrder.CustomerBranchId));
+        var previousActivation = db.Database.IsNpgsql()
+            ? await previousQuery.OrderByDescending(item => item.UpdatedAt).FirstOrDefaultAsync(cancellationToken)
+            : (await previousQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.UpdatedAt).FirstOrDefault();
 
         if (previousActivation is not null)
         {
@@ -297,8 +398,21 @@ public static class StationActivationEndpoints
     {
         var activation = await Query(db).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (activation is null || !CanAccess(activation.WorkOrder, context)) return Results.NotFound();
+        var storedQuery = db.QualityDocuments.AsNoTracking()
+            .Where(item => item.Category == "StationActivations" && item.Description == $"activation:{activation.Id}" && item.FileData != null)
+            .Select(item => new StoredActivationPdf(item.FileData!, item.ContentType, item.FileName, item.CreatedAt));
+        var stored = db.Database.IsNpgsql()
+            ? await storedQuery.OrderByDescending(item => item.CreatedAt).FirstOrDefaultAsync(cancellationToken)
+            : (await storedQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).FirstOrDefault();
+        if (stored is not null)
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(stored.FileData)).ToLowerInvariant();
+            return PrivateFileResults.Exact(stored.FileData, stored.ContentType, stored.FileName, stored.CreatedAt, hash);
+        }
         var company = await db.Companies.AsNoTracking().SingleAsync(item => item.Id == activation.CompanyId, cancellationToken);
-        return Results.File(StationActivationPdfRenderer.Render(activation, StationActivationData.Deserialize(activation.StationsJson), company), "application/pdf", $"{activation.Number}.pdf");
+        var pdf = StationActivationPdfRenderer.Render(activation, StationActivationData.Deserialize(activation.StationsJson), company);
+        var fallbackHash = Convert.ToHexString(SHA256.HashData(pdf)).ToLowerInvariant();
+        return PrivateFileResults.Exact(pdf, "application/pdf", $"{activation.Number}.pdf", activation.UpdatedAt, fallbackHash);
     }
 
     private static string? Validate(UpsertStationActivationRequest request)
@@ -331,10 +445,27 @@ public static class StationActivationEndpoints
     private static bool CanAccess(WorkOrder order, ICompanyContext context) => context.Portal == PortalType.Owner ||
         context.Portal == PortalType.Employee && context.AccountId.HasValue && (order.AssignedEmployeeAccountId == context.AccountId || order.Assignments.Any(item => item.EmployeeAccountId == context.AccountId));
 
+    private static bool CanView(StationActivation activation, ICompanyContext context) =>
+        context.Portal == PortalType.Customer
+            ? activation.Status == "Finalized" && context.CustomerId.HasValue && activation.WorkOrder.CustomerId == context.CustomerId.Value &&
+              (!context.CustomerBranchId.HasValue || activation.WorkOrder.CustomerBranchId == context.CustomerBranchId.Value)
+            : CanAccess(activation.WorkOrder, context);
+
     private static StationActivationResponse ToResponse(StationActivation item) => new(
         item.Id, item.WorkOrderId, item.WorkOrder.Number, item.Number, item.Status, item.WorkOrder.CustomerId, item.WorkOrder.Customer.LegalName,
         item.WorkOrder.CustomerBranchId, item.WorkOrder.CustomerBranch?.Name ?? "Merkez / Genel", item.WorkOrder.ScheduledAt,
         item.CreatedByAccount.DisplayName, item.Notes, item.TotalStations, item.ActiveStations, item.DamagedStations,
         item.InaccessibleStations, item.TotalCaught, item.UpdatedAt, item.FinalizedAt, StationActivationData.Deserialize(item.StationsJson));
+    private static StationActivationSummaryResponse ToSummary(StationActivationSummaryRow item) => new(
+        item.Id, item.WorkOrderId, item.WorkOrderNumber, item.Number, item.Status, item.CustomerId, item.CustomerName,
+        item.BranchId, item.BranchName, item.ScheduledAt, item.OperatorName, item.TotalStations, item.ActiveStations,
+        item.DamagedStations, item.InaccessibleStations, item.TotalCaught, item.UpdatedAt, item.FinalizedAt,
+        $"/api/v2/station-activations/{item.Id}", $"/api/station-activations/{item.Id}/pdf");
     private static string? Clean(string? value, int length) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(value.Trim().Length, length)];
+    private sealed record StationActivationSummaryRow(
+        Guid Id, Guid WorkOrderId, string WorkOrderNumber, string Number, string Status,
+        Guid CustomerId, string CustomerName, Guid? BranchId, string BranchName, DateTimeOffset ScheduledAt,
+        string OperatorName, int TotalStations, int ActiveStations, int DamagedStations, int InaccessibleStations,
+        int TotalCaught, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? FinalizedAt);
+    private sealed record StoredActivationPdf(byte[] FileData, string ContentType, string FileName, DateTimeOffset CreatedAt);
 }

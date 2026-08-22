@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@noble/hashes": "^2.3.0",
     "@vitejs/plugin-react": "latest",
     "@zxing/browser": "latest",
     "jspdf": "latest",
@@ -19,6 +20,7 @@
     "react": "latest",
     "react-dom": "latest",
     "react-to-print": "^3.3.0",
+    "tus-js-client": "^4.3.1",
     "vite": "latest",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
@@ -27,5 +29,8 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "typescript": "latest"
+  },
+  "overrides": {
+    "nanoid": "3.3.18"
   }
 }

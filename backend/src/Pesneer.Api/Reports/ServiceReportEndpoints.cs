@@ -10,6 +10,7 @@ using Pesneer.Api.WorkOrders;
 using Pesneer.Api.StationActivations;
 using Pesneer.Api.Audits;
 using Pesneer.Api.FieldOperations;
+using Pesneer.Api.Optimization;
 
 namespace Pesneer.Api.Reports;
 
@@ -39,7 +40,23 @@ public static class ServiceReportEndpoints
         app.MapGet("/api/employee/service-reports", GetEmployeeReportsAsync).RequireAuthorization("EmployeePortal");
         app.MapGet("/api/customer/service-reports", GetCustomerReportsAsync).RequireAuthorization("CustomerPortal");
         app.MapGet("/api/service-reports/{reportId:guid}/pdf", DownloadPdfAsync).RequireAuthorization();
+        app.MapGet("/api/v2/company/service-reports", GetCompanyReportSummariesAsync).RequireAuthorization("OwnerPortal");
+        app.MapGet("/api/v2/employee/service-reports", GetEmployeeReportSummariesAsync).RequireAuthorization("EmployeePortal");
+        app.MapGet("/api/v2/customer/service-reports", GetCustomerReportSummariesAsync).RequireAuthorization("CustomerPortal");
+        app.MapGet("/api/v2/service-reports/{reportId:guid}", GetReportDetailAsync).RequireAuthorization();
         return app;
+    }
+
+    private static async Task<IResult> GetReportDetailAsync(
+        Guid reportId,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        CancellationToken cancellationToken)
+    {
+        var report = await ReportQuery(dbContext).SingleOrDefaultAsync(item => item.Id == reportId, cancellationToken);
+        return report is null || !CanViewReport(report, companyContext)
+            ? Results.NotFound(new { message = "Hizmet raporu bulunamadı." })
+            : Results.Ok(ToResponse(report, companyContext.Portal != PortalType.Customer));
     }
 
     private static async Task<IResult> DownloadPdfAsync(
@@ -54,7 +71,7 @@ public static class ServiceReportEndpoints
 
         var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == report.CompanyId, cancellationToken);
         var pdf = AuditPackageRenderer.RenderOfficialEk1Form(report, company);
-        return Results.File(pdf, "application/pdf", $"{report.ReportNumber}_EK1.pdf");
+        return PrivateFileResults.Exact(pdf, "application/pdf", $"{report.ReportNumber}_EK1.pdf", report.UpdatedAt);
     }
 
     private static async Task<IResult> GetByWorkOrderAsync(Guid workOrderId, PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
@@ -70,38 +87,127 @@ public static class ServiceReportEndpoints
     {
         var workOrder = await WorkOrderQuery(dbContext).AsNoTracking().SingleOrDefaultAsync(item => item.Id == workOrderId, cancellationToken);
         if (workOrder is null || !CanAccess(workOrder, companyContext)) return Results.NotFound(new { message = "İş emri bulunamadı." });
-        var reports = await ReportQuery(dbContext)
+        var query = ReportQuery(dbContext)
             .Where(item => item.WorkOrderId != workOrderId && item.Status == "Finalized")
-            .Where(item => item.WorkOrder.CustomerId == workOrder.CustomerId && item.WorkOrder.CustomerBranchId == workOrder.CustomerBranchId)
-            .ToListAsync(cancellationToken);
-        var report = reports.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).FirstOrDefault();
+            .Where(item => item.WorkOrder.CustomerId == workOrder.CustomerId && item.WorkOrder.CustomerBranchId == workOrder.CustomerBranchId);
+        var report = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).FirstOrDefaultAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).FirstOrDefault();
         return Results.Ok(report is null ? null : ToResponse(report));
     }
 
     private static async Task<IResult> GetCompanyReportsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
     {
-        var reports = await ReportQuery(dbContext).ToListAsync(cancellationToken);
-        return Results.Ok(reports.OrderByDescending(item => item.UpdatedAt).Select(item => ToResponse(item)));
+        var query = ReportQuery(dbContext);
+        var reports = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.UpdatedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.UpdatedAt).ToList();
+        return Results.Ok(reports.Select(item => ToResponse(item)));
     }
 
     private static async Task<IResult> GetEmployeeReportsAsync(PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue) return Results.Forbid();
-        var reports = await ReportQuery(dbContext)
+        var query = ReportQuery(dbContext)
             .Where(item => item.WorkOrder.AssignedEmployeeAccountId == companyContext.AccountId.Value ||
-                           item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value))
-            .ToListAsync(cancellationToken);
-        return Results.Ok(reports.OrderByDescending(item => item.UpdatedAt).Select(item => ToResponse(item)));
+                           item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value));
+        var reports = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.UpdatedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.UpdatedAt).ToList();
+        return Results.Ok(reports.Select(item => ToResponse(item)));
     }
 
     private static async Task<IResult> GetCustomerReportsAsync(PesneerDbContext dbContext, ICompanyContext companyContext, CancellationToken cancellationToken)
     {
         if (!companyContext.CustomerId.HasValue) return Results.Forbid();
-        var reports = await ReportQuery(dbContext)
+        var query = ReportQuery(dbContext)
             .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == companyContext.CustomerId.Value)
-            .Where(item => !companyContext.CustomerBranchId.HasValue || item.WorkOrder.CustomerBranchId == companyContext.CustomerBranchId.Value)
-            .ToListAsync(cancellationToken);
-        return Results.Ok(reports.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).Select(item => ToResponse(item, false)));
+            .Where(item => !companyContext.CustomerBranchId.HasValue || item.WorkOrder.CustomerBranchId == companyContext.CustomerBranchId.Value);
+        var reports = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.FinalizedAt ?? item.UpdatedAt).ToList();
+        return Results.Ok(reports.Select(item => ToResponse(item, false)));
+    }
+
+    private static Task<IResult> GetCompanyReportSummariesAsync(
+        int? limit, string? cursor, PesneerDbContext dbContext, CancellationToken cancellationToken) =>
+        GetReportSummaryPageAsync(dbContext, dbContext.ServiceReports.AsNoTracking(), limit, cursor, cancellationToken);
+
+    private static Task<IResult> GetEmployeeReportSummariesAsync(
+        int? limit, string? cursor, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        if (!context.AccountId.HasValue) return Task.FromResult<IResult>(Results.Forbid());
+        var accountId = context.AccountId.Value;
+        var query = dbContext.ServiceReports.AsNoTracking().Where(item =>
+            item.WorkOrder.AssignedEmployeeAccountId == accountId ||
+            item.WorkOrder.Assignments.Any(assignment => assignment.EmployeeAccountId == accountId));
+        return GetReportSummaryPageAsync(dbContext, query, limit, cursor, cancellationToken);
+    }
+
+    private static Task<IResult> GetCustomerReportSummariesAsync(
+        int? limit, string? cursor, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
+    {
+        if (!context.CustomerId.HasValue) return Task.FromResult<IResult>(Results.Forbid());
+        var customerId = context.CustomerId.Value;
+        var query = dbContext.ServiceReports.AsNoTracking()
+            .Where(item => item.Status == "Finalized" && item.WorkOrder.CustomerId == customerId);
+        if (context.CustomerBranchId.HasValue)
+        {
+            var branchId = context.CustomerBranchId.Value;
+            query = query.Where(item => item.WorkOrder.CustomerBranchId == branchId);
+        }
+        return GetReportSummaryPageAsync(dbContext, query, limit, cursor, cancellationToken);
+    }
+
+    private static async Task<IResult> GetReportSummaryPageAsync(
+        PesneerDbContext dbContext,
+        IQueryable<ServiceReport> query,
+        int? requestedLimit,
+        string? cursor,
+        CancellationToken cancellationToken)
+    {
+        var limit = CursorPaging.NormalizeLimit(requestedLimit);
+        var hasCursor = CursorPaging.TryRead(cursor, out var position);
+        if (!string.IsNullOrWhiteSpace(cursor) && !hasCursor)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["cursor"] = ["Sayfalama anahtarı geçerli değil."] });
+
+        var snapshot = hasCursor ? position.Snapshot : DateTimeOffset.UtcNow;
+        var projection = query.AsSplitQuery().Select(item => new ReportSummarySource(
+                item.Id, item.WorkOrderId, item.WorkOrder.Number, item.ReportNumber, item.Status,
+                item.WorkOrder.CustomerId, item.WorkOrder.Customer.LegalName, item.WorkOrder.CustomerBranchId,
+                item.WorkOrder.CustomerBranch != null ? item.WorkOrder.CustomerBranch.Name : "Merkez",
+                item.WorkOrder.ScheduledAt,
+                item.WorkOrder.AssignedEmployeeAccount != null ? item.WorkOrder.AssignedEmployeeAccount.DisplayName : "Atama bekliyor",
+                item.CreatedAt, item.UpdatedAt, item.FinalizedAt,
+                item.Stations.Select(station => new SummaryStation(
+                    station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest)).ToArray(),
+                item.EmailDeliveries.Select(delivery => delivery.Status).ToArray()));
+
+        List<ReportSummarySource> rows;
+        if (dbContext.Database.IsNpgsql())
+        {
+            projection = projection.Where(item => item.CreatedAt <= snapshot);
+            if (hasCursor)
+                projection = projection.Where(item => item.CreatedAt < position.Sort ||
+                    (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0));
+            rows = await projection.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(limit + 1).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            rows = (await projection.ToListAsync(cancellationToken))
+                .Where(item => item.CreatedAt <= snapshot && (!hasCursor || item.CreatedAt < position.Sort ||
+                    (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0)))
+                .OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(limit + 1).ToList();
+        }
+
+        var hasMore = rows.Count > limit;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        var items = rows.Select(ToSummaryResponse).ToArray();
+        var last = rows.LastOrDefault();
+        var nextCursor = hasMore && last is not null ? CursorPaging.Write(snapshot, last.CreatedAt, last.Id) : null;
+        return Results.Ok(new CursorPage<ServiceReportSummaryResponse>(items, nextCursor, hasMore, snapshot.ToString("O")));
     }
 
     private static async Task<IResult> UpsertAsync(
@@ -227,7 +333,14 @@ public static class ServiceReportEndpoints
         var stations = request.Stations.Select(item =>
         {
             var stationId = Guid.NewGuid();
-            var observations = (item.PestObservations ?? []).Where(observation => observation.ApprovedCount > 0 || observation.DetectedCount > 0)
+            var observationInputs = (item.PestObservations ?? [])
+                .Where(observation => observation.ApprovedCount > 0 || observation.DetectedCount > 0).ToArray();
+            var sharedVisionValues = observationInputs
+                .Where(observation => observation.Source.Trim() is "PestneerVision" or "VisionEdited")
+                .Select(observation => NullIfEmpty(observation.VisionResultJson))
+                .Where(value => value is not null).Distinct(StringComparer.Ordinal).ToArray();
+            var sharedVisionJson = sharedVisionValues.Length == 1 ? sharedVisionValues[0] : null;
+            var observations = observationInputs
                 .Select(observation => new ServiceReportPestObservation
                 {
                     Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, ServiceReportStationId = stationId,
@@ -235,7 +348,11 @@ public static class ServiceReportEndpoints
                     DetectedCount = observation.DetectedCount, ApprovedCount = observation.ApprovedCount,
                     MeanConfidence = observation.MeanConfidence, Source = observation.Source,
                     ModelName = NullIfEmpty(observation.ModelName), ModelVersion = NullIfEmpty(observation.ModelVersion),
-                    ReviewStatus = observation.ReviewStatus, VisionResultJson = NullIfEmpty(observation.VisionResultJson),
+                    ReviewStatus = observation.ReviewStatus,
+                    VisionResultJson = sharedVisionJson is not null && (observation.Source.Trim() is "PestneerVision" or "VisionEdited") &&
+                        string.Equals(NullIfEmpty(observation.VisionResultJson), sharedVisionJson, StringComparison.Ordinal)
+                            ? null
+                            : NullIfEmpty(observation.VisionResultJson),
                     AnalyzedAt = observation.AnalyzedAt, ReviewedAt = now, ReviewedByAccountId = companyContext.AccountId
                 }).ToList();
             var approvedTotal = observations.Sum(observation => observation.ApprovedCount);
@@ -253,6 +370,7 @@ public static class ServiceReportEndpoints
                 AppliedAmount = item.AppliedAmount, AppliedUnit = NullIfEmpty(item.AppliedUnit),
                 ReplacementVehicleStockItemId = item.ReplacementVehicleStockItemId, ReplacementProductName = NullIfEmpty(item.ReplacementProductName),
                 ReplacementQuantity = item.ReplacementQuantity, ReplacementUnit = NullIfEmpty(item.ReplacementUnit), Notes = NullIfEmpty(item.Notes),
+                VisionAnalysisJson = sharedVisionJson,
                 PestObservations = observations
             };
         }).ToList();
@@ -338,13 +456,15 @@ public static class ServiceReportEndpoints
             if (detail?.Location?.Length > 240 || detail?.Status?.Length > 80 || detail?.Description?.Length > 1000)
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["metadata"] = ["Fotoğraf yer, durum veya açıklama alanı izin verilen uzunluğu aşıyor."] });
             await using var stream = file.OpenReadStream();
-            using var memory = new MemoryStream();
-            await stream.CopyToAsync(memory, cancellationToken);
+            var data = GC.AllocateUninitializedArray<byte>(checked((int)file.Length));
+            await stream.ReadExactlyAsync(data, cancellationToken);
+            if (!HasImageSignature(data, file.ContentType))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["photos"] = ["Fotoğraf dosyasının gerçek biçimi doğrulanamadı."] });
             var photo = new WorkOrderPhoto
             {
                 Id = Guid.NewGuid(), CompanyId = companyContext.CompanyId.Value, WorkOrderId = workOrderId,
                 FileName = Path.GetFileName(file.FileName),
-                ContentType = file.ContentType, Data = memory.ToArray(), Location = NullIfEmpty(detail?.Location),
+                ContentType = file.ContentType, Data = data, Location = NullIfEmpty(detail?.Location),
                 Status = NullIfEmpty(detail?.Status), Description = NullIfEmpty(detail?.Description), UploadedAt = DateTimeOffset.UtcNow
             };
             dbContext.WorkOrderPhotos.Add(photo);
@@ -368,22 +488,24 @@ public static class ServiceReportEndpoints
         if (toDate < fromDate || toDate.DayNumber - fromDate.DayNumber > 730) return Results.ValidationProblem(new Dictionary<string, string[]> { ["period"] = ["Geçerli ve en fazla iki yıllık bir tarih aralığı seçin."] });
         var fromOffset = new DateTimeOffset(fromDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
         var toOffset = new DateTimeOffset(toDate.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-        var query = ReportQuery(dbContext).Where(item => item.Status == "Finalized");
+        var query = dbContext.ServiceReports.AsNoTracking().Where(item => item.Status == "Finalized");
         if (customerId.HasValue) query = query.Where(item => item.WorkOrder.CustomerId == customerId.Value);
         if (branchId.HasValue) query = query.Where(item => item.WorkOrder.CustomerBranchId == branchId.Value);
         var reports = await query
             .Where(item => item.WorkOrder.ScheduledAt >= fromOffset && item.WorkOrder.ScheduledAt < toOffset)
+            .Select(item => new AnalyticsSource(item.WorkOrder.ScheduledAt, item.Stations.Select(station => new AnalyticsStation(
+                station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest,
+                station.PestObservations.Select(pest => new AnalyticsPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray()))
             .ToListAsync(cancellationToken);
-        var activationQuery = dbContext.StationActivations.AsNoTracking().Include(item => item.WorkOrder).Where(item => item.Status == "Finalized");
+        var activationQuery = dbContext.StationActivations.AsNoTracking().Where(item => item.Status == "Finalized");
         if (customerId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerId == customerId.Value);
         if (branchId.HasValue) activationQuery = activationQuery.Where(item => item.WorkOrder.CustomerBranchId == branchId.Value);
         var activations = await activationQuery
             .Where(item => item.WorkOrder.ScheduledAt >= fromOffset && item.WorkOrder.ScheduledAt < toOffset)
+            .Select(item => new ActivationAnalyticsSource(item.WorkOrder.ScheduledAt, item.StationsJson))
             .ToListAsync(cancellationToken);
-        var sources = reports.Where(item => item.Stations.Count > 0).Select(item => new AnalyticsSource(item.WorkOrder.ScheduledAt, item.Stations.Select(station => new AnalyticsStation(
-                station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest,
-                station.PestObservations.Select(pest => new AnalyticsPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray()))
-            .Concat(activations.Select(item => new AnalyticsSource(item.WorkOrder.ScheduledAt, StationActivationData.Deserialize(item.StationsJson).Select(station => new AnalyticsStation(
+        var sources = reports.Where(item => item.Stations.Count > 0)
+            .Concat(activations.Select(item => new AnalyticsSource(item.ScheduledAt, StationActivationData.Deserialize(item.StationsJson).Select(station => new AnalyticsStation(
                 station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest,
                 (station.PestObservations ?? []).Select(pest => new AnalyticsPest(pest.PestName, pest.ApprovedCount)).ToArray())).ToArray())))
             .ToArray();
@@ -643,21 +765,30 @@ public static class ServiceReportEndpoints
         if (stockItemIds.Length == 0) return new ProductLicenseResolution(products, null);
 
         var stockItems = await dbContext.VehicleStockItems.AsNoTracking()
-            .Include(item => item.InventoryItem).ThenInclude(item => item!.LicenseDocuments)
             .Where(item => stockItemIds.Contains(item.Id) && item.IsActive)
+            .Select(item => new StockLicenseSource(
+                item.Id, item.InventoryItemId,
+                item.InventoryItem != null ? item.InventoryItem.LicenseNumber : null))
             .ToDictionaryAsync(item => item.Id, cancellationToken);
         if (stockItems.Count != stockItemIds.Length)
             return new ProductLicenseResolution(products, new Dictionary<string, string[]> { ["products"] = ["Seçilen araç stok ürünlerinden biri artık kullanılamıyor."] });
 
+        var inventoryIds = stockItems.Values.Where(item => item.InventoryItemId.HasValue).Select(item => item.InventoryItemId!.Value).Distinct().ToArray();
+        var licenseRows = await dbContext.QualityDocuments.AsNoTracking()
+            .Where(document => document.InventoryItemId.HasValue && inventoryIds.Contains(document.InventoryItemId.Value) && document.Category == "Licenses")
+            .OrderByDescending(document => document.CreatedAt)
+            .Select(document => new LicenseDocumentMetadata(document.InventoryItemId!.Value, document.Id, document.LicenseNumber))
+            .ToListAsync(cancellationToken);
+        var latestLicenses = licenseRows.GroupBy(item => item.InventoryItemId).ToDictionary(group => group.Key, group => group.First());
+
         var resolved = products.Select(item =>
         {
-            if (!item.VehicleStockItemId.HasValue || !stockItems.TryGetValue(item.VehicleStockItemId.Value, out var stockItem) || stockItem.InventoryItem is null)
+            if (!item.VehicleStockItemId.HasValue || !stockItems.TryGetValue(item.VehicleStockItemId.Value, out var stockItem) || !stockItem.InventoryItemId.HasValue)
                 return item;
-            var license = stockItem.InventoryItem.LicenseDocuments.Where(document => document.Category == "Licenses")
-                .OrderByDescending(document => document.CreatedAt).FirstOrDefault();
+            var license = latestLicenses.GetValueOrDefault(stockItem.InventoryItemId.Value);
             return license is null
-                ? item with { LicenseDocumentId = null, LicenseNumber = stockItem.InventoryItem.LicenseNumber ?? item.LicenseNumber }
-                : item with { LicenseDocumentId = license.Id, LicenseNumber = license.LicenseNumber ?? stockItem.InventoryItem.LicenseNumber };
+                ? item with { LicenseDocumentId = null, LicenseNumber = stockItem.InventoryLicenseNumber ?? item.LicenseNumber }
+                : item with { LicenseDocumentId = license.Id, LicenseNumber = license.LicenseNumber ?? stockItem.InventoryLicenseNumber };
         }).ToArray();
         return new ProductLicenseResolution(resolved, null);
     }
@@ -703,7 +834,9 @@ public static class ServiceReportEndpoints
         item.PestObservations.Select(observation => new ServiceReportPestObservationInput(
             observation.PestKey, observation.PestName, observation.DetectedCount, observation.ApprovedCount,
             observation.MeanConfidence, observation.Source, observation.ModelName, observation.ModelVersion,
-            observation.ReviewStatus, observation.VisionResultJson, observation.AnalyzedAt)).ToArray());
+            observation.ReviewStatus,
+            observation.VisionResultJson ?? (observation.Source is "PestneerVision" or "VisionEdited" ? item.VisionAnalysisJson : null),
+            observation.AnalyzedAt)).ToArray());
 
     private static string StationKey(ServiceReportStationInput item) => !string.IsNullOrWhiteSpace(item.SitePlanElementId)
         ? $"plan:{item.SitePlanId}:{item.SitePlanElementId.Trim()}"
@@ -747,8 +880,34 @@ public static class ServiceReportEndpoints
     }
 
     private sealed record AnalyticsSource(DateTimeOffset ScheduledAt, IReadOnlyList<AnalyticsStation> Stations);
+    private sealed record ActivationAnalyticsSource(DateTimeOffset ScheduledAt, string StationsJson);
     private sealed record AnalyticsStation(bool HasActivity, bool PlateChanged, int CaughtCount, string DeviceStatus, string? TargetPest, IReadOnlyList<AnalyticsPest> Pests);
     private sealed record AnalyticsPest(string Name, int Count);
+    private sealed record SummaryStation(bool HasActivity, bool PlateChanged, int CaughtCount, string DeviceStatus, string? TargetPest);
+    private sealed record ReportSummarySource(
+        Guid Id, Guid WorkOrderId, string WorkOrderNumber, string ReportNumber, string Status,
+        Guid CustomerId, string CustomerName, Guid? BranchId, string BranchName, DateTimeOffset ScheduledAt,
+        string OperatorName, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? FinalizedAt,
+        IReadOnlyList<SummaryStation> Stations, IReadOnlyList<string> EmailStatuses);
+
+    private static ServiceReportSummaryResponse ToSummaryResponse(ReportSummarySource item)
+    {
+        var stations = item.Stations.Select(station => new AnalyticsStation(
+            station.HasActivity, station.PlateChanged, station.CaughtCount, station.DeviceStatus, station.TargetPest, [])).ToArray();
+        var risk = CalculateRisk(stations);
+        var sent = item.EmailStatuses.Count(status => status == "Sent");
+        var emailStatus = item.EmailStatuses.Count == 0 ? "NotQueued"
+            : sent == item.EmailStatuses.Count ? "Sent"
+            : sent > 0 ? "Partial"
+            : item.EmailStatuses.All(status => status == "Failed") ? "Failed" : "Pending";
+        return new ServiceReportSummaryResponse(
+            item.Id, item.WorkOrderId, item.WorkOrderNumber, item.ReportNumber, item.Status,
+            item.CustomerId, item.CustomerName, item.BranchId, item.BranchName, item.ScheduledAt, item.OperatorName,
+            item.UpdatedAt, item.FinalizedAt, stations.Length, stations.Count(station => station.HasActivity),
+            stations.Count(station => station.PlateChanged), stations.Sum(station => station.CaughtCount),
+            risk.ActivityRate, risk.Score, risk.Level, risk.Infestation, emailStatus, sent, item.EmailStatuses.Count,
+            $"/api/v2/service-reports/{item.Id}", $"/api/service-reports/{item.Id}/pdf");
+    }
 
     private static ServiceReportResponse ToResponse(ServiceReport report, bool includeEmailDetails = true)
     {
@@ -784,6 +943,16 @@ public static class ServiceReportEndpoints
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static bool HasImageSignature(ReadOnlySpan<byte> data, string contentType)
+    {
+        if (contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
+            return data.StartsWith(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
+        if (contentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase))
+            return data.Length >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
+        if (contentType.Equals("image/webp", StringComparison.OrdinalIgnoreCase))
+            return data.Length >= 12 && data[..4].SequenceEqual("RIFF"u8) && data.Slice(8, 4).SequenceEqual("WEBP"u8);
+        return false;
+    }
     private static string EmailDeliveryStatus(ICollection<ReportEmailDelivery> deliveries)
     {
         if (deliveries.Count == 0) return "NotQueued";
@@ -794,6 +963,8 @@ public static class ServiceReportEndpoints
         return "Pending";
     }
     private sealed record StockUsage(Guid? VehicleStockItemId, string ProductName, decimal Amount, string Unit);
+    private sealed record StockLicenseSource(Guid Id, Guid? InventoryItemId, string? InventoryLicenseNumber);
+    private sealed record LicenseDocumentMetadata(Guid InventoryItemId, Guid Id, string? LicenseNumber);
     private sealed record ProductLicenseResolution(IReadOnlyList<ServiceReportProductInput> Products, Dictionary<string, string[]>? Errors);
     private sealed record ServiceReportPhotoMetadata(string? Location, string? Status, string? Description);
 }

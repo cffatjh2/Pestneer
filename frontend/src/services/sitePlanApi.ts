@@ -64,6 +64,19 @@ export type SitePlanRecord = {
   document: { id: string; fileName: string; contentType: string; downloadUrl: string };
 };
 
+export type SitePlanSummary = Omit<SitePlanRecord, 'canvas'> & {
+  detailUrl: string;
+};
+
+type CursorPage<T> = {
+  items: T[];
+  nextCursor?: string | null;
+  hasMore: boolean;
+  snapshotVersion: string;
+};
+
+export const v2SitePlanDataEnabled = String(import.meta.env.VITE_V2_SITE_PLAN_DATA ?? 'true').toLowerCase() !== 'false';
+
 export type SaveSitePlanInput = {
   customerId: string;
   branchId?: string;
@@ -81,6 +94,13 @@ export class SitePlanSessionExpiredError extends Error {
   }
 }
 
+class SitePlanContractError extends Error {
+  constructor() {
+    super('Yerleşim planı özet yanıtı beklenen biçimde değil.');
+    this.name = 'SitePlanContractError';
+  }
+}
+
 export async function getSitePlans(token: string) {
   const scope = offlineScopeFromToken(token);
   try {
@@ -93,12 +113,50 @@ export async function getSitePlans(token: string) {
     throw error;
   }
 }
+export async function getSitePlanSummaries(token: string): Promise<SitePlanSummary[]> {
+  if (!v2SitePlanDataEnabled) return (await getSitePlans(token)).map(toSitePlanSummary);
+  try {
+    return await requestAllCursorPages('/api/v2/site-plans', token);
+  } catch (error) {
+    if (error instanceof SitePlanSessionExpiredError) throw error;
+    return (await getSitePlans(token)).map(toSitePlanSummary);
+  }
+}
+
+export async function getSitePlanDetail(token: string, plan: Pick<SitePlanSummary, 'id'>): Promise<SitePlanRecord> {
+  if (v2SitePlanDataEnabled) {
+    try {
+      const detail = await request<SitePlanRecord>(`/api/v2/site-plans/${plan.id}`, token);
+      if (!isSitePlanRecord(detail)) throw new SitePlanContractError();
+      return detail;
+    } catch (error) {
+      if (error instanceof SitePlanSessionExpiredError) throw error;
+    }
+  }
+
+  const legacyPlans = await getSitePlans(token);
+  const legacy = legacyPlans.find((item) => item.id === plan.id);
+  if (!legacy) throw new Error('Yerleşim planı bulunamadı.');
+  return legacy;
+}
+
+export async function getMatchingSitePlanDetail(token: string, customerId: string, branchId?: string) {
+  const summaries = await getSitePlanSummaries(token);
+  const matching = summaries.find((item) => item.customerId === customerId &&
+    (branchId ? item.branchId === branchId : !item.branchId));
+  return matching ? getSitePlanDetail(token, matching) : null;
+}
+
+export function toSitePlanSummary(plan: SitePlanRecord): SitePlanSummary {
+  const { canvas: _, ...summary } = plan;
+  return { ...summary, detailUrl: `/api/v2/site-plans/${plan.id}` };
+}
 export const createSitePlan = (token: string, input: SaveSitePlanInput) => request<SitePlanRecord>('/api/site-plans/', token, { method: 'POST', body: JSON.stringify(input) });
 export const updateSitePlan = (token: string, id: string, input: SaveSitePlanInput) => request<SitePlanRecord>(`/api/site-plans/${id}`, token, { method: 'PUT', body: JSON.stringify(input) });
 
 import { shareOrDownloadFile } from '../utils/shareUtils';
 
-export async function downloadSitePlan(token: string, plan: SitePlanRecord, open = false) {
+export async function downloadSitePlan(token: string, plan: Pick<SitePlanSummary, 'document'>, open = false) {
   const response = await apiFetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new SitePlanSessionExpiredError();
   if (!response.ok) throw new Error('Yerleşim planı PDF dosyası indirilemedi.');
@@ -116,7 +174,7 @@ export async function downloadSitePlan(token: string, plan: SitePlanRecord, open
   window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
 }
 
-export async function shareSitePlan(token: string, plan: SitePlanRecord) {
+export async function shareSitePlan(token: string, plan: Pick<SitePlanSummary, 'number' | 'title' | 'customerName' | 'branchName' | 'document'>) {
   const response = await apiFetch(plan.document.downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401 || response.status === 403) throw new SitePlanSessionExpiredError();
   if (!response.ok) throw new Error('Yerleşim planı PDF dosyası indirilemedi.');
@@ -129,6 +187,60 @@ export async function shareSitePlan(token: string, plan: SitePlanRecord) {
   });
 }
 
+async function requestAllCursorPages(path: string, token: string): Promise<SitePlanSummary[]> {
+  const items: SitePlanSummary[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+
+  do {
+    const page = await request<CursorPage<SitePlanSummary>>(`${path}?limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, token);
+    if (!isCursorPage(page)) throw new SitePlanContractError();
+    items.push(...page.items);
+    if (!page.hasMore) break;
+    if (!page.nextCursor || seenCursors.has(page.nextCursor)) throw new SitePlanContractError();
+    seenCursors.add(page.nextCursor);
+    cursor = page.nextCursor;
+  } while (cursor);
+
+  return items;
+}
+
+function isCursorPage(value: unknown): value is CursorPage<SitePlanSummary> {
+  if (!value || typeof value !== 'object') return false;
+  const page = value as Partial<CursorPage<unknown>>;
+  return Array.isArray(page.items) && page.items.every(isSitePlanSummary) && typeof page.hasMore === 'boolean' &&
+    typeof page.snapshotVersion === 'string' && (page.nextCursor == null || typeof page.nextCursor === 'string');
+}
+
+function isSitePlanSummary(value: unknown): value is SitePlanSummary {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<SitePlanSummary>;
+  return typeof item.id === 'string' && typeof item.number === 'string' && typeof item.title === 'string' &&
+    typeof item.areaName === 'string' && typeof item.fieldGuide === 'string' && typeof item.status === 'string' &&
+    typeof item.revision === 'number' && isOptionalString(item.revisionNote) && typeof item.customerId === 'string' &&
+    typeof item.customerName === 'string' && isOptionalString(item.branchId) && typeof item.branchName === 'string' &&
+    typeof item.createdBy === 'string' && typeof item.createdAt === 'string' && typeof item.updatedAt === 'string' &&
+    isSitePlanDocument(item.document) && typeof item.detailUrl === 'string';
+}
+
+function isSitePlanRecord(value: unknown): value is SitePlanRecord {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<SitePlanRecord>;
+  return typeof item.id === 'string' && typeof item.number === 'string' && isSitePlanDocument(item.document) &&
+    !!item.canvas && item.canvas.width === 1200 && item.canvas.height === 720 &&
+    Array.isArray(item.canvas.equipmentTypes) && Array.isArray(item.canvas.elements);
+}
+
+function isSitePlanDocument(value: unknown): value is SitePlanRecord['document'] {
+  if (!value || typeof value !== 'object') return false;
+  const document = value as Partial<SitePlanRecord['document']>;
+  return typeof document.id === 'string' && typeof document.fileName === 'string' &&
+    typeof document.contentType === 'string' && typeof document.downloadUrl === 'string';
+}
+
+function isOptionalString(value: unknown) {
+  return value == null || typeof value === 'string';
+}
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response;

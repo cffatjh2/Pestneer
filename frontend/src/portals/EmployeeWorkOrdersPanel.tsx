@@ -61,7 +61,7 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
         }
       }
       const queue = await listQueuedReports();
-      for (const item of queue.filter((value) => value.status !== 'conflict')) {
+      for (const item of queue.filter((value) => value.status !== 'conflict' && value.status !== 'evidence-missing')) {
         await updateQueuedReport({ ...item, status: 'syncing', attempts: item.attempts + 1, error: undefined });
         try {
           const saved = item.reportSaved ?? await saveServiceReport(accessToken, item.workOrderId, item.input);
@@ -163,6 +163,7 @@ export default function EmployeeWorkOrdersPanel({ accessToken, accountId, compan
       </section>
     )}
     {(offlineMode || queuedReports.length > 0 || queuedActions.length > 0) && <section className={`field-sync-banner ${offlineMode ? 'offline' : 'online'}`}><div>{offlineMode ? <CloudOff size={20} /> : <Cloud size={20} />}<span><strong>{offlineMode ? 'Çevrimdışı saha modu · Cihaza kaydoldu' : 'Senkronizasyon bekliyor'}</strong><small>{offlineMode ? `${queuedReports.length + queuedActions.length} işlem bu cihazda güvende; internet geldiğinde otomatik gönderilir.` : `${queuedReports.length + queuedActions.length} kayıt sunucuya gönderilecek.`}</small></span></div><button disabled={offlineMode} onClick={() => void syncQueue()}><RefreshCw size={15} /> Şimdi eşitle</button></section>}
+    {queuedReports.filter((item) => item.status === 'evidence-missing').map((item) => <section className="field-sync-conflict" key={item.id}><AlertCircle size={19} /><div><strong>Çevrimdışı fotoğraf kanıtı eksik</strong><span>{item.error ?? 'Kayıt güvenlik için otomatik gönderilmedi. Raporu açıp fotoğrafları yeniden ekleyin.'}</span></div><button className="danger" onClick={() => void removeQueuedReport(item.id).then(refreshQueue)}>Eksik kuyruğu kaldır</button></section>)}
     {queuedReports.filter((item) => item.status === 'conflict').map((item) => <section className="field-sync-conflict" key={item.id}><AlertCircle size={19} /><div><strong>Aynı rapor başka bir cihazda değiştirildi</strong><span>Sunucudaki kayıt ile bu cihazdaki taslak farklı. Hangi sürümün korunacağını seçin.</span></div><button onClick={() => void resolveConflict(item, false)}>Sunucudakini kullan</button><button className="danger" onClick={() => void resolveConflict(item, true)}>Bu cihazdakini koru</button></section>)}
     {options.canSelfSchedule && <div className="self-schedule-permission"><Sparkles size={17} /><span>Firma sahibi, kendi iş programınızı oluşturma yetkisini etkinleştirdi.</span></div>}{error && <div className="field-operation-error"><AlertCircle size={16} /><span>{error}</span></div>}
     {emergencyRequests.some((item) => !['Completed','Cancelled'].includes(item.status)) && <div className="employee-emergency-strip"><AlertCircle size={19} /><div><strong>Size atanan acil müşteri çağrıları</strong>{emergencyRequests.filter((item) => !['Completed','Cancelled'].includes(item.status)).map((item) => <article key={item.id}><span>{item.number} · {item.customerName} / {item.branchName}</span><p>{item.description}</p>{item.status === 'New' ? <button onClick={() => void acknowledgeEmergency(item)}>Çağrıyı kabul et</button> : <em>Çağrı kabul edildi</em>}</article>)}</div></div>}

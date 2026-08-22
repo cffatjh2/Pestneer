@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
 using System.Globalization;
+using System.Security.Cryptography;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
+using Pesneer.Api.Optimization;
 
 namespace Pesneer.Api.Commercial;
 
@@ -25,11 +28,113 @@ public static class CommercialEndpoints
         group.MapPost("/receivables/{receivableId:guid}/payment", RecordPaymentAsync);
         group.MapPut("/work-orders/{workOrderId:guid}/economics", SaveEconomicsAsync);
         group.MapGet("/profitability", GetProfitabilityAsync);
+        var v2 = app.MapGroup("/api/v2/company/commercial").RequireAuthorization("OwnerPortal");
+        v2.MapGet("/proposals", GetProposalPageAsync);
+        v2.MapGet("/proposals/{proposalId:guid}", GetProposalDetailAsync);
+        v2.MapGet("/contracts", GetContractPageAsync);
+        v2.MapGet("/contracts/{contractId:guid}", GetContractDetailAsync);
+        v2.MapGet("/receivables", GetReceivablePageAsync);
         return app;
     }
 
-    private static async Task<IResult> GetProposalsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken) =>
-        Results.Ok((await ProposalQuery(dbContext).ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).Select(ToProposal));
+    private static async Task<IResult> GetProposalPageAsync(int? limit, string? cursor, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var parsed = ParseCursor(limit, cursor);
+        if (parsed.Error is not null) return parsed.Error;
+        List<CommercialProposal> rows;
+        if (dbContext.Database.IsNpgsql())
+        {
+            var query = ProposalQuery(dbContext).Where(item => item.CreatedAt <= parsed.Snapshot);
+            if (parsed.Position.HasValue)
+            {
+                var position = parsed.Position.Value;
+                query = query.Where(item => item.CreatedAt < position.Sort || (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0));
+            }
+            rows = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(parsed.Limit + 1).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            rows = (await ProposalQuery(dbContext).ToListAsync(cancellationToken))
+                .Where(item => InPage(item.CreatedAt, item.Id, parsed))
+                .OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(parsed.Limit + 1).ToList();
+        }
+        return Page(rows, parsed, item => item.CreatedAt, item => item.Id, ToProposal);
+    }
+
+    private static async Task<IResult> GetContractPageAsync(int? limit, string? cursor, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var parsed = ParseCursor(limit, cursor);
+        if (parsed.Error is not null) return parsed.Error;
+        List<CustomerContract> rows;
+        if (dbContext.Database.IsNpgsql())
+        {
+            var query = ContractQuery(dbContext).Where(item => item.CreatedAt <= parsed.Snapshot);
+            if (parsed.Position.HasValue)
+            {
+                var position = parsed.Position.Value;
+                query = query.Where(item => item.CreatedAt < position.Sort || (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0));
+            }
+            rows = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(parsed.Limit + 1).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            rows = (await ContractQuery(dbContext).ToListAsync(cancellationToken))
+                .Where(item => InPage(item.CreatedAt, item.Id, parsed))
+                .OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(parsed.Limit + 1).ToList();
+        }
+        return Page(rows, parsed, item => item.CreatedAt, item => item.Id, ToContract);
+    }
+
+    private static async Task<IResult> GetReceivablePageAsync(int? limit, string? cursor, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var parsed = ParseCursor(limit, cursor);
+        if (parsed.Error is not null) return parsed.Error;
+        List<ReceivableEntry> rows;
+        if (dbContext.Database.IsNpgsql())
+        {
+            var query = ReceivableQuery(dbContext).Where(item => item.CreatedAt <= parsed.Snapshot);
+            if (parsed.Position.HasValue)
+            {
+                var position = parsed.Position.Value;
+                query = query.Where(item => item.CreatedAt < position.Sort || (item.CreatedAt == position.Sort && item.Id.CompareTo(position.Id) < 0));
+            }
+            rows = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(parsed.Limit + 1).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            rows = (await ReceivableQuery(dbContext).ToListAsync(cancellationToken))
+                .Where(item => InPage(item.CreatedAt, item.Id, parsed))
+                .OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+                .Take(parsed.Limit + 1).ToList();
+        }
+        return Page(rows, parsed, item => item.CreatedAt, item => item.Id, ToReceivable);
+    }
+
+    private static async Task<IResult> GetProposalDetailAsync(Guid proposalId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var item = await ProposalQuery(dbContext).SingleOrDefaultAsync(value => value.Id == proposalId, cancellationToken);
+        return item is null ? Results.NotFound() : Results.Ok(ToProposal(item));
+    }
+
+    private static async Task<IResult> GetContractDetailAsync(Guid contractId, PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var item = await ContractQuery(dbContext).SingleOrDefaultAsync(value => value.Id == contractId, cancellationToken);
+        return item is null ? Results.NotFound() : Results.Ok(ToContract(item));
+    }
+
+    private static async Task<IResult> GetProposalsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var query = ProposalQuery(dbContext);
+        var rows = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.CreatedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
+        return Results.Ok(rows.Select(ToProposal));
+    }
 
     private static async Task<IResult> CreateProposalAsync(CreateProposalRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
@@ -133,8 +238,14 @@ public static class CommercialEndpoints
         return Results.Created($"/api/company/commercial/contracts/{contract.Id}", ToContract(savedContract));
     }
 
-    private static async Task<IResult> GetContractsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken) =>
-        Results.Ok((await ContractQuery(dbContext).ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).Select(ToContract));
+    private static async Task<IResult> GetContractsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var query = ContractQuery(dbContext);
+        var rows = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.CreatedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
+        return Results.Ok(rows.Select(ToContract));
+    }
 
     private static async Task<IResult> GenerateContractWorkOrdersAsync(Guid contractId, GenerateContractWorkOrdersRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
@@ -175,7 +286,7 @@ public static class CommercialEndpoints
     }
 
     private static async Task<IResult> GetReceivablesAsync(PesneerDbContext dbContext, CancellationToken cancellationToken) =>
-        Results.Ok((await ReceivableQuery(dbContext).ToListAsync(cancellationToken)).OrderBy(item => item.DueDate).Select(ToReceivable));
+        Results.Ok((await ReceivableQuery(dbContext).OrderBy(item => item.DueDate).ToListAsync(cancellationToken)).Select(ToReceivable));
 
     private static async Task<IResult> RecordPaymentAsync(Guid receivableId, RecordPaymentRequest request, PesneerDbContext dbContext, CancellationToken cancellationToken)
     {
@@ -214,13 +325,17 @@ public static class CommercialEndpoints
         var endDate = end ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var from = new DateTimeOffset(startDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
         var until = new DateTimeOffset(endDate.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-        var completedOrders = await dbContext.WorkOrders.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch)
-            .Where(item => item.Status == "Completed").ToListAsync(cancellationToken);
-        var orders = completedOrders.Where(item => item.ScheduledAt >= from && item.ScheduledAt < until).ToList();
+        var orders = await dbContext.WorkOrders.AsNoTracking().Include(item => item.Customer).Include(item => item.CustomerBranch)
+            .Where(item => item.Status == "Completed" && item.ScheduledAt >= from && item.ScheduledAt < until)
+            .ToListAsync(cancellationToken);
         var economics = await dbContext.WorkOrderEconomics.AsNoTracking().Where(item => orders.Select(order => order.Id).Contains(item.WorkOrderId)).ToDictionaryAsync(item => item.WorkOrderId, cancellationToken);
-        var reports = await dbContext.ServiceReports.AsNoTracking().Include(item => item.Products).ThenInclude(item => item.VehicleStockItem).ThenInclude(item => item!.InventoryItem)
-            .Where(item => orders.Select(order => order.Id).Contains(item.WorkOrderId)).ToListAsync(cancellationToken);
-        var productCosts = reports.ToDictionary(report => report.WorkOrderId, report => report.Products.Sum(product => product.AmountUsed * (product.VehicleStockItem?.InventoryItem?.UnitCost ?? 0)));
+        var reports = await dbContext.ServiceReports.AsNoTracking()
+            .Where(item => orders.Select(order => order.Id).Contains(item.WorkOrderId))
+            .Select(item => new ProductCostSource(item.WorkOrderId, item.Products.Select(product => new ProductCostLine(
+                product.AmountUsed, product.VehicleStockItem != null && product.VehicleStockItem.InventoryItem != null
+                    ? product.VehicleStockItem.InventoryItem.UnitCost : 0m)).ToArray()))
+            .ToListAsync(cancellationToken);
+        var productCosts = reports.ToDictionary(report => report.WorkOrderId, report => report.Products.Sum(product => product.AmountUsed * product.UnitCost));
         var receivables = await dbContext.ReceivableEntries.AsNoTracking().ToListAsync(cancellationToken);
         var contracts = await dbContext.CustomerContracts.AsNoTracking().ToListAsync(cancellationToken);
         var rows = orders.GroupBy(item => new { item.CustomerId, item.Customer.LegalName, item.CustomerBranchId, BranchName = item.CustomerBranch != null ? item.CustomerBranch.Name : "Merkez / Genel" }).Select(group =>
@@ -251,8 +366,11 @@ public static class CommercialEndpoints
         var proposal = await ProposalQuery(dbContext).SingleOrDefaultAsync(item => item.Id == proposalId, cancellationToken);
         if (proposal is null) return Results.NotFound();
         if (!context.CompanyId.HasValue) return Results.Forbid();
+        var stored = await FindGeneratedPdfAsync(dbContext, "CommercialProposals", $"{proposal.Number}.pdf", cancellationToken);
+        if (stored is not null) return StoredPdfResult(stored);
         var company = await dbContext.Companies.AsNoTracking().SingleAsync(value => value.Id == context.CompanyId.Value, cancellationToken);
-        return Results.File(CommercialPdfRenderer.Proposal(proposal, company), "application/pdf", $"{proposal.Number}.pdf");
+        var pdf = CommercialPdfRenderer.Proposal(proposal, company);
+        return PdfResult(pdf, $"{proposal.Number}.pdf", proposal.UpdatedAt);
     }
 
     private static async Task<IResult> GetContractPdfAsync(Guid contractId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -260,8 +378,11 @@ public static class CommercialEndpoints
         var contract = await ContractQuery(dbContext).SingleOrDefaultAsync(item => item.Id == contractId, cancellationToken);
         if (contract is null) return Results.NotFound();
         if (!context.CompanyId.HasValue) return Results.Forbid();
+        var stored = await FindGeneratedPdfAsync(dbContext, "Contracts", $"{contract.Number}.pdf", cancellationToken);
+        if (stored is not null) return StoredPdfResult(stored);
         var company = await dbContext.Companies.AsNoTracking().SingleAsync(value => value.Id == context.CompanyId.Value, cancellationToken);
-        return Results.File(CommercialPdfRenderer.Contract(contract, company), "application/pdf", $"{contract.Number}.pdf");
+        var pdf = CommercialPdfRenderer.Contract(contract, company);
+        return PdfResult(pdf, $"{contract.Number}.pdf", contract.UpdatedAt);
     }
 
     private static async Task<ContractGenerationResponse> GenerateForContractAsync(CustomerContract contract, DateOnly through, PesneerDbContext dbContext, Guid accountId, CancellationToken cancellationToken)
@@ -387,6 +508,51 @@ public static class CommercialEndpoints
     private static IEnumerable<DateOnly> BillingDates(DateOnly start, DateOnly end, string frequency, int day) { var current = new DateOnly(start.Year, start.Month, Math.Min(day, DateTime.DaysInMonth(start.Year, start.Month))); if (current < start) current = current.AddMonths(1); var months = frequency switch { "Quarterly" => 3, "SemiAnnual" => 6, "Annual" => 12, _ => 1 }; while (current <= end) { yield return current; current = frequency == "Weekly" ? current.AddDays(7) : current.AddMonths(months); } }
     private static async Task<string> NextNumberAsync(IQueryable<string> query, string prefix, CancellationToken cancellationToken) { var year = DateTime.UtcNow.Year; var start = $"{prefix}-{year}-"; var values = await query.Where(value => value.StartsWith(start)).ToListAsync(cancellationToken); var next = values.Select(value => int.TryParse(value[start.Length..], out var number) ? number : 0).DefaultIfEmpty().Max() + 1; return $"{start}{next:0000}"; }
     private static QualityDocument NewCommercialDocument(Guid companyId, Guid customerId, Guid? branchId, Guid accountId, string category, string title, string fileName, byte[] pdf) => new() { Id = Guid.NewGuid(), CompanyId = companyId, CustomerId = customerId, CustomerBranchId = branchId, CreatedByAccountId = accountId, Category = category, Title = title, Description = "Ticari yönetim modülünde otomatik oluşturuldu.", FileName = fileName, ContentType = "application/pdf", SizeBytes = pdf.LongLength, FileData = pdf };
+    private static async Task<StoredPdf?> FindGeneratedPdfAsync(PesneerDbContext dbContext, string category, string fileName, CancellationToken cancellationToken)
+    {
+        var query = dbContext.QualityDocuments.AsNoTracking()
+            .Where(item => item.Category == category && item.FileName == fileName && item.FileData != null)
+            .Select(item => new StoredPdf(item.FileData!, item.ContentType, item.FileName, item.CreatedAt));
+        return dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.CreatedAt).FirstOrDefaultAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).FirstOrDefault();
+    }
+    private static IResult StoredPdfResult(StoredPdf stored) => PdfResult(stored.Data, stored.FileName, stored.CreatedAt, stored.ContentType);
+    private static IResult PdfResult(byte[] data, string fileName, DateTimeOffset updatedAt, string contentType = "application/pdf")
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+        return PrivateFileResults.Exact(data, contentType, fileName, updatedAt, hash);
+    }
+    private static PageRequest ParseCursor(int? limit, string? cursor)
+    {
+        var pageSize = CursorPaging.NormalizeLimit(limit);
+        var hasCursor = CursorPaging.TryRead(cursor, out var position);
+        if (!string.IsNullOrWhiteSpace(cursor) && !hasCursor)
+            return new PageRequest(pageSize, DateTimeOffset.UtcNow, null,
+                Results.ValidationProblem(new Dictionary<string, string[]> { ["cursor"] = ["Sayfalama anahtarı geçerli değil."] }));
+        return new PageRequest(pageSize, hasCursor ? position.Snapshot : DateTimeOffset.UtcNow,
+            hasCursor ? position : null, null);
+    }
+    private static IResult Page<TEntity, TResponse>(
+        List<TEntity> rows,
+        PageRequest request,
+        Func<TEntity, DateTimeOffset> sort,
+        Func<TEntity, Guid> id,
+        Func<TEntity, TResponse> map) where TEntity : class
+    {
+        var hasMore = rows.Count > request.Limit;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        var last = rows.LastOrDefault();
+        var nextCursor = hasMore && last is not null ? CursorPaging.Write(request.Snapshot, sort(last), id(last)) : null;
+        return Results.Ok(new CursorPage<TResponse>(rows.Select(map).ToArray(), nextCursor, hasMore, request.Snapshot.ToString("O")));
+    }
+    private static bool InPage(DateTimeOffset createdAt, Guid id, PageRequest request) =>
+        createdAt <= request.Snapshot && (!request.Position.HasValue || createdAt < request.Position.Value.Sort ||
+            (createdAt == request.Position.Value.Sort && id.CompareTo(request.Position.Value.Id) < 0));
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static IResult Validation(string key, string message) => Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });
+    private sealed record ProductCostSource(Guid WorkOrderId, IReadOnlyList<ProductCostLine> Products);
+    private sealed record ProductCostLine(decimal AmountUsed, decimal UnitCost);
+    private sealed record StoredPdf(byte[] Data, string ContentType, string FileName, DateTimeOffset CreatedAt);
+    private sealed record PageRequest(int Limit, DateTimeOffset Snapshot, CursorPosition? Position, IResult? Error);
 }

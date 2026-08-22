@@ -42,14 +42,14 @@ import {
 import { CalendarSessionExpiredError, getCalendarEntries, type CalendarEntryRecord } from '../services/calendarApi';
 import { getEmployeeWorkOrders, WorkOrderSessionExpiredError } from '../services/workOrderApi';
 import {
-  getEmployeeServiceReports,
-  ReportConflictError,
-  ReportNetworkError,
+  getEmployeeServiceReportSummaries,
+  getServiceReportDetail,
   ReportSessionExpiredError,
   saveServiceReport,
   uploadServiceReportPhotos,
   type ReportPhotoUpload,
   type ServiceReportRecord,
+  type ServiceReportSummary,
   type UpsertServiceReportInput,
 } from '../services/serviceReportApi';
 import QualityCenter from '../components/quality/QualityCenter';
@@ -61,7 +61,7 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
   const [catalog, setCatalog] = useState<string[]>([]);
   const [assignedTasks, setAssignedTasks] = useState<CalendarEntryRecord[]>([]);
   const [orders, setOrders] = useState<WorkOrder[]>([]);
-  const [reports, setReports] = useState<ServiceReportRecord[]>([]);
+  const [reports, setReports] = useState<ServiceReportSummary[]>([]);
   const [activeTab, setActiveTab] = useState<'operations' | 'workOrders' | 'tasks' | 'quality' | 'account'>('operations');
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -72,6 +72,7 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
   // Quick modals accessible from task details
   const [taskActivationOrder, setTaskActivationOrder] = useState<WorkOrder | null>(null);
   const [taskReportingOrder, setTaskReportingOrder] = useState<WorkOrder | null>(null);
+  const [taskReportDetail, setTaskReportDetail] = useState<ServiceReportRecord | undefined>();
 
   const load = async () => {
     setIsLoading(true);
@@ -86,7 +87,7 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
         getVehicleStockCatalog(session.accessToken),
         getCalendarEntries(session.accessToken, toDateKey(from), toDateKey(to)),
         getEmployeeWorkOrders(session.accessToken).catch(() => []),
-        getEmployeeServiceReports(session.accessToken).catch(() => []),
+        getEmployeeServiceReportSummaries(session.accessToken).catch(() => []),
       ]);
       setAttendance(attendanceResult);
       setLatestStock(stockResult);
@@ -153,12 +154,12 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
   const handleSaveTaskReport = async (input: UpsertServiceReportInput, photos: ReportPhotoUpload[]) => {
     if (!taskReportingOrder) return;
     try {
-      const saved = await saveServiceReport(session.accessToken, taskReportingOrder.recordId, input);
+      await saveServiceReport(session.accessToken, taskReportingOrder.recordId, input);
       if (photos.length > 0) {
         await uploadServiceReportPhotos(session.accessToken, taskReportingOrder.recordId, photos);
       }
-      setReports((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
       setTaskReportingOrder(null);
+      setTaskReportDetail(undefined);
       await load();
     } catch (saveError) {
       if (saveError instanceof ReportSessionExpiredError) return onLogout();
@@ -167,6 +168,25 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
   };
 
   const reportByOrder = useMemo(() => new Map(reports.map((item) => [item.workOrderId, item])), [reports]);
+
+  const openTaskReport = async (order: WorkOrder) => {
+    const summary = reportByOrder.get(order.recordId);
+    if (!summary) {
+      setTaskReportDetail(undefined);
+      setTaskReportingOrder(order);
+      return;
+    }
+
+    try {
+      setError(null);
+      const detail = await getServiceReportDetail(session.accessToken, summary);
+      setTaskReportDetail(detail);
+      setTaskReportingOrder(order);
+    } catch (detailError) {
+      if (detailError instanceof ReportSessionExpiredError) return onLogout();
+      setError(detailError instanceof Error ? detailError.message : 'Rapor detayı yüklenemedi.');
+    }
+  };
 
   const status = attendance?.status ?? 'notStarted';
   const firstName = session.user.name.split(' ')[0];
@@ -235,7 +255,7 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
             isShiftActive={status === 'working'}
             onNavigateToWorkOrders={() => setActiveTab('workOrders')}
             onOpenStations={(order) => setTaskActivationOrder(order)}
-            onOpenReport={(order) => setTaskReportingOrder(order)}
+            onOpenReport={(order) => void openTaskReport(order)}
           />
         ) : activeTab === 'quality' ? (
           <QualityCenter accessToken={session.accessToken} mode="staff" onSessionExpired={onLogout} />
@@ -427,7 +447,7 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
           onOpenReport={() => {
             const target = taskActivationOrder;
             setTaskActivationOrder(null);
-            setTaskReportingOrder(target);
+            void openTaskReport(target);
           }}
         />
       )}
@@ -436,12 +456,12 @@ export default function EmployeePortal({ session, onLogout }: { session: Authent
         <ServiceReportModal
           accessToken={session.accessToken}
           order={taskReportingOrder}
-          existing={reportByOrder.get(taskReportingOrder.recordId)}
+          existing={taskReportDetail}
           companyName={session.company.name}
           operatorName={session.user.name}
           vehicleStockItems={latestStock?.items}
           readOnly={reportByOrder.get(taskReportingOrder.recordId)?.status === 'Finalized'}
-          onClose={() => setTaskReportingOrder(null)}
+          onClose={() => { setTaskReportingOrder(null); setTaskReportDetail(undefined); }}
           onSave={handleSaveTaskReport}
         />
       )}
@@ -462,7 +482,7 @@ function Tasks({
 }: {
   tasks: CalendarEntryRecord[];
   orders: WorkOrder[];
-  reports: ServiceReportRecord[];
+  reports: ServiceReportSummary[];
   loading: boolean;
   accessToken: string;
   isShiftActive?: boolean;

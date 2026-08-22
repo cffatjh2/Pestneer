@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pestneer-field-v5';
+const CACHE_NAME = 'pestneer-field-v6';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pesneer-mark.jpeg'];
 
 self.addEventListener('install', (event) => {
@@ -31,6 +31,22 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => caches.match('/'))
+    );
+    return;
+  }
+
+  const isModelManifest = url.pathname.startsWith('/models/') && url.pathname.endsWith('/manifest.json');
+  if (isModelManifest) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }

@@ -23,6 +23,7 @@ using Pesneer.Api.Email;
 using Pesneer.Api.FieldOperations;
 using Pesneer.Api.Health;
 using Pesneer.Api.Inventory;
+using Pesneer.Api.Observability;
 using Pesneer.Api.Reports;
 using Pesneer.Api.StationActivations;
 using Pesneer.Api.Quality;
@@ -31,9 +32,16 @@ using Pesneer.Api.WeatherRisk;
 using Pesneer.Api.Vision;
 using Pesneer.Api.WorkOrders;
 using Pesneer.Api.SystemAdministration;
+using Pesneer.Api.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+// HttpClientFactory's default request logs contain the full Storage object path. Suppress that
+// category so tenant identifiers, hashes, signed tokens and object paths never reach Render logs.
+builder.Logging.AddFilter("System.Net.Http.HttpClient.SupabaseStorage", LogLevel.None);
+// EF's built-in command logger can include SQL text, schema/column names and parameter metadata.
+// Privacy-safe aggregate command counts and timings are collected by our interceptor instead.
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.None);
 var railwayDatabaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 var databaseProvider = string.IsNullOrWhiteSpace(railwayDatabaseUrl)
     ? builder.Configuration["DatabaseProvider"]
@@ -55,18 +63,25 @@ if (jwtOptions.SigningKey.Length < 32)
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<EmailDeliveryOptions>(builder.Configuration.GetSection(EmailDeliveryOptions.SectionName));
+builder.Services.Configure<SupabaseStorageOptions>(builder.Configuration.GetSection(SupabaseStorageOptions.SectionName));
+builder.Services.Configure<RequestMetricsOptions>(builder.Configuration.GetSection(RequestMetricsOptions.SectionName));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICompanyContext, HttpCompanyContext>();
+builder.Services.AddScoped<PrivacySafeDbRequestMetrics>();
+builder.Services.AddScoped<PrivacySafeDbCommandInterceptor>();
 if (string.Equals(databaseProvider, "Sqlite", StringComparison.OrdinalIgnoreCase))
 {
-    builder.Services.AddDbContext<PesneerDbContext>(options => options.UseSqlite(connectionString));
+    builder.Services.AddDbContext<PesneerDbContext>((services, options) => options
+        .UseSqlite(connectionString)
+        .AddInterceptors(services.GetRequiredService<PrivacySafeDbCommandInterceptor>()));
 }
 else
 {
-    builder.Services.AddDbContext<PostgresPesneerDbContext>(options =>
+    builder.Services.AddDbContext<PostgresPesneerDbContext>((services, options) =>
         options.UseNpgsql(connectionString, npgsql => npgsql
             .MigrationsAssembly(typeof(PostgresPesneerDbContext).Assembly.FullName)
-            .EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null)));
+            .EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null))
+            .AddInterceptors(services.GetRequiredService<PrivacySafeDbCommandInterceptor>()));
     builder.Services.AddScoped<PesneerDbContext>(services =>
         services.GetRequiredService<PostgresPesneerDbContext>());
 }
@@ -92,6 +107,12 @@ builder.Services.AddScoped<IGoogleEmailConnectionService, GoogleEmailConnectionS
 builder.Services.AddScoped<IEmailSender, ReliableEmailSender>();
 builder.Services.AddScoped<IReportEmailDispatcher, ReportEmailDispatcher>();
 builder.Services.AddHostedService<ReportEmailDeliveryWorker>();
+builder.Services.AddHttpClient("SupabaseStorage", client => client.Timeout = TimeSpan.FromMinutes(10))
+    .RedactLoggedHeaders(_ => true);
+builder.Services.AddSingleton<IFileStore, SupabaseFileStore>();
+builder.Services.AddSingleton<IHybridFileStorage, HybridFileStorageService>();
+builder.Services.AddHostedService<PendingFileCleanupWorker>();
+builder.Services.AddHostedService<LegacyBlobBackfillWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("OpenMeteo", client =>
 {
@@ -214,9 +235,10 @@ var app = builder.Build();
 await MigrateDatabaseAsync(app.Services);
 await DevelopmentDataSeeder.InitializeAsync(app.Services, app.Environment);
 
+app.UseForwardedHeaders();
+app.UsePrivacySafeRequestMetrics();
 if (app.Environment.IsDevelopment()) app.UseDeveloperExceptionPage();
 else app.UseExceptionHandler();
-app.UseForwardedHeaders();
 app.UseResponseCompression();
 app.UseCors();
 app.UseDefaultFiles();
@@ -245,24 +267,41 @@ auth.MapPost("/register-demo", (DemoRegisterRequest request, ILoginService login
 
 app.MapGet("/api/company/dashboard", async (PesneerDbContext dbContext, CancellationToken cancellationToken) =>
 {
-    var today = DateTimeOffset.UtcNow.Date;
+    var today = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
     var tomorrow = today.AddDays(1);
     var weekStart = today.AddDays(-7);
-    var counts = await dbContext.WorkOrders.AsNoTracking()
-        .Where(item => item.Status == "InProgress" || (item.ScheduledAt >= weekStart && item.ScheduledAt < tomorrow))
-        .GroupBy(_ => 1)
-        .Select(g => new
-        {
-            plannedWorkOrders = g.Count(item => item.ScheduledAt >= today && item.ScheduledAt < tomorrow),
-            activeOperations = g.Count(item => item.Status == "InProgress"),
-            completedThisWeek = g.Count(item => item.Status == "Completed" && item.ScheduledAt >= weekStart)
-        })
-        .SingleOrDefaultAsync(cancellationToken);
+    int plannedWorkOrders;
+    int activeOperations;
+    int completedThisWeek;
+    if (dbContext.Database.IsNpgsql())
+    {
+        var counts = await dbContext.WorkOrders.AsNoTracking()
+            .Where(item => item.Status == "InProgress" || (item.ScheduledAt >= weekStart && item.ScheduledAt < tomorrow))
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                plannedWorkOrders = g.Count(item => item.ScheduledAt >= today && item.ScheduledAt < tomorrow),
+                activeOperations = g.Count(item => item.Status == "InProgress"),
+                completedThisWeek = g.Count(item => item.Status == "Completed" && item.ScheduledAt >= weekStart)
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        plannedWorkOrders = counts?.plannedWorkOrders ?? 0;
+        activeOperations = counts?.activeOperations ?? 0;
+        completedThisWeek = counts?.completedThisWeek ?? 0;
+    }
+    else
+    {
+        var rows = await dbContext.WorkOrders.AsNoTracking()
+            .Select(item => new { item.Status, item.ScheduledAt }).ToListAsync(cancellationToken);
+        plannedWorkOrders = rows.Count(item => item.ScheduledAt >= today && item.ScheduledAt < tomorrow);
+        activeOperations = rows.Count(item => item.Status == "InProgress");
+        completedThisWeek = rows.Count(item => item.Status == "Completed" && item.ScheduledAt >= weekStart);
+    }
     return Results.Ok(new
     {
-        plannedWorkOrders = counts?.plannedWorkOrders ?? 0,
-        activeOperations = counts?.activeOperations ?? 0,
-        completedThisWeek = counts?.completedThisWeek ?? 0
+        plannedWorkOrders,
+        activeOperations,
+        completedThisWeek
     });
 }).RequireAuthorization("CompanyStaff");
 
@@ -286,6 +325,7 @@ app.MapAuditPackageEndpoints();
 app.MapVisionSettingsEndpoints();
 app.MapAccountSecurityEndpoints();
 app.MapSystemAdministrationEndpoints();
+app.MapFileStorageEndpoints();
 
 app.MapFallbackToFile("index.html");
 app.Run();
@@ -307,6 +347,7 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
                 try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Accounts\" ADD COLUMN \"HasAcceptedTerms\" INTEGER NOT NULL DEFAULT 0;"); } catch { }
                 try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Accounts\" ADD COLUMN \"TermsAcceptedAt\" TEXT;"); } catch { }
                 try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Accounts\" ADD COLUMN \"TermsAcceptedVersion\" TEXT;"); } catch { }
+                await EnsureSqlitePrivateStorageFoundationAsync(db);
             }
             else if (db.Database.IsNpgsql())
             {
@@ -326,6 +367,101 @@ static async Task MigrateDatabaseAsync(IServiceProvider services)
         {
             await Task.Delay(TimeSpan.FromSeconds(attempt * 2));
         }
+    }
+}
+
+static async Task EnsureSqlitePrivateStorageFoundationAsync(PesneerDbContext db)
+{
+    // Local databases historically use EnsureCreated rather than migration history. Keep their
+    // upgrade additive and idempotent so existing inline bytes remain untouched.
+    (string Table, string Column, string Sql)[] additiveColumns =
+    [
+        ("ServiceReportStations", "VisionAnalysisJson", "ALTER TABLE \"ServiceReportStations\" ADD COLUMN \"VisionAnalysisJson\" TEXT;"),
+        ("WorkOrderPhotos", "StoredObjectId", "ALTER TABLE \"WorkOrderPhotos\" ADD COLUMN \"StoredObjectId\" TEXT;"),
+        ("WasteDisposalEvidence", "StoredObjectId", "ALTER TABLE \"WasteDisposalEvidence\" ADD COLUMN \"StoredObjectId\" TEXT;"),
+        ("QualityDocuments", "StoredObjectId", "ALTER TABLE \"QualityDocuments\" ADD COLUMN \"StoredObjectId\" TEXT;"),
+        ("CorrectiveActionEvidence", "StoredObjectId", "ALTER TABLE \"CorrectiveActionEvidence\" ADD COLUMN \"StoredObjectId\" TEXT;"),
+        ("Companies", "LogoStoredObjectId", "ALTER TABLE \"Companies\" ADD COLUMN \"LogoStoredObjectId\" TEXT;"),
+        ("AuditPackages", "PdfStoredObjectId", "ALTER TABLE \"AuditPackages\" ADD COLUMN \"PdfStoredObjectId\" TEXT;"),
+        ("AuditPackages", "ZipStoredObjectId", "ALTER TABLE \"AuditPackages\" ADD COLUMN \"ZipStoredObjectId\" TEXT;"),
+        ("AuditPackageItems", "SizeBytes", "ALTER TABLE \"AuditPackageItems\" ADD COLUMN \"SizeBytes\" INTEGER;"),
+        ("AuditPackageItems", "StoredObjectId", "ALTER TABLE \"AuditPackageItems\" ADD COLUMN \"StoredObjectId\" TEXT;")
+    ];
+    foreach (var addition in additiveColumns)
+        if (!await SqliteColumnExistsAsync(db, addition.Table, addition.Column))
+            await db.Database.ExecuteSqlRawAsync(addition.Sql);
+
+    string[] foundationCommands =
+    [
+        """
+        CREATE TABLE IF NOT EXISTS "StoredObjects" (
+            "Id" TEXT NOT NULL CONSTRAINT "PK_StoredObjects" PRIMARY KEY,
+            "CompanyId" TEXT NOT NULL,
+            "Sha256" TEXT NOT NULL,
+            "SizeBytes" INTEGER NOT NULL,
+            "ContentType" TEXT NOT NULL,
+            "StorageKey" TEXT NOT NULL,
+            "InitialFileName" TEXT NOT NULL,
+            "State" TEXT NOT NULL,
+            "CreatedAt" TEXT NOT NULL,
+            "VerifiedAt" TEXT NULL,
+            CONSTRAINT "FK_StoredObjects_Companies_CompanyId" FOREIGN KEY ("CompanyId")
+                REFERENCES "Companies" ("Id") ON DELETE CASCADE
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS "StoredObjectUploadSessions" (
+            "Id" TEXT NOT NULL CONSTRAINT "PK_StoredObjectUploadSessions" PRIMARY KEY,
+            "CompanyId" TEXT NOT NULL,
+            "StoredObjectId" TEXT NOT NULL,
+            "FileName" TEXT NOT NULL,
+            "IdempotencyKeyHash" TEXT NOT NULL,
+            "CreatedAt" TEXT NOT NULL,
+            "ExpiresAt" TEXT NOT NULL,
+            "CompletedAt" TEXT NULL,
+            CONSTRAINT "FK_StoredObjectUploadSessions_StoredObjects_StoredObjectId" FOREIGN KEY ("StoredObjectId")
+                REFERENCES "StoredObjects" ("Id") ON DELETE CASCADE
+        );
+        """,
+        "CREATE INDEX IF NOT EXISTS \"IX_WorkOrderPhotos_StoredObjectId\" ON \"WorkOrderPhotos\" (\"StoredObjectId\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_WasteDisposalEvidence_StoredObjectId\" ON \"WasteDisposalEvidence\" (\"StoredObjectId\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_QualityDocuments_StoredObjectId\" ON \"QualityDocuments\" (\"StoredObjectId\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_CorrectiveActionEvidence_StoredObjectId\" ON \"CorrectiveActionEvidence\" (\"StoredObjectId\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_Companies_LogoStoredObjectId\" ON \"Companies\" (\"LogoStoredObjectId\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_AuditPackages_PdfStoredObjectId\" ON \"AuditPackages\" (\"PdfStoredObjectId\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_AuditPackages_ZipStoredObjectId\" ON \"AuditPackages\" (\"ZipStoredObjectId\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_AuditPackageItems_StoredObjectId\" ON \"AuditPackageItems\" (\"StoredObjectId\");",
+        "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_StoredObjects_CompanyId_Sha256\" ON \"StoredObjects\" (\"CompanyId\", \"Sha256\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_StoredObjects_State_CreatedAt\" ON \"StoredObjects\" (\"State\", \"CreatedAt\");",
+        "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_StoredObjects_StorageKey\" ON \"StoredObjects\" (\"StorageKey\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_StoredObjectUploadSessions_CompanyId_ExpiresAt\" ON \"StoredObjectUploadSessions\" (\"CompanyId\", \"ExpiresAt\");",
+        "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_StoredObjectUploadSessions_CompanyId_IdempotencyKeyHash\" ON \"StoredObjectUploadSessions\" (\"CompanyId\", \"IdempotencyKeyHash\");",
+        "CREATE INDEX IF NOT EXISTS \"IX_StoredObjectUploadSessions_StoredObjectId\" ON \"StoredObjectUploadSessions\" (\"StoredObjectId\");"
+    ];
+    foreach (var command in foundationCommands)
+        await db.Database.ExecuteSqlRawAsync(command);
+}
+
+static async Task<bool> SqliteColumnExistsAsync(PesneerDbContext db, string tableName, string columnName)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose) await connection.OpenAsync();
+    try
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info(\"{tableName.Replace("\"", "\"\"")}\");";
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            if (reader.GetString(1).Equals(columnName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+    finally
+    {
+        if (shouldClose) await connection.CloseAsync();
     }
 }
 

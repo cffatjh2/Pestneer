@@ -3,14 +3,12 @@ import { AlertTriangle, Ban, Barcode, Bug, Camera, Check, CheckCircle2, ChevronD
 import type { WorkOrder } from '../../types';
 import { getPreviousServiceReport, getServiceReportCatalog, ReportConflictError, type ReportPhotoUpload, type ReportProductInput, type ReportStationInput, type ServiceReportCatalog, type ServiceReportRecord, type UpsertServiceReportInput } from '../../services/serviceReportApi';
 import { getStationActivationByWorkOrder } from '../../services/stationActivationApi';
-import { getSitePlans, type SitePlanElement, type SitePlanRecord } from '../../services/sitePlanApi';
 import type { VehicleStockCheck } from '../../services/fieldOperationsApi';
 import { getLocalReportDraft, removeLocalReportDraft, saveLocalReportDraft, toOfflinePhotos } from '../../services/offlineFieldStore';
 import { downloadStationLabelPdf, matchStationByCode, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
 import { getStoredCompanyEk1Defaults } from '../../services/companySettingsStorage';
 import SignaturePad from './SignaturePad';
 import QrScannerModal from './QrScannerModal';
-import PestneerVisionAnalyzer from '../vision/PestneerVisionAnalyzer';
 import { compressImages } from '../../utils/imageCompression';
 
 type Props = {
@@ -32,9 +30,6 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   const [stations, setStations] = useState<ReportStationInput[]>(existing?.stations.map(stripStationId) ?? []);
   const [products, setProducts] = useState<ReportProductInput[]>(existing?.products.map(stripProductId) ?? [blankProduct()]);
   const [autoAggregatedNotice, setAutoAggregatedNotice] = useState<string | null>(null);
-  const [sitePlan, setSitePlan] = useState<SitePlanRecord | null>(null);
-  const [planLoading, setPlanLoading] = useState(false);
-  const [planWarning, setPlanWarning] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>('report');
   const [stationIndex, setStationIndex] = useState(0);
   const [signatureTarget, setSignatureTarget] = useState<'manager' | 'customer' | null>(null);
@@ -202,9 +197,6 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
   }, [accessToken, order.recordId, existing?.products, vehicleStockItems]);
 
   useEffect(() => {
-    setPlanLoading(false);
-    setPlanWarning(null);
-    setSitePlan(null);
     if (!existing?.stations.length) setStations([]);
   }, [existing?.stations.length, order.recordId]);
 
@@ -221,13 +213,12 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
       setStage('report');
       setStationIndex(0);
       setBaseUpdatedAt(draft.input.baseUpdatedAt ?? existing?.updatedAt);
-      setPlanLoading(false);
     }).finally(() => { if (active) setDraftReady(true); });
     return () => { active = false; };
   }, [existing?.updatedAt, order.recordId, readOnly]);
 
   useEffect(() => {
-    if (readOnly || !draftReady || planLoading) return;
+    if (readOnly || !draftReady) return;
     setLocalSaveState('saving');
     const timer = window.setTimeout(() => {
       const input = buildInput(false);
@@ -235,7 +226,7 @@ export default function ServiceReportModal({ accessToken, order, existing, previ
         .then(() => setLocalSaveState('saved')).catch(() => setLocalSaveState('saved'));
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [form, stations, products, photos, stage, stationIndex, readOnly, draftReady, planLoading, baseUpdatedAt]);
+  }, [form, stations, products, photos, stage, stationIndex, readOnly, draftReady, baseUpdatedAt]);
 
   const currentStation = stations[stationIndex];
   const checkedCount = stations.filter((item) => item.deviceStatus !== 'Unchecked').length;

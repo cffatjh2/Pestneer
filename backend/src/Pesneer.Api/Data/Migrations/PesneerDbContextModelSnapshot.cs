@@ -36,6 +36,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("HasAcceptedTerms")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
@@ -55,6 +58,12 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<string>("Portal")
                         .IsRequired()
                         .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("TermsAcceptedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TermsAcceptedVersion")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -112,6 +121,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PdfStoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateOnly>("PeriodEnd")
                         .HasColumnType("TEXT");
 
@@ -147,6 +159,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ZipStoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByAccountId");
@@ -155,7 +170,11 @@ namespace Pesneer.Api.Data.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("PdfStoredObjectId");
+
                     b.HasIndex("QualityDocumentId");
+
+                    b.HasIndex("ZipStoredObjectId");
 
                     b.HasIndex("CompanyId", "Number")
                         .IsUnique();
@@ -217,6 +236,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset>("SourceDate")
                         .HasColumnType("TEXT");
 
@@ -228,6 +250,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("StoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(240)
@@ -236,6 +261,8 @@ namespace Pesneer.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AuditPackageId");
+
+                    b.HasIndex("StoredObjectId");
 
                     b.HasIndex("CompanyId", "AuditPackageId", "Section");
 
@@ -461,6 +488,11 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsTrial")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("LegalName")
                         .IsRequired()
                         .HasMaxLength(240)
@@ -477,11 +509,20 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(240)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("LogoStoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset?>("LogoUpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ReportNotificationEmail")
                         .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("TrialEndsAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("TrialStartedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("VisionEnabled")
@@ -505,6 +546,8 @@ namespace Pesneer.Api.Data.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("LogoStoredObjectId");
 
                     b.ToTable("Companies");
                 });
@@ -828,12 +871,17 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("StoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("UploadedByAccountId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CorrectiveActionId");
+
+                    b.HasIndex("StoredObjectId");
 
                     b.HasIndex("UploadedByAccountId");
 
@@ -1596,6 +1644,9 @@ namespace Pesneer.Api.Data.Migrations
                     b.Property<long>("SizeBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("StoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(240)
@@ -1614,6 +1665,8 @@ namespace Pesneer.Api.Data.Migrations
                     b.HasIndex("QualityAnalysisId");
 
                     b.HasIndex("SitePlanId");
+
+                    b.HasIndex("StoredObjectId");
 
                     b.HasIndex("CompanyId", "Category", "CreatedAt");
 
@@ -2216,6 +2269,10 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("VisionAnalysisJson")
+                        .HasMaxLength(200000)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("PlateChanged")
                         .HasColumnType("INTEGER");
 
@@ -2405,6 +2462,107 @@ namespace Pesneer.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("StationActivations");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.StoredObject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InitialFileName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .IsFixedLength();
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Sha256")
+                        .IsUnique();
+
+                    b.HasIndex("State", "CreatedAt");
+
+                    b.ToTable("StoredObjects");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.StoredObjectUploadSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IdempotencyKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("StoredObjectId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredObjectId");
+
+                    b.HasIndex("CompanyId", "ExpiresAt");
+
+                    b.HasIndex("CompanyId", "IdempotencyKeyHash")
+                        .IsUnique();
+
+                    b.ToTable("StoredObjectUploadSessions");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>
@@ -2668,6 +2826,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("StoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("UploadedByAccountId")
                         .HasColumnType("TEXT");
 
@@ -2675,6 +2836,8 @@ namespace Pesneer.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("StoredObjectId");
 
                     b.HasIndex("UploadedByAccountId");
 
@@ -3012,6 +3175,9 @@ namespace Pesneer.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("StoredObjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("UploadedAt")
                         .HasColumnType("TEXT");
 
@@ -3019,6 +3185,8 @@ namespace Pesneer.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("StoredObjectId");
 
                     b.HasIndex("WorkOrderId");
 
@@ -3195,9 +3363,19 @@ namespace Pesneer.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "PdfStoredObject")
+                        .WithMany()
+                        .HasForeignKey("PdfStoredObjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Pesneer.Api.Domain.QualityDocument", "QualityDocument")
                         .WithMany()
                         .HasForeignKey("QualityDocumentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "ZipStoredObject")
+                        .WithMany()
+                        .HasForeignKey("ZipStoredObjectId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("CreatedByAccount");
@@ -3206,7 +3384,11 @@ namespace Pesneer.Api.Data.Migrations
 
                     b.Navigation("CustomerBranch");
 
+                    b.Navigation("PdfStoredObject");
+
                     b.Navigation("QualityDocument");
+
+                    b.Navigation("ZipStoredObject");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.AuditPackageItem", b =>
@@ -3217,7 +3399,14 @@ namespace Pesneer.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "StoredObject")
+                        .WithMany()
+                        .HasForeignKey("StoredObjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("AuditPackage");
+
+                    b.Navigation("StoredObject");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.CalendarEntry", b =>
@@ -3265,6 +3454,16 @@ namespace Pesneer.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("CommercialProposal");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.Company", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "LogoStoredObject")
+                        .WithMany()
+                        .HasForeignKey("LogoStoredObjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("LogoStoredObject");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.CompanyEmailConnection", b =>
@@ -3371,6 +3570,11 @@ namespace Pesneer.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "StoredObject")
+                        .WithMany()
+                        .HasForeignKey("StoredObjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Pesneer.Api.Domain.Account", "UploadedByAccount")
                         .WithMany()
                         .HasForeignKey("UploadedByAccountId")
@@ -3378,6 +3582,8 @@ namespace Pesneer.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("CorrectiveAction");
+
+                    b.Navigation("StoredObject");
 
                     b.Navigation("UploadedByAccount");
                 });
@@ -3619,6 +3825,11 @@ namespace Pesneer.Api.Data.Migrations
                         .HasForeignKey("SitePlanId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "StoredObject")
+                        .WithMany()
+                        .HasForeignKey("StoredObjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("CreatedByAccount");
 
                     b.Navigation("Customer");
@@ -3630,6 +3841,8 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("QualityAnalysis");
 
                     b.Navigation("SitePlan");
+
+                    b.Navigation("StoredObject");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.QualityInspection", b =>
@@ -3820,6 +4033,26 @@ namespace Pesneer.Api.Data.Migrations
                     b.Navigation("WorkOrder");
                 });
 
+            modelBuilder.Entity("Pesneer.Api.Domain.StoredObject", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.StoredObjectUploadSession", b =>
+                {
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "StoredObject")
+                        .WithMany("UploadSessions")
+                        .HasForeignKey("StoredObjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StoredObject");
+                });
+
             modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>
                 {
                     b.HasOne("Pesneer.Api.Domain.Account", "AssignedEmployeeAccount")
@@ -3918,6 +4151,11 @@ namespace Pesneer.Api.Data.Migrations
 
             modelBuilder.Entity("Pesneer.Api.Domain.WasteDisposalEvidence", b =>
                 {
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "StoredObject")
+                        .WithMany()
+                        .HasForeignKey("StoredObjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Pesneer.Api.Domain.Account", "UploadedByAccount")
                         .WithMany()
                         .HasForeignKey("UploadedByAccountId")
@@ -3929,6 +4167,8 @@ namespace Pesneer.Api.Data.Migrations
                         .HasForeignKey("WasteDisposalRecordId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("StoredObject");
 
                     b.Navigation("UploadedByAccount");
 
@@ -4039,11 +4279,18 @@ namespace Pesneer.Api.Data.Migrations
 
             modelBuilder.Entity("Pesneer.Api.Domain.WorkOrderPhoto", b =>
                 {
+                    b.HasOne("Pesneer.Api.Domain.StoredObject", "StoredObject")
+                        .WithMany()
+                        .HasForeignKey("StoredObjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Pesneer.Api.Domain.WorkOrder", "WorkOrder")
                         .WithMany("Photos")
                         .HasForeignKey("WorkOrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("StoredObject");
 
                     b.Navigation("WorkOrder");
                 });
@@ -4178,6 +4425,11 @@ namespace Pesneer.Api.Data.Migrations
             modelBuilder.Entity("Pesneer.Api.Domain.SitePlan", b =>
                 {
                     b.Navigation("Documents");
+                });
+
+            modelBuilder.Entity("Pesneer.Api.Domain.StoredObject", b =>
+                {
+                    b.Navigation("UploadSessions");
                 });
 
             modelBuilder.Entity("Pesneer.Api.Domain.Vehicle", b =>

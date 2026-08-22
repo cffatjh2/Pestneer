@@ -1,11 +1,14 @@
 using System.Globalization;
 using System.Net.Mail;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
 using Pesneer.Api.FieldOperations;
+using Pesneer.Api.Optimization;
+using Pesneer.Api.Storage;
 using Pesneer.Api.WeatherRisk;
 
 namespace Pesneer.Api.WorkOrders;
@@ -44,6 +47,13 @@ public static class WorkOrderEndpoints
         employeeWorkOrders.MapPost("/{workOrderId:guid}/complete", CompleteWorkOrderAsync).DisableAntiforgery();
 
         app.MapGet("/api/work-orders/photos/{photoId:guid}", GetWorkOrderPhotoAsync)
+            .RequireAuthorization();
+
+        app.MapGet("/api/v2/company/work-orders", GetCompanyWorkOrderPageAsync)
+            .RequireAuthorization("OwnerPortal");
+        app.MapGet("/api/v2/employee/work-orders", GetEmployeeWorkOrderPageAsync)
+            .RequireAuthorization("EmployeePortal");
+        app.MapGet("/api/v2/work-orders/{workOrderId:guid}", GetWorkOrderDetailAsync)
             .RequireAuthorization();
 
         return app;
@@ -208,10 +218,20 @@ public static class WorkOrderEndpoints
         return Results.Ok(branches.Select(ToResponse));
     }
 
-    private static async Task<IResult> GetCompanyWorkOrdersAsync(PesneerDbContext dbContext, CancellationToken cancellationToken) =>
-        Results.Ok((await WorkOrderQuery(dbContext).ToListAsync(cancellationToken))
-            .OrderByDescending(item => item.ScheduledAt)
-            .Select(ToResponse));
+    private static async Task<IResult> GetCompanyWorkOrdersAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var query = ApplyScheduledAtOrder(dbContext.WorkOrders, dbContext, descending: true);
+        var workOrders = await WorkOrderResponseQuery(query)
+            .ToListAsync(cancellationToken);
+        return Results.Ok(workOrders.OrderByDescending(item => item.ScheduledAt).Select(OrderResponseCollections));
+    }
+
+    private static Task<IResult> GetCompanyWorkOrderPageAsync(
+        int? limit,
+        string? cursor,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken) =>
+        GetWorkOrderPageAsync(dbContext.WorkOrders.AsNoTracking(), descending: true, limit, cursor, dbContext, cancellationToken);
 
     private static async Task<IResult> GetEmployeeWorkOrdersAsync(
         PesneerDbContext dbContext,
@@ -219,10 +239,124 @@ public static class WorkOrderEndpoints
         CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue) return Results.Forbid();
-        var workOrders = await WorkOrderQuery(dbContext)
-            .Where(item => item.AssignedEmployeeAccountId == companyContext.AccountId.Value || item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value))
+        var query = dbContext.WorkOrders.Where(item => item.AssignedEmployeeAccountId == companyContext.AccountId.Value ||
+            item.Assignments.Any(assignment => assignment.EmployeeAccountId == companyContext.AccountId.Value));
+        query = ApplyScheduledAtOrder(query, dbContext, descending: false);
+        var workOrders = await WorkOrderResponseQuery(query)
             .ToListAsync(cancellationToken);
-        return Results.Ok(workOrders.OrderBy(item => item.ScheduledAt).Select(ToResponse));
+        return Results.Ok(workOrders.OrderBy(item => item.ScheduledAt).Select(OrderResponseCollections));
+    }
+
+    private static Task<IResult> GetEmployeeWorkOrderPageAsync(
+        int? limit,
+        string? cursor,
+        PesneerDbContext dbContext,
+        ICompanyContext companyContext,
+        CancellationToken cancellationToken)
+    {
+        if (!companyContext.AccountId.HasValue) return Task.FromResult<IResult>(Results.Forbid());
+        var accountId = companyContext.AccountId.Value;
+        var query = dbContext.WorkOrders.AsNoTracking().Where(item => item.AssignedEmployeeAccountId == accountId ||
+            item.Assignments.Any(assignment => assignment.EmployeeAccountId == accountId));
+        return GetWorkOrderPageAsync(query, descending: false, limit, cursor, dbContext, cancellationToken);
+    }
+
+    private static async Task<IResult> GetWorkOrderPageAsync(
+        IQueryable<WorkOrder> query,
+        bool descending,
+        int? requestedLimit,
+        string? cursor,
+        PesneerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(requestedLimit ?? 50, 1, 200);
+        var hasCursor = TryReadWorkOrderCursor(cursor, out var position);
+        if (!string.IsNullOrWhiteSpace(cursor) && !hasCursor)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["cursor"] = ["Sayfalama anahtarı geçerli değil."] });
+
+        var snapshot = hasCursor ? position.Snapshot : DateTimeOffset.UtcNow;
+        List<WorkOrderSummaryRow> rows;
+        if (dbContext.Database.IsNpgsql())
+        {
+            query = query.Where(item => !item.History.Any() || item.History.Any(history => history.OccurredAt <= snapshot));
+            if (hasCursor)
+            {
+                query = descending
+                    ? query.Where(item => item.ScheduledAt < position.Sort ||
+                        (item.ScheduledAt == position.Sort && item.Id.CompareTo(position.Id) < 0))
+                    : query.Where(item => item.ScheduledAt > position.Sort ||
+                        (item.ScheduledAt == position.Sort && item.Id.CompareTo(position.Id) > 0));
+            }
+            query = descending
+                ? query.OrderByDescending(item => item.ScheduledAt).ThenByDescending(item => item.Id)
+                : query.OrderBy(item => item.ScheduledAt).ThenBy(item => item.Id);
+            rows = await WorkOrderSummaryQuery(query).Take(limit + 1).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            var historyRows = await dbContext.WorkOrderStatusHistories.AsNoTracking()
+                .Select(history => new WorkOrderCreationRow(history.WorkOrderId, history.OccurredAt))
+                .ToListAsync(cancellationToken);
+            var knownWorkOrderIds = historyRows.Select(item => item.WorkOrderId).ToHashSet();
+            var eligibleWorkOrderIds = historyRows.Where(item => item.OccurredAt <= snapshot)
+                .Select(item => item.WorkOrderId).ToHashSet();
+            var candidates = await WorkOrderSummaryQuery(query).ToListAsync(cancellationToken);
+            var eligible = candidates.Where(item => !knownWorkOrderIds.Contains(item.Id) || eligibleWorkOrderIds.Contains(item.Id));
+            if (hasCursor)
+            {
+                eligible = descending
+                    ? eligible.Where(item => item.ScheduledAt < position.Sort ||
+                        (item.ScheduledAt == position.Sort && item.Id.CompareTo(position.Id) < 0))
+                    : eligible.Where(item => item.ScheduledAt > position.Sort ||
+                        (item.ScheduledAt == position.Sort && item.Id.CompareTo(position.Id) > 0));
+            }
+            rows = (descending
+                    ? eligible.OrderByDescending(item => item.ScheduledAt).ThenByDescending(item => item.Id)
+                    : eligible.OrderBy(item => item.ScheduledAt).ThenBy(item => item.Id))
+                .Take(limit + 1).ToList();
+        }
+
+        var hasMore = rows.Count > limit;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        var last = rows.LastOrDefault();
+        var nextCursor = hasMore && last is not null ? WriteWorkOrderCursor(snapshot, last.ScheduledAt, last.Id) : null;
+        return Results.Ok(new CursorPage<WorkOrderSummaryResponse>(
+            rows.Select(ToWorkOrderSummary).ToArray(), nextCursor, hasMore, snapshot.ToString("O")));
+    }
+
+    private static async Task<IResult> GetWorkOrderDetailAsync(
+        Guid workOrderId,
+        PesneerDbContext dbContext,
+        ICompanyContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!context.Portal.HasValue) return Results.Forbid();
+        var query = dbContext.WorkOrders.AsNoTracking().Where(item => item.Id == workOrderId);
+        switch (context.Portal.Value)
+        {
+            case PortalType.Owner:
+                break;
+            case PortalType.Employee:
+                if (!context.AccountId.HasValue) return Results.Forbid();
+                var employeeId = context.AccountId.Value;
+                query = query.Where(item => item.AssignedEmployeeAccountId == employeeId ||
+                    item.Assignments.Any(assignment => assignment.EmployeeAccountId == employeeId));
+                break;
+            case PortalType.Customer:
+                if (!context.CustomerId.HasValue) return Results.Forbid();
+                var customerId = context.CustomerId.Value;
+                var branchId = context.CustomerBranchId;
+                query = query.Where(item => item.CustomerId == customerId &&
+                    (!branchId.HasValue || item.CustomerBranchId == branchId.Value));
+                break;
+            default:
+                return Results.Forbid();
+        }
+
+        var result = await WorkOrderResponseQuery(query).SingleOrDefaultAsync(cancellationToken);
+        return result is null
+            ? Results.NotFound(new { message = "İş emri bulunamadı." })
+            : Results.Ok(OrderResponseCollections(result));
     }
 
     private static async Task<IResult> GetEmployeePlanningOptionsAsync(
@@ -369,8 +503,11 @@ public static class WorkOrderEndpoints
         await dbContext.SaveChangesAsync(cancellationToken);
         var createdIds = workOrders.Select(item => item.Id).ToArray();
         dbContext.ChangeTracker.Clear();
-        var createdOrders = await WorkOrderQuery(dbContext).Where(item => createdIds.Contains(item.Id)).ToListAsync(cancellationToken);
-        return Results.Created("/api/company/work-orders", createdOrders.OrderBy(item => item.ScheduledAt).Select(ToResponse));
+        var createdQuery = ApplyScheduledAtOrder(
+            dbContext.WorkOrders.Where(item => createdIds.Contains(item.Id)), dbContext, descending: false);
+        var createdOrders = await WorkOrderResponseQuery(createdQuery)
+            .ToListAsync(cancellationToken);
+        return Results.Created("/api/company/work-orders", createdOrders.OrderBy(item => item.ScheduledAt).Select(OrderResponseCollections));
     }
 
     private static async Task<IResult> UpdateWorkOrderAsync(
@@ -425,8 +562,8 @@ public static class WorkOrderEndpoints
         AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, request.Status, "Planlama ve atama bilgileri güncellendi."));
         await dbContext.SaveChangesAsync(cancellationToken);
         dbContext.ChangeTracker.Clear();
-        var updated = await WorkOrderQuery(dbContext).SingleAsync(item => item.Id == workOrderId, cancellationToken);
-        return Results.Ok(ToResponse(updated));
+        var updated = await WorkOrderResponseQuery(dbContext.WorkOrders.Where(item => item.Id == workOrderId)).SingleAsync(cancellationToken);
+        return Results.Ok(OrderResponseCollections(updated));
     }
 
     private static async Task<IResult> StartWorkOrderAsync(
@@ -474,7 +611,8 @@ public static class WorkOrderEndpoints
         workOrder.StartedAt ??= now;
         AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, "InProgress", "Personel ziyaret oturumunu başlattı."));
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Results.Ok(ToResponse(workOrder));
+        var response = await WorkOrderResponseQuery(dbContext.WorkOrders.Where(item => item.Id == workOrder.Id)).SingleAsync(cancellationToken);
+        return Results.Ok(OrderResponseCollections(response));
     }
 
     private static async Task<IResult> ChangeVisitStateAsync(
@@ -526,7 +664,8 @@ public static class WorkOrderEndpoints
         var historyNote = action == "FinishPart" ? "Personel kendi saha payını tamamladı; ekip raporu diğer katılımcıları bekliyor." : reason ?? action;
         AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId.Value, workOrder.Id, companyContext.AccountId.Value, previousStatus, workOrder.Status, historyNote));
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Results.Ok(ToResponse(workOrder));
+        var response = await WorkOrderResponseQuery(dbContext.WorkOrders.Where(item => item.Id == workOrder.Id)).SingleAsync(cancellationToken);
+        return Results.Ok(OrderResponseCollections(response));
     }
 
     private static async Task<IResult> CompleteWorkOrderAsync(
@@ -534,6 +673,7 @@ public static class WorkOrderEndpoints
         HttpRequest request,
         PesneerDbContext dbContext,
         ICompanyContext companyContext,
+        IHybridFileStorage hybridFiles,
         CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue) return Results.Forbid();
@@ -549,6 +689,7 @@ public static class WorkOrderEndpoints
         if (completionNote.Length is < 3 or > 2000) return Validation("completionNote", "İşlem açıklaması 3-2000 karakter arasında olmalıdır.");
         if (recommendation?.Length > 2000) return Validation("recommendation", "Öneri en fazla 2000 karakter olabilir.");
         if (form.Files.Count > 5) return Validation("photos", "En fazla 5 fotoğraf yükleyebilirsiniz.");
+        var newPhotos = new List<WorkOrderPhoto>(form.Files.Count);
         foreach (var file in form.Files)
         {
             if (file.Length is <= 0 or > 5_242_880 || !AllowedImageTypes.Contains(file.ContentType))
@@ -559,9 +700,9 @@ public static class WorkOrderEndpoints
 
         foreach (var file in form.Files)
         {
-            await using var stream = file.OpenReadStream();
-            using var memory = new MemoryStream();
-            await stream.CopyToAsync(memory, cancellationToken);
+            var data = await UploadBuffers.ReadExactlyAsync(file, cancellationToken);
+            if (!UploadBuffers.HasImageSignature(data, file.ContentType))
+                return Validation("photos", "Fotoğraf dosyasının gerçek biçimi doğrulanamadı.");
             var photo = new WorkOrderPhoto
             {
                 Id = Guid.NewGuid(),
@@ -569,9 +710,10 @@ public static class WorkOrderEndpoints
                 WorkOrderId = workOrder.Id,
                 FileName = Path.GetFileName(file.FileName),
                 ContentType = file.ContentType,
-                Data = memory.ToArray()
+                Data = data
             };
             dbContext.WorkOrderPhotos.Add(photo);
+            newPhotos.Add(photo);
         }
 
         workOrder.Status = "Completed";
@@ -581,30 +723,50 @@ public static class WorkOrderEndpoints
         workOrder.Recommendation = recommendation;
         AddHistory(dbContext, workOrder, NewHistory(companyContext.CompanyId!.Value, workOrder.Id, companyContext.AccountId.Value, "InProgress", "Completed", "Saha uygulaması tamamlandı."));
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Results.Ok(ToResponse(workOrder));
+        await Task.WhenAll(newPhotos.Select(photo => hybridFiles.TryDualWriteAsync(
+            HybridFileResourceKind.WorkOrderPhoto,
+            photo.CompanyId,
+            photo.Id,
+            photo.FileName,
+            photo.ContentType,
+            photo.Data,
+            cancellationToken)));
+        var response = await WorkOrderResponseQuery(dbContext.WorkOrders.Where(item => item.Id == workOrder.Id)).SingleAsync(cancellationToken);
+        return Results.Ok(OrderResponseCollections(response));
     }
 
     private static async Task<IResult> GetWorkOrderPhotoAsync(
         Guid photoId,
+        HttpRequest request,
         PesneerDbContext dbContext,
         ICompanyContext companyContext,
+        IHybridFileStorage hybridFiles,
         CancellationToken cancellationToken)
     {
         if (!companyContext.AccountId.HasValue || !companyContext.Portal.HasValue) return Results.Forbid();
         var photoMeta = await dbContext.WorkOrderPhotos.AsNoTracking()
             .Where(item => item.Id == photoId)
-            .Select(item => new { item.Id, item.ContentType, item.FileName, item.WorkOrder.AssignedEmployeeAccountId, item.WorkOrder.CustomerId, item.WorkOrder.CustomerBranchId, item.WorkOrderId })
+            .Select(item => new { item.Id, item.CompanyId, item.StoredObjectId, item.ContentType, item.FileName, item.UploadedAt, item.WorkOrder.AssignedEmployeeAccountId, item.WorkOrder.CustomerId, item.WorkOrder.CustomerBranchId, item.WorkOrderId })
             .SingleOrDefaultAsync(cancellationToken);
         if (photoMeta is null) return Results.NotFound();
         if (companyContext.Portal == PortalType.Employee && photoMeta.AssignedEmployeeAccountId != companyContext.AccountId.Value &&
             !await dbContext.WorkOrderAssignments.AnyAsync(item => item.WorkOrderId == photoMeta.WorkOrderId && item.EmployeeAccountId == companyContext.AccountId.Value, cancellationToken)) return Results.Forbid();
         if (companyContext.Portal == PortalType.Customer &&
             (photoMeta.CustomerId != companyContext.CustomerId || companyContext.CustomerBranchId.HasValue && photoMeta.CustomerBranchId != companyContext.CustomerBranchId)) return Results.Forbid();
+        var storedResult = await hybridFiles.TryReadAsync(
+            photoMeta.CompanyId,
+            photoMeta.StoredObjectId,
+            request,
+            photoMeta.FileName,
+            photoMeta.ContentType,
+            photoMeta.UploadedAt,
+            cancellationToken);
+        if (storedResult is not null) return storedResult;
         var data = await dbContext.WorkOrderPhotos.AsNoTracking()
             .Where(item => item.Id == photoId)
             .Select(item => item.Data)
             .SingleAsync(cancellationToken);
-        return Results.File(data, photoMeta.ContentType, photoMeta.FileName);
+        return PrivateFileResults.Exact(data, photoMeta.ContentType, photoMeta.FileName, photoMeta.UploadedAt);
     }
 
     private static IQueryable<WorkOrder> WorkOrderQuery(PesneerDbContext dbContext) => dbContext.WorkOrders
@@ -614,8 +776,141 @@ public static class WorkOrderEndpoints
         .Include(item => item.Assignments).ThenInclude(item => item.EmployeeAccount)
         .Include(item => item.VisitSessions).ThenInclude(item => item.EmployeeAccount)
         .Include(item => item.History).ThenInclude(item => item.ChangedByAccount)
-        .Include(item => item.Photos)
         .AsSplitQuery();
+
+    private static IQueryable<WorkOrder> ApplyScheduledAtOrder(
+        IQueryable<WorkOrder> query,
+        PesneerDbContext dbContext,
+        bool descending) => dbContext.Database.IsSqlite()
+            ? query
+            : descending ? query.OrderByDescending(item => item.ScheduledAt) : query.OrderBy(item => item.ScheduledAt);
+
+    private static IQueryable<WorkOrderResponse> WorkOrderResponseQuery(IQueryable<WorkOrder> query) => query
+        .AsNoTracking()
+        .AsSplitQuery()
+        .Select(workOrder => new WorkOrderResponse(
+            workOrder.Id,
+            workOrder.Number,
+            workOrder.CustomerId,
+            workOrder.Customer.LegalName,
+            workOrder.CustomerBranchId,
+            workOrder.CustomerBranch != null ? workOrder.CustomerBranch.Name : "Merkez",
+            workOrder.CustomerBranch != null ? workOrder.CustomerBranch.Address : workOrder.Customer.Address ?? string.Empty,
+            workOrder.CustomerBranch != null && workOrder.CustomerBranch.MapUrl != null ? workOrder.CustomerBranch.MapUrl : workOrder.Customer.MapUrl,
+            workOrder.CustomerBranch != null && workOrder.CustomerBranch.Latitude.HasValue ? workOrder.CustomerBranch.Latitude : workOrder.Customer.Latitude,
+            workOrder.CustomerBranch != null && workOrder.CustomerBranch.Longitude.HasValue ? workOrder.CustomerBranch.Longitude : workOrder.Customer.Longitude,
+            workOrder.ServiceType,
+            workOrder.VisitType,
+            workOrder.RecurrenceType,
+            workOrder.RecurrenceGroupId,
+            workOrder.ScheduledAt,
+            workOrder.DurationMinutes,
+            workOrder.AssignedEmployeeAccountId,
+            workOrder.AssignedEmployeeAccount != null ? workOrder.AssignedEmployeeAccount.DisplayName : "Atama bekliyor",
+            workOrder.Status,
+            workOrder.Notes,
+            workOrder.StartedAt,
+            workOrder.CompletedAt,
+            workOrder.CustomerDurationMinutes,
+            workOrder.TotalLaborMinutes,
+            workOrder.CompletionNote,
+            workOrder.Recommendation,
+            workOrder.Assignments.Select(item => new WorkOrderAssignmentResponse(item.EmployeeAccountId, item.EmployeeAccount.DisplayName, item.IsLead)).ToArray(),
+            workOrder.VisitSessions.Select(item => new WorkOrderVisitSessionResponse(item.Id, item.EmployeeAccountId, item.EmployeeAccount.DisplayName, item.Status, item.StartedAt, item.EndedAt, item.DurationMinutes, item.Reason)).ToArray(),
+            workOrder.History.Select(item => new WorkOrderHistoryResponse(item.Id, item.FromStatus, item.ToStatus, item.Note, item.OccurredAt, item.ChangedByAccount != null ? item.ChangedByAccount.DisplayName : "Sistem")).ToArray(),
+            workOrder.Photos.Select(item => new WorkOrderPhotoResponse(item.Id, item.FileName, item.ContentType, item.UploadedAt, string.Empty, item.Location, item.Status, item.Description)).ToArray()));
+
+    private static IQueryable<WorkOrderSummaryRow> WorkOrderSummaryQuery(IQueryable<WorkOrder> query) => query
+        .AsNoTracking()
+        .Select(workOrder => new WorkOrderSummaryRow(
+            workOrder.Id,
+            workOrder.Number,
+            workOrder.CustomerId,
+            workOrder.Customer.LegalName,
+            workOrder.CustomerBranchId,
+            workOrder.CustomerBranch != null ? workOrder.CustomerBranch.Name : "Merkez",
+            workOrder.CustomerBranch != null ? workOrder.CustomerBranch.Address : workOrder.Customer.Address ?? string.Empty,
+            workOrder.CustomerBranch != null && workOrder.CustomerBranch.MapUrl != null ? workOrder.CustomerBranch.MapUrl : workOrder.Customer.MapUrl,
+            workOrder.CustomerBranch != null && workOrder.CustomerBranch.Latitude.HasValue ? workOrder.CustomerBranch.Latitude : workOrder.Customer.Latitude,
+            workOrder.CustomerBranch != null && workOrder.CustomerBranch.Longitude.HasValue ? workOrder.CustomerBranch.Longitude : workOrder.Customer.Longitude,
+            workOrder.ServiceType,
+            workOrder.VisitType,
+            workOrder.RecurrenceType,
+            workOrder.RecurrenceGroupId,
+            workOrder.ScheduledAt,
+            workOrder.DurationMinutes,
+            workOrder.AssignedEmployeeAccountId,
+            workOrder.AssignedEmployeeAccount != null ? workOrder.AssignedEmployeeAccount.DisplayName : "Atama bekliyor",
+            workOrder.Status,
+            workOrder.Notes,
+            workOrder.StartedAt,
+            workOrder.CompletedAt,
+            workOrder.CustomerDurationMinutes,
+            workOrder.TotalLaborMinutes,
+            workOrder.Assignments.Count,
+            workOrder.VisitSessions.Count,
+            workOrder.Photos.Count));
+
+    private static WorkOrderSummaryResponse ToWorkOrderSummary(WorkOrderSummaryRow item) => new(
+        item.Id, item.Number, item.CustomerId, item.CustomerName, item.BranchId, item.BranchName,
+        item.Address, item.MapUrl, item.Latitude, item.Longitude, item.ServiceType, item.VisitType,
+        item.RecurrenceType, item.RecurrenceGroupId, item.ScheduledAt, item.DurationMinutes,
+        item.AssignedEmployeeAccountId, item.AssignedEmployeeName, item.Status, item.Notes,
+        item.StartedAt, item.CompletedAt, item.CustomerDurationMinutes, item.TotalLaborMinutes,
+        item.AssignmentCount, item.VisitSessionCount, item.PhotoCount, $"/api/v2/work-orders/{item.Id}");
+
+    private static bool TryReadWorkOrderCursor(string? cursor, out WorkOrderCursorPosition position)
+    {
+        position = default;
+        if (string.IsNullOrWhiteSpace(cursor)) return false;
+        try
+        {
+            var value = cursor.Replace('-', '+').Replace('_', '/');
+            value = value.PadRight(value.Length + ((4 - value.Length % 4) % 4), '=');
+            var payload = JsonSerializer.Deserialize<WorkOrderCursorPayload>(Convert.FromBase64String(value));
+            if (payload is null || payload.V != 1 || payload.Id == Guid.Empty ||
+                payload.Snapshot > DateTimeOffset.UtcNow.AddMinutes(5)) return false;
+            position = new WorkOrderCursorPosition(payload.Snapshot, payload.Sort, payload.Id);
+            return true;
+        }
+        catch (FormatException) { return false; }
+        catch (JsonException) { return false; }
+    }
+
+    private static string WriteWorkOrderCursor(DateTimeOffset snapshot, DateTimeOffset sort, Guid id)
+    {
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new WorkOrderCursorPayload(1, snapshot, sort, id));
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    private static WorkOrderResponse OrderResponseCollections(WorkOrderResponse workOrder) => workOrder with
+    {
+        Assignments = workOrder.Assignments.OrderByDescending(item => item.IsLead).ThenBy(item => item.EmployeeName).ToArray(),
+        VisitSessions = workOrder.VisitSessions.OrderBy(item => item.StartedAt).ToArray(),
+        History = workOrder.History.OrderBy(item => item.OccurredAt).ToArray(),
+        Photos = workOrder.Photos.OrderBy(item => item.UploadedAt)
+            .Select(item => item with { Url = $"/api/work-orders/photos/{item.Id}" }).ToArray()
+    };
+
+    private sealed record WorkOrderSummaryRow(
+        Guid Id, string Number, Guid CustomerId, string CustomerName, Guid? BranchId, string BranchName,
+        string Address, string? MapUrl, decimal? Latitude, decimal? Longitude, string ServiceType,
+        string VisitType, string RecurrenceType, Guid? RecurrenceGroupId, DateTimeOffset ScheduledAt,
+        int DurationMinutes, Guid? AssignedEmployeeAccountId, string AssignedEmployeeName, string Status,
+        string? Notes, DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt, int? CustomerDurationMinutes,
+        int TotalLaborMinutes, int AssignmentCount, int VisitSessionCount, int PhotoCount);
+
+    private sealed record WorkOrderSummaryResponse(
+        Guid Id, string Number, Guid CustomerId, string CustomerName, Guid? BranchId, string BranchName,
+        string Address, string? MapUrl, decimal? Latitude, decimal? Longitude, string ServiceType,
+        string VisitType, string RecurrenceType, Guid? RecurrenceGroupId, DateTimeOffset ScheduledAt,
+        int DurationMinutes, Guid? AssignedEmployeeAccountId, string AssignedEmployeeName, string Status,
+        string? Notes, DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt, int? CustomerDurationMinutes,
+        int TotalLaborMinutes, int AssignmentCount, int VisitSessionCount, int PhotoCount, string DetailUrl);
+
+    private readonly record struct WorkOrderCreationRow(Guid WorkOrderId, DateTimeOffset OccurredAt);
+    private readonly record struct WorkOrderCursorPosition(DateTimeOffset Snapshot, DateTimeOffset Sort, Guid Id);
+    private sealed record WorkOrderCursorPayload(int V, DateTimeOffset Snapshot, DateTimeOffset Sort, Guid Id);
 
     private static IReadOnlyList<BranchEmployeeAssignmentRequest> BuildAssignments(CreateWorkOrdersRequest request, Guid? forcedEmployeeAccountId)
     {

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Ban, Barcode, BrainCircuit, Car, Check, CheckCircle2, ChevronDown, FileDown, FilePlus2, Filter, Hash, Info, Layers, PackageCheck, Pencil, Plus, QrCode, Save, ScanLine, Search, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import type { WorkOrder } from '../../types';
 import { getServiceReportCatalog, type ReportPestObservationInput, type ReportStationInput, type ServiceReportCatalog } from '../../services/serviceReportApi';
-import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
+import { getMatchingSitePlanDetail, type SitePlanRecord } from '../../services/sitePlanApi';
 import { getLatestVehicleStock, type VehicleStockCheck } from '../../services/fieldOperationsApi';
 import {
   downloadStationActivationPdf,
@@ -11,9 +11,10 @@ import {
   type StationActivationRecord,
 } from '../../services/stationActivationApi';
 import QrScannerModal from './QrScannerModal';
-import PestneerVisionAnalyzer from '../vision/PestneerVisionAnalyzer';
 import { downloadStationLabelPdf, matchStationByCode, normalizeStationQrValue, parseStationQrValue } from '../../utils/stationQr';
 import { getCompanyBranding, getCompanyLogoObjectUrl } from '../../services/brandingApi';
+
+const PestneerVisionAnalyzer = lazy(() => import('../vision/PestneerVisionAnalyzer'));
 
 type Props = {
   accessToken: string;
@@ -122,16 +123,15 @@ export default function StationActivationModal({ accessToken, order, onClose, on
     let active = true;
     Promise.all([
       getStationActivationByWorkOrder(accessToken, order.recordId),
-      getSitePlans(accessToken),
+      getMatchingSitePlanDetail(accessToken, order.customerId, order.branchId),
       getServiceReportCatalog(accessToken),
       getLatestVehicleStock(accessToken).catch(() => null),
     ])
-      .then(([existing, plans, loadedCatalog, stock]) => {
+      .then(([existing, plan, loadedCatalog, stock]) => {
         if (!active) return;
         setCatalog(loadedCatalog);
         if (stock) setVehicleStock(stock);
         setRecord(existing); setNotes(existing?.notes ?? '');
-        const plan = plans.find((item) => item.customerId === order.customerId && (order.branchId ? item.branchId === order.branchId : !item.branchId));
         setSitePlan(plan || null);
         if (existing?.stations.length) { setStations(existing.stations); return; }
         const equipment = new Map(plan?.canvas.equipmentTypes.map((item) => [item.id, item]) ?? []);
@@ -981,11 +981,13 @@ export default function StationActivationModal({ accessToken, order, onClose, on
             <button type="button" className="icon-button" onClick={() => setVisionOpen(false)}><X /></button>
           </div>
           <div className="vision-modal-inner" style={{ padding: '0 24px 20px', maxHeight: '78vh', overflowY: 'auto' }}>
-            <PestneerVisionAnalyzer
-              accessToken={accessToken}
-              disabled={readOnly}
-              onApply={handleVisionApply}
-            />
+            <Suspense fallback={<div className="empty-state">Yapay zekâ analiz aracı yükleniyor…</div>}>
+              <PestneerVisionAnalyzer
+                accessToken={accessToken}
+                disabled={readOnly}
+                onApply={handleVisionApply}
+              />
+            </Suspense>
           </div>
           <div className="modal-actions" style={{ padding: '14px 24px' }}>
             <button type="button" className="secondary-button" onClick={() => setVisionOpen(false)}>Vazgeç / Kapat</button>

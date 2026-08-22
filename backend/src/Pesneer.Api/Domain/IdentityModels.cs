@@ -35,6 +35,7 @@ public sealed class Company
     public DateTimeOffset? TrialStartedAt { get; set; }
     public DateTimeOffset? TrialEndsAt { get; set; }
     public byte[]? LogoData { get; set; }
+    public Guid? LogoStoredObjectId { get; set; }
     public string? LogoContentType { get; set; }
     public string? LogoFileName { get; set; }
     public DateTimeOffset? LogoUpdatedAt { get; set; }
@@ -43,6 +44,7 @@ public sealed class Company
     public bool VisionReviewRequired { get; set; } = true;
     public string VisionPreferredModel { get; set; } = "Auto";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public StoredObject? LogoStoredObject { get; set; }
 }
 
 public sealed class CompanyEmailConnection : ICompanyScoped
@@ -431,11 +433,13 @@ public sealed class WorkOrderPhoto : ICompanyScoped
     public required string FileName { get; set; }
     public required string ContentType { get; set; }
     public required byte[] Data { get; set; }
+    public Guid? StoredObjectId { get; set; }
     public string? Location { get; set; }
     public string? Status { get; set; }
     public string? Description { get; set; }
     public DateTimeOffset UploadedAt { get; set; } = DateTimeOffset.UtcNow;
     public WorkOrder WorkOrder { get; set; } = null!;
+    public StoredObject? StoredObject { get; set; }
 }
 
 public sealed class ServiceReport : ICompanyScoped
@@ -522,6 +526,7 @@ public sealed class ServiceReportStation : ICompanyScoped
     public decimal? ReplacementQuantity { get; set; }
     public string? ReplacementUnit { get; set; }
     public string? Notes { get; set; }
+    public string? VisionAnalysisJson { get; set; }
     public ServiceReport ServiceReport { get; set; } = null!;
     public ICollection<ServiceReportPestObservation> PestObservations { get; set; } = [];
 }
@@ -637,6 +642,7 @@ public sealed class QualityDocument : ICompanyScoped
     public required string ContentType { get; set; }
     public long SizeBytes { get; set; }
     public byte[]? FileData { get; set; }
+    public Guid? StoredObjectId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public Customer? Customer { get; set; }
     public CustomerBranch? CustomerBranch { get; set; }
@@ -644,6 +650,7 @@ public sealed class QualityDocument : ICompanyScoped
     public QualityAnalysis? QualityAnalysis { get; set; }
     public SitePlan? SitePlan { get; set; }
     public InventoryItem? InventoryItem { get; set; }
+    public StoredObject? StoredObject { get; set; }
 }
 
 public sealed class AuditPackage : ICompanyScoped
@@ -664,8 +671,10 @@ public sealed class AuditPackage : ICompanyScoped
     public int ReadinessScore { get; set; }
     public required string PreflightJson { get; set; }
     public required string ManifestJson { get; set; }
-    public required byte[] PdfData { get; set; }
-    public required byte[] ZipData { get; set; }
+    public byte[]? PdfData { get; set; }
+    public byte[]? ZipData { get; set; }
+    public Guid? PdfStoredObjectId { get; set; }
+    public Guid? ZipStoredObjectId { get; set; }
     public required string PdfSha256 { get; set; }
     public required string ZipSha256 { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -673,6 +682,8 @@ public sealed class AuditPackage : ICompanyScoped
     public CustomerBranch? CustomerBranch { get; set; }
     public Account CreatedByAccount { get; set; } = null!;
     public QualityDocument? QualityDocument { get; set; }
+    public StoredObject? PdfStoredObject { get; set; }
+    public StoredObject? ZipStoredObject { get; set; }
     public ICollection<AuditPackageItem> Items { get; set; } = [];
 }
 
@@ -692,9 +703,12 @@ public sealed class AuditPackageItem : ICompanyScoped
     public string? Scope { get; set; }
     public DateTimeOffset SourceDate { get; set; }
     public required string Sha256 { get; set; }
-    public required byte[] FileData { get; set; }
+    public byte[]? FileData { get; set; }
+    public long? SizeBytes { get; set; }
+    public Guid? StoredObjectId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public AuditPackage AuditPackage { get; set; } = null!;
+    public StoredObject? StoredObject { get; set; }
 }
 
 public sealed class QualityInspection : ICompanyScoped
@@ -777,10 +791,12 @@ public sealed class CorrectiveActionEvidence : ICompanyScoped
     public required string FileName { get; set; }
     public required string ContentType { get; set; }
     public required byte[] Data { get; set; }
+    public Guid? StoredObjectId { get; set; }
     public string? Note { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public CorrectiveAction CorrectiveAction { get; set; } = null!;
     public Account UploadedByAccount { get; set; } = null!;
+    public StoredObject? StoredObject { get; set; }
 }
 
 public sealed class CorrectiveActionHistory : ICompanyScoped
@@ -835,10 +851,12 @@ public sealed class WasteDisposalEvidence : ICompanyScoped
     public required string FileName { get; set; }
     public required string ContentType { get; set; }
     public required byte[] Data { get; set; }
+    public Guid? StoredObjectId { get; set; }
     public string? Note { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public WasteDisposalRecord WasteDisposalRecord { get; set; } = null!;
     public Account UploadedByAccount { get; set; } = null!;
+    public StoredObject? StoredObject { get; set; }
 }
 
 public sealed class SitePlan : ICompanyScoped

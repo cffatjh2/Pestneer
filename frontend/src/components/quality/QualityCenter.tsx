@@ -4,7 +4,7 @@ import SitePlanCenter from '../sitePlans/SitePlanCenter';
 import AuditPackageCenter from './AuditPackageCenter';
 import DocumentScannerModal from '../scanner/DocumentScannerModal';
 import { getInventory, type InventoryItem } from '../../services/inventoryApi';
-import { getSitePlans, type SitePlanRecord } from '../../services/sitePlanApi';
+import { getSitePlanDetail, getSitePlanSummaries, type SitePlanRecord, type SitePlanSummary } from '../../services/sitePlanApi';
 import { shareProtectedDocument } from '../../utils/shareUtils';
 import {
   archiveQualityDocument, createRiskAnalysis, createTrendAnalysis, deleteQualityDocument, downloadQualityDocument, getQualityAnalyses, getQualityDocuments, getQualityLocations,
@@ -321,23 +321,35 @@ function TrendAnalysisModal({ locations, onClose, onSubmit }: { locations: Quali
 function RiskAnalysisModal({ accessToken, locations, onClose, onSubmit }: { accessToken: string; locations: QualityLocation[]; onClose: () => void; onSubmit: (input: CreateRiskAnalysisInput) => Promise<void> }) {
   const [locationKey, setLocationKey] = useState(locationValue(locations[0])); const [scores, setScores] = useState<Record<string, number>>(Object.fromEntries(riskQuestions.map((item) => [item.code, 0]))); const [notes, setNotes] = useState<Record<string, string>>({}); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
   const [matrix, setMatrix] = useState<RiskMatrixRow[]>([{ location: '', pestCategory: 'Kemirgen', severity: 1, likelihood: 1, note: '' }]);
-  const [sitePlans, setSitePlans] = useState<SitePlanRecord[]>([]);
+  const [sitePlans, setSitePlans] = useState<SitePlanSummary[]>([]);
+  const [activePlan, setActivePlan] = useState<SitePlanRecord | undefined>();
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
 
   useEffect(() => {
     const location = findLocation(locations, locationKey);
     if (location) {
-      getSitePlans(accessToken).then((allPlans) => {
+      getSitePlanSummaries(accessToken).then((allPlans) => {
         const filtered = allPlans.filter((p) => p.customerId === location.customerId && (!location.branchId || !p.branchId || p.branchId === location.branchId));
         setSitePlans(filtered);
         setSelectedPlanId('');
-      }).catch(() => setSitePlans([]));
+      }).catch(() => { setSitePlans([]); setActivePlan(undefined); });
     } else {
       setSitePlans([]);
+      setActivePlan(undefined);
     }
   }, [accessToken, locations, locationKey]);
 
-  const activePlan = sitePlans.find((p) => p.id === selectedPlanId) || sitePlans[0];
+  useEffect(() => {
+    const summary = sitePlans.find((plan) => plan.id === selectedPlanId) || sitePlans[0];
+    if (!summary) { setActivePlan(undefined); return; }
+    let active = true;
+    setActivePlan(undefined);
+    getSitePlanDetail(accessToken, summary)
+      .then((detail) => { if (active) setActivePlan(detail); })
+      .catch(() => { if (active) setActivePlan(undefined); });
+    return () => { active = false; };
+  }, [accessToken, selectedPlanId, sitePlans]);
+
   const locationSuggestions = useMemo(() => {
     if (!activePlan?.canvas?.elements) return [];
     const list: string[] = [];

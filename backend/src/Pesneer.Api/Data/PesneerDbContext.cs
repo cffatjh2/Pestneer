@@ -1,5 +1,6 @@
 using System.Security;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Pesneer.Api.Domain;
 
 namespace Pesneer.Api.Data;
@@ -55,9 +56,14 @@ public class PesneerDbContext(
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
+    public DbSet<StoredObject> StoredObjects => Set<StoredObject>();
+    public DbSet<StoredObjectUploadSession> StoredObjectUploadSessions => Set<StoredObjectUploadSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Storage-only audit artifacts are a PostgreSQL-only canary. SQLite keeps its historical
+        // NOT NULL schema and legacy byte behavior, including existing EnsureCreated databases.
+        var requiresInlineAuditBytes = !Database.IsNpgsql();
         modelBuilder.Entity<Company>(entity =>
         {
             entity.HasIndex(company => company.Code).IsUnique();
@@ -70,6 +76,7 @@ public class PesneerDbContext(
             entity.Property(company => company.VisionEnabled).HasDefaultValue(true);
             entity.Property(company => company.VisionReviewRequired).HasDefaultValue(true);
             entity.Property(company => company.VisionPreferredModel).HasMaxLength(16).HasDefaultValue("Auto");
+            entity.HasOne(company => company.LogoStoredObject).WithMany().HasForeignKey(company => company.LogoStoredObjectId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<CompanyEmailConnection>(entity =>
@@ -80,6 +87,31 @@ public class PesneerDbContext(
             entity.Property(item => item.EncryptedRefreshToken).HasMaxLength(4000);
             entity.Property(item => item.LastError).HasMaxLength(2000);
             entity.HasOne(item => item.Company).WithMany().HasForeignKey(item => item.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<StoredObject>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.Sha256 }).IsUnique();
+            entity.HasIndex(item => item.StorageKey).IsUnique();
+            entity.HasIndex(item => new { item.State, item.CreatedAt });
+            entity.Property(item => item.Sha256).HasMaxLength(64).IsFixedLength();
+            entity.Property(item => item.ContentType).HasMaxLength(80);
+            entity.Property(item => item.StorageKey).HasMaxLength(1024);
+            entity.Property(item => item.InitialFileName).HasMaxLength(240);
+            entity.Property(item => item.State).HasConversion<string>().HasMaxLength(16);
+            entity.HasOne<Company>().WithMany().HasForeignKey(item => item.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
+        });
+
+        modelBuilder.Entity<StoredObjectUploadSession>(entity =>
+        {
+            entity.HasIndex(item => new { item.CompanyId, item.IdempotencyKeyHash }).IsUnique();
+            entity.HasIndex(item => new { item.CompanyId, item.ExpiresAt });
+            entity.Property(item => item.FileName).HasMaxLength(240);
+            entity.Property(item => item.IdempotencyKeyHash).HasMaxLength(64).IsFixedLength();
+            entity.HasOne(item => item.StoredObject).WithMany(item => item.UploadSessions)
+                .HasForeignKey(item => item.StoredObjectId).OnDelete(DeleteBehavior.Cascade);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -342,6 +374,7 @@ public class PesneerDbContext(
             entity.Property(item => item.Status).HasMaxLength(80);
             entity.Property(item => item.Description).HasMaxLength(1000);
             entity.HasOne(item => item.WorkOrder).WithMany(workOrder => workOrder.Photos).HasForeignKey(item => item.WorkOrderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.StoredObject).WithMany().HasForeignKey(item => item.StoredObjectId).OnDelete(DeleteBehavior.SetNull);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -410,6 +443,7 @@ public class PesneerDbContext(
             entity.Property(item => item.ReplacementQuantity).HasPrecision(12, 3);
             entity.Property(item => item.ReplacementUnit).HasMaxLength(32);
             entity.Property(item => item.Notes).HasMaxLength(1000);
+            entity.Property(item => item.VisionAnalysisJson).HasMaxLength(200000);
             entity.HasOne(item => item.ServiceReport).WithMany(report => report.Stations).HasForeignKey(item => item.ServiceReportId).OnDelete(DeleteBehavior.Cascade);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
@@ -494,6 +528,7 @@ public class PesneerDbContext(
             entity.HasOne(item => item.QualityAnalysis).WithMany(item => item.Documents).HasForeignKey(item => item.QualityAnalysisId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.SitePlan).WithMany(item => item.Documents).HasForeignKey(item => item.SitePlanId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.InventoryItem).WithMany(item => item.LicenseDocuments).HasForeignKey(item => item.InventoryItemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.StoredObject).WithMany().HasForeignKey(item => item.StoredObjectId).OnDelete(DeleteBehavior.SetNull);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -507,10 +542,14 @@ public class PesneerDbContext(
             entity.Property(item => item.Status).HasMaxLength(24);
             entity.Property(item => item.PdfSha256).HasMaxLength(64);
             entity.Property(item => item.ZipSha256).HasMaxLength(64);
+            entity.Property(item => item.PdfData).IsRequired(requiresInlineAuditBytes);
+            entity.Property(item => item.ZipData).IsRequired(requiresInlineAuditBytes);
             entity.HasOne(item => item.Customer).WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CustomerBranch).WithMany().HasForeignKey(item => item.CustomerBranchId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.CreatedByAccount).WithMany().HasForeignKey(item => item.CreatedByAccountId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.QualityDocument).WithMany().HasForeignKey(item => item.QualityDocumentId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(item => item.PdfStoredObject).WithMany().HasForeignKey(item => item.PdfStoredObjectId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(item => item.ZipStoredObject).WithMany().HasForeignKey(item => item.ZipStoredObjectId).OnDelete(DeleteBehavior.SetNull);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -526,7 +565,9 @@ public class PesneerDbContext(
             entity.Property(item => item.Revision).HasMaxLength(80);
             entity.Property(item => item.Scope).HasMaxLength(500);
             entity.Property(item => item.Sha256).HasMaxLength(64);
+            entity.Property(item => item.FileData).IsRequired(requiresInlineAuditBytes);
             entity.HasOne(item => item.AuditPackage).WithMany(item => item.Items).HasForeignKey(item => item.AuditPackageId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.StoredObject).WithMany().HasForeignKey(item => item.StoredObjectId).OnDelete(DeleteBehavior.SetNull);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -584,6 +625,7 @@ public class PesneerDbContext(
             entity.Property(item => item.Note).HasMaxLength(1000);
             entity.HasOne(item => item.CorrectiveAction).WithMany(item => item.Evidence).HasForeignKey(item => item.CorrectiveActionId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.UploadedByAccount).WithMany().HasForeignKey(item => item.UploadedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.StoredObject).WithMany().HasForeignKey(item => item.StoredObjectId).OnDelete(DeleteBehavior.SetNull);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -628,6 +670,7 @@ public class PesneerDbContext(
             entity.Property(item => item.Note).HasMaxLength(1000);
             entity.HasOne(item => item.WasteDisposalRecord).WithMany(item => item.Evidence).HasForeignKey(item => item.WasteDisposalRecordId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(item => item.UploadedByAccount).WithMany().HasForeignKey(item => item.UploadedByAccountId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(item => item.StoredObject).WithMany().HasForeignKey(item => item.StoredObjectId).OnDelete(DeleteBehavior.SetNull);
             entity.HasQueryFilter(item => companyContext.CompanyId.HasValue && item.CompanyId == companyContext.CompanyId.Value);
         });
 
@@ -802,9 +845,57 @@ public class PesneerDbContext(
         return base.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<int> SaveFileStorageMaintenanceChangesAsync(Guid targetCompanyId, CancellationToken cancellationToken = default)
+    {
+        var changedCompanyEntries = ChangeTracker.Entries<ICompanyScoped>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToArray();
+        if (changedCompanyEntries.Any(entry => entry.Entity is not StoredObject and not StoredObjectUploadSession))
+            throw new SecurityException("Dosya depolama bakımı başka operasyon verisini değiştiremez.");
+
+        EnforceCompanyBoundary(targetCompanyId);
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<int> SaveFileStorageBackfillChangesAsync(Guid targetCompanyId, CancellationToken cancellationToken = default)
+    {
+        var changedEntries = ChangeTracker.Entries()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToArray();
+        foreach (var entry in changedEntries)
+        {
+            var isAllowed = entry.Entity switch
+            {
+                StoredObject or StoredObjectUploadSession => true,
+                Company company => company.Id == targetCompanyId && HasOnlyModifiedProperties(entry, nameof(Company.LogoStoredObjectId)),
+                WorkOrderPhoto photo => photo.CompanyId == targetCompanyId && HasOnlyModifiedProperties(entry, nameof(WorkOrderPhoto.StoredObjectId)),
+                QualityDocument document => document.CompanyId == targetCompanyId && HasOnlyModifiedProperties(entry, nameof(QualityDocument.StoredObjectId)),
+                AuditPackage package => package.CompanyId == targetCompanyId && HasOnlyModifiedProperties(entry, nameof(AuditPackage.PdfStoredObjectId), nameof(AuditPackage.ZipStoredObjectId)),
+                AuditPackageItem item => item.CompanyId == targetCompanyId && HasOnlyModifiedProperties(entry, nameof(AuditPackageItem.StoredObjectId), nameof(AuditPackageItem.SizeBytes)),
+                CorrectiveActionEvidence evidence => evidence.CompanyId == targetCompanyId && HasOnlyModifiedProperties(entry, nameof(Pesneer.Api.Domain.CorrectiveActionEvidence.StoredObjectId)),
+                WasteDisposalEvidence evidence => evidence.CompanyId == targetCompanyId && HasOnlyModifiedProperties(entry, nameof(Pesneer.Api.Domain.WasteDisposalEvidence.StoredObjectId)),
+                _ => false
+            };
+            if (!isAllowed)
+                throw new SecurityException("Dosya backfill işlemi içerik ve referans alanları dışında veri değiştiremez.");
+        }
+
+        EnforceCompanyBoundary(targetCompanyId);
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private static bool HasOnlyModifiedProperties(EntityEntry entry, params string[] allowedPropertyNames)
+    {
+        var allowed = allowedPropertyNames.ToHashSet(StringComparer.Ordinal);
+        return entry.State == EntityState.Modified &&
+            entry.Properties.Where(property => property.IsModified).All(property => allowed.Contains(property.Metadata.Name));
+    }
+
     private void EnforceCompanyBoundary(Guid? explicitCompanyId = null)
     {
-        var scopedEntries = ChangeTracker.Entries<ICompanyScoped>().ToArray();
+        var scopedEntries = ChangeTracker.Entries<ICompanyScoped>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToArray();
         if (scopedEntries.Length == 0) return;
 
         var currentCompanyId = explicitCompanyId ?? companyContext.CompanyId
@@ -817,8 +908,7 @@ public class PesneerDbContext(
                 entry.Entity.CompanyId = currentCompanyId;
             }
 
-            if (entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
-                entry.Entity.CompanyId != currentCompanyId)
+            if (entry.Entity.CompanyId != currentCompanyId)
             {
                 throw new SecurityException("Başka bir firmaya ait veri üzerinde işlem yapılamaz.");
             }

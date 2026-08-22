@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Pesneer.Api.Commercial;
 using Pesneer.Api.Data;
 using Pesneer.Api.Domain;
+using Pesneer.Api.Optimization;
 
 namespace Pesneer.Api.Customers;
 
@@ -52,17 +53,26 @@ public static class CustomerPortalEndpoints
             .SingleOrDefaultAsync(item => item.Id == context.CustomerId.Value && item.IsActive, cancellationToken);
         if (customer is null) return Results.NotFound(new { message = "Müşteri kaydı bulunamadı." });
 
-        var orders = await WorkOrderQuery(dbContext, context).ToListAsync(cancellationToken);
-        var requests = await RequestQuery(dbContext).Where(item => item.CustomerId == customer.Id)
-            .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value)
-            .ToListAsync(cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var activeQuery = WorkOrderQuery(dbContext, context)
+            .Where(item => (item.Status == "Planned" || item.Status == "InProgress") && item.ScheduledAt >= now.AddDays(-1));
+        var activeOrders = dbContext.Database.IsNpgsql()
+            ? await activeQuery.OrderBy(item => item.ScheduledAt).ToListAsync(cancellationToken)
+            : (await activeQuery.ToListAsync(cancellationToken)).OrderBy(item => item.ScheduledAt).ToList();
+        var completedQuery = WorkOrderQuery(dbContext, context).Where(item => item.Status == "Completed");
+        var completedOrders = dbContext.Database.IsNpgsql()
+            ? await completedQuery.OrderByDescending(item => item.CompletedAt ?? item.ScheduledAt).Take(50).ToListAsync(cancellationToken)
+            : (await completedQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.CompletedAt ?? item.ScheduledAt).Take(50).ToList();
+        var requestQuery = RequestQuery(dbContext).Where(item => item.CustomerId == customer.Id)
+            .Where(item => !context.CustomerBranchId.HasValue || item.CustomerBranchId == context.CustomerBranchId.Value);
+        var requests = dbContext.Database.IsNpgsql()
+            ? await requestQuery.OrderByDescending(item => item.RequestedAt).ToListAsync(cancellationToken)
+            : (await requestQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.RequestedAt).ToList();
         var branches = customer.Branches.Where(item => item.IsActive && (!context.CustomerBranchId.HasValue || item.Id == context.CustomerBranchId.Value))
             .OrderBy(item => item.Name).Select(item => new CustomerPortalBranchResponse(item.Id, item.Name, item.Code, item.Address, item.City, item.District, item.PhoneNumber, item.Email, item.MapUrl)).ToArray();
-        var now = DateTimeOffset.UtcNow;
         return Results.Ok(new CustomerPortalSummaryResponse(customer.Id, customer.LegalName, context.CustomerBranchId.HasValue ? "Branch" : "Customer", branches,
-            orders.Where(item => (item.Status is "Planned" or "InProgress") && item.ScheduledAt >= now.AddDays(-1)).OrderBy(item => item.ScheduledAt).Select(ToWorkOrderResponse).ToArray(),
-            orders.Where(item => item.Status == "Completed").OrderByDescending(item => item.CompletedAt ?? item.ScheduledAt).Take(50).Select(ToWorkOrderResponse).ToArray(),
-            requests.OrderByDescending(item => item.RequestedAt).Select(ToResponse).ToArray()));
+            activeOrders.Select(ToWorkOrderResponse).ToArray(), completedOrders.Select(ToWorkOrderResponse).ToArray(),
+            requests.Select(ToResponse).ToArray()));
     }
 
     private static async Task<IResult> CreateRequestAsync(CreateEmergencyRequestRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -84,15 +94,12 @@ public static class CustomerPortalEndpoints
             return Validation("branchId", "Yetkili olduğunuz bir şube seçin.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var activeContracts = await dbContext.CustomerContracts
-            .Where(item => item.CustomerId == context.CustomerId.Value && item.Status == "Active")
-            .ToListAsync(cancellationToken);
-        var contract = activeContracts
-            .Where(item => item.StartDate <= today && item.EndDate >= today)
+        var contract = await dbContext.CustomerContracts
+            .Where(item => item.CustomerId == context.CustomerId.Value && item.Status == "Active" && item.StartDate <= today && item.EndDate >= today)
             .Where(item => !item.CustomerBranchId.HasValue || item.CustomerBranchId == branchId)
             .OrderByDescending(item => item.CustomerBranchId == branchId)
             .ThenByDescending(item => item.StartDate)
-            .FirstOrDefault();
+            .FirstOrDefaultAsync(cancellationToken);
         var contractCoverage = contract is null ? "OutOfContract" : "ContractIncluded";
         var chargeAmount = 0m;
         DateTimeOffset? slaDueAt = null;
@@ -114,11 +121,13 @@ public static class CustomerPortalEndpoints
             }
         }
 
-        var recentAssignments = await dbContext.WorkOrders.AsNoTracking()
+        var assignmentQuery = dbContext.WorkOrders.AsNoTracking()
             .Where(item => item.CustomerId == context.CustomerId.Value && item.AssignedEmployeeAccountId.HasValue)
             .Where(item => !branchId.HasValue || item.CustomerBranchId == branchId)
-            .Select(item => new { item.AssignedEmployeeAccountId, item.ScheduledAt }).ToListAsync(cancellationToken);
-        var assignedEmployeeId = recentAssignments.OrderByDescending(item => item.ScheduledAt).Select(item => item.AssignedEmployeeAccountId).FirstOrDefault();
+            .Select(item => new { item.AssignedEmployeeAccountId, item.ScheduledAt });
+        var assignedEmployeeId = dbContext.Database.IsNpgsql()
+            ? (await assignmentQuery.OrderByDescending(item => item.ScheduledAt).FirstOrDefaultAsync(cancellationToken))?.AssignedEmployeeAccountId
+            : (await assignmentQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.ScheduledAt).FirstOrDefault()?.AssignedEmployeeAccountId;
         var prefix = $"TLP-{DateTimeOffset.UtcNow:yyMMdd}-";
         var sequence = await NextSequenceAsync(dbContext, prefix, cancellationToken);
         var item = new EmergencyRequest
@@ -140,9 +149,15 @@ public static class CustomerPortalEndpoints
     private static async Task<IResult> GetCommercialSummaryAsync(PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
         if (!context.CustomerId.HasValue) return Results.Forbid();
-        var proposals = (await CustomerProposalQuery(dbContext, context).ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
-        var contracts = (await CustomerContractQuery(dbContext, context).ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
-        var receivables = (await CustomerReceivableQuery(dbContext, context).ToListAsync(cancellationToken)).OrderBy(item => item.DueDate).ToList();
+        var proposalQuery = CustomerProposalQuery(dbContext, context);
+        var proposals = dbContext.Database.IsNpgsql()
+            ? await proposalQuery.OrderByDescending(item => item.CreatedAt).ToListAsync(cancellationToken)
+            : (await proposalQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
+        var contractQuery = CustomerContractQuery(dbContext, context);
+        var contracts = dbContext.Database.IsNpgsql()
+            ? await contractQuery.OrderByDescending(item => item.CreatedAt).ToListAsync(cancellationToken)
+            : (await contractQuery.ToListAsync(cancellationToken)).OrderByDescending(item => item.CreatedAt).ToList();
+        var receivables = await CustomerReceivableQuery(dbContext, context).OrderBy(item => item.DueDate).ToListAsync(cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var receivableResponses = receivables.Select(item => ToCustomerReceivable(item, today)).ToArray();
         return Results.Ok(new CustomerCommercialSummaryResponse(
@@ -179,7 +194,7 @@ public static class CustomerPortalEndpoints
         var proposal = await CustomerProposalQuery(dbContext, context).SingleOrDefaultAsync(item => item.Id == proposalId, cancellationToken);
         if (proposal is null) return Results.NotFound();
         var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == context.CompanyId.Value, cancellationToken);
-        return Results.File(CommercialPdfRenderer.Proposal(proposal, company), "application/pdf", $"{proposal.Number}.pdf");
+        return PrivateFileResults.Exact(CommercialPdfRenderer.Proposal(proposal, company), "application/pdf", $"{proposal.Number}.pdf", proposal.UpdatedAt);
     }
 
     private static async Task<IResult> GetCustomerContractPdfAsync(Guid contractId, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
@@ -188,7 +203,7 @@ public static class CustomerPortalEndpoints
         var contract = await CustomerContractQuery(dbContext, context).SingleOrDefaultAsync(item => item.Id == contractId, cancellationToken);
         if (contract is null) return Results.NotFound();
         var company = await dbContext.Companies.AsNoTracking().SingleAsync(item => item.Id == context.CompanyId.Value, cancellationToken);
-        return Results.File(CommercialPdfRenderer.Contract(contract, company), "application/pdf", $"{contract.Number}.pdf");
+        return PrivateFileResults.Exact(CommercialPdfRenderer.Contract(contract, company), "application/pdf", $"{contract.Number}.pdf", contract.UpdatedAt);
     }
 
     private static async Task<int> NextSequenceAsync(PesneerDbContext dbContext, string prefix, CancellationToken cancellationToken)
@@ -197,14 +212,23 @@ public static class CustomerPortalEndpoints
         return existing.Select(item => int.TryParse(item[prefix.Length..], out var value) ? value : 0).DefaultIfEmpty().Max() + 1;
     }
 
-    private static async Task<IResult> GetCompanyRequestsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken) =>
-        Results.Ok((await RequestQuery(dbContext).ToListAsync(cancellationToken)).OrderByDescending(item => item.RequestedAt).Select(ToResponse));
+    private static async Task<IResult> GetCompanyRequestsAsync(PesneerDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var query = RequestQuery(dbContext);
+        var rows = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.RequestedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.RequestedAt).ToList();
+        return Results.Ok(rows.Select(ToResponse));
+    }
 
     private static async Task<IResult> GetEmployeeRequestsAsync(PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken)
     {
         if (!context.AccountId.HasValue) return Results.Forbid();
-        var items = await RequestQuery(dbContext).Where(item => item.AssignedEmployeeAccountId == context.AccountId.Value).ToListAsync(cancellationToken);
-        return Results.Ok(items.OrderByDescending(item => item.RequestedAt).Select(ToResponse));
+        var query = RequestQuery(dbContext).Where(item => item.AssignedEmployeeAccountId == context.AccountId.Value);
+        var items = dbContext.Database.IsNpgsql()
+            ? await query.OrderByDescending(item => item.RequestedAt).ToListAsync(cancellationToken)
+            : (await query.ToListAsync(cancellationToken)).OrderByDescending(item => item.RequestedAt).ToList();
+        return Results.Ok(items.Select(ToResponse));
     }
 
     private static Task<IResult> UpdateRequestAsync(Guid requestId, UpdateEmergencyRequestRequest request, PesneerDbContext dbContext, ICompanyContext context, CancellationToken cancellationToken) =>
